@@ -1,10 +1,8 @@
-
 import torch
 import torch.nn as nn
 
 
 class Node(nn.Module):
-
     def __init__(self, index: int):
         super().__init__()
         self._index = index
