@@ -1,3 +1,10 @@
+"""
+This script creates a dataset of cropped images from the CUB dataset. It currently copies a lot of stuff around
+and is thus very inefficient in terms of storage, possibly also in terms of I/O. In a future version we might
+want to assemble the dataset on the fly. Need to check how I/O compares to processing time.
+"""
+
+
 import logging
 import shutil
 from pathlib import Path
@@ -18,7 +25,6 @@ train_corners_dir = dataset_dir / "train_corners"
 test_full_dir = dataset_dir / "test_full"
 test_crop_dir = dataset_dir / "test_crop"
 
-new_dirs = [train_crop_dir, train_corners_dir, test_full_dir, test_crop_dir]
 
 log = logging.getLogger(__name__)
 
@@ -27,13 +33,16 @@ def get_image_basedir_name_tuple(image_path: str) -> tuple[str, str]:
     return tuple(*image_path.split("/"))
 
 
+def save_image(image: Image, path: Path):
+    log.debug(f"Saving image to: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path)
+
+
 def save_cropped_cub_images(overwrite: bool = False):
     image_id_path_dict = get_image_id_path_dict()
     image_id_train_test_dict = get_image_id_train_test_dict()
     image_id_bbox_dict = get_image_id_bbox_dict()
-
-    for new_dir in new_dirs:
-        new_dir.mkdir(parents=True, exist_ok=True)
 
     for image_id, is_train in tqdm(image_id_train_test_dict.items()):
         is_test = not is_train
@@ -47,8 +56,9 @@ def save_cropped_cub_images(overwrite: bool = False):
         if is_test:
             test_full_image_path = test_full_dir / image_subpath
             if not test_full_image_path.exists() or overwrite:
-                log.info(f"Copying test image to: {test_full_image_path}")
+                log.debug(f"Copying test image to: {test_full_image_path}")
                 test_full_image_path.parent.mkdir(parents=True, exist_ok=True)
+                # TODO: to we need to convert to RGB, or is copying enough? Why do we need the full images?
                 shutil.copy(image_path, test_full_image_path)
 
         if cropped_image_path.exists() and not overwrite:
@@ -58,21 +68,26 @@ def save_cropped_cub_images(overwrite: bool = False):
             )
             continue
 
-        cropped_image_path.parent.mkdir(parents=True, exist_ok=True)
+        # TODO: is the conversion needed?
         image = Image.open(image_path).convert("RGB")
         cropped_image = image.crop(bbox)
-        cropped_image.save(cropped_image_path)
-        log.info(f"Saved cropped image to: {cropped_image_path}")
+        save_image(cropped_image, cropped_image_path)
 
         if is_train:
             # special treatment for train images, we extract corners and full images as candidates for prototypes
             # and save them in the appropriate directories
+            # TODO: this is a MASSIVE waste of space and I/O, should happen at runtime.
+            #   It is unclear why this is needed at all, prototypes could be extracted from the full images
+            #   or from the cropped images.
+            #   Note that there is a lot of redundancy here as one single image is blown up to 5, each of them
+            #   containing the object. They are later rescaled to the same size before the prototype search begins,
+            #   so the patches in them don't exactly coincide, but I still have the feeling that this treatment
+            #   is an overkill.
             save_corner_subimages(image, bbox, image_path)
             normal_image_path = (
                 train_corners_dir / image_path.parent.name / f"normal_{image_path.name}"
             )
-            normal_image_path.parent.mkdir(parents=True, exist_ok=True)
-            image.save(normal_image_path)
+            save_image(image, normal_image_path)
 
 
 def get_corner_bbox(
@@ -148,9 +163,7 @@ def save_corner_subimages(
             )
 
             corner_image = image.crop(corner_bbox)
-            log.info(f"Saving corner to: {save_image_path}")
-            save_image_path.parent.mkdir(parents=True, exist_ok=True)
-            corner_image.save(save_image_path)
+            save_image(corner_image, save_image_path)
 
 
 if __name__ == "__main__":
