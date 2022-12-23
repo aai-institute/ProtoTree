@@ -11,6 +11,9 @@ cub_labels = cub_dir / "image_class_labels.txt"
 
 @cache
 def get_image_id_path_dict() -> dict[int, Path]:
+    """
+    Mapping image ids to their path (relative to the root dir).
+    """
     image_id_path_dict = {}
     with open(cub_images_txt, "r") as f:
         for line in f:
@@ -21,6 +24,9 @@ def get_image_id_path_dict() -> dict[int, Path]:
 
 @cache
 def get_image_id_train_test_dict() -> dict[int, bool]:
+    """
+    Mapping image_id to whether it is a train image or not.
+    """
     image_id_train_test_dict = {}
     with open(cub_split_indices_txt, "r") as f:
         for line in f:
@@ -31,6 +37,9 @@ def get_image_id_train_test_dict() -> dict[int, bool]:
 
 @cache
 def get_image_id_bbox_dict() -> dict[int, tuple[int, int, int, int]]:
+    """
+    Mapping image ids to bounding boxes. The bounding boxes are tuples of (left, top, right, bottom).
+    """
     image_id_bbox_dict = {}
     with open(cub_bounding_boxes, "r") as f:
         for line in f:
