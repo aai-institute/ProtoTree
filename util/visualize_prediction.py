@@ -12,9 +12,7 @@ import torchvision
 from PIL import Image
 from torchvision.utils import save_image
 
-from prototree.branch import Branch
-from prototree.leaf import Leaf
-from prototree.node import Node
+from prototree.node import InternalNode, Leaf, Node
 from prototree.prototree import ProtoTree
 from prototree.upsample import find_high_activation_crop, imsave_with_bbox
 

@@ -2,9 +2,7 @@ from copy import deepcopy
 
 import torch
 
-from prototree.branch import Branch
-from prototree.leaf import Leaf
-from prototree.node import Node
+from prototree.node import InternalNode, Leaf, Node
 from prototree.prototree import ProtoTree
 from util.log import Log
 
@@ -23,7 +21,7 @@ def nodes_to_prune_based_on_leaf_dists_threshold(
 
 # Returns True when all the node's children have a max leaf value < threshold
 def has_max_prob_lower_threshold(node: Node, threshold: float):
-    if isinstance(node, Branch):
+    if isinstance(node, InternalNode):
         for leaf in node.leaves:
             if leaf.log_probabilities:
                 if torch.max(torch.exp(leaf.distribution())).item() > threshold:
@@ -59,7 +57,7 @@ def prune(tree: ProtoTree, pruning_threshold_leaves: float, log: Log) -> list:
     to_prune = deepcopy(node_idxs_to_prune)
     # remove children from prune_list of nodes that would already be pruned
     for node_idx in node_idxs_to_prune:
-        if isinstance(tree.nodes_by_index[node_idx], Branch):
+        if isinstance(tree.nodes_by_index[node_idx], InternalNode):
             if node_idx > 0:  # parent cannot be root since root would then be removed
                 for child in tree.nodes_by_index[node_idx].nodes:
                     if child.index in to_prune and child.index != node_idx:
@@ -69,27 +67,27 @@ def prune(tree: ProtoTree, pruning_threshold_leaves: float, log: Log) -> list:
         node = tree.nodes_by_index[node_idx]
         parent = tree._parents[node]
         if parent.index > 0:  # parent cannot be root since root would then be removed
-            if node == parent.l:
-                if parent == tree._parents[parent].l:
+            if node == parent.left:
+                if parent == tree._parents[parent].left:
                     # make right child of parent the left child of parent of parent
-                    tree._parents[parent.r] = tree._parents[parent]
-                    tree._parents[parent].l = parent.r
-                elif parent == tree._parents[parent].r:
+                    tree._parents[parent.right] = tree._parents[parent]
+                    tree._parents[parent].left = parent.right
+                elif parent == tree._parents[parent].right:
                     # make right child of parent the right child of parent of parent
-                    tree._parents[parent.r] = tree._parents[parent]
-                    tree._parents[parent].r = parent.r
+                    tree._parents[parent.right] = tree._parents[parent]
+                    tree._parents[parent].right = parent.right
                 else:
                     raise Exception("Pruning went wrong, this should not be possible")
 
-            elif node == parent.r:
-                if parent == tree._parents[parent].l:
+            elif node == parent.right:
+                if parent == tree._parents[parent].left:
                     # make left child or parent the left child of parent of parent
-                    tree._parents[parent.l] = tree._parents[parent]
-                    tree._parents[parent].l = parent.l
-                elif parent == tree._parents[parent].r:
+                    tree._parents[parent.left] = tree._parents[parent]
+                    tree._parents[parent].left = parent.left
+                elif parent == tree._parents[parent].right:
                     # make left child of parent the right child of parent of parent
-                    tree._parents[parent.l] = tree._parents[parent]
-                    tree._parents[parent].r = parent.l
+                    tree._parents[parent.left] = tree._parents[parent]
+                    tree._parents[parent].right = parent.left
                 else:
                     raise Exception("Pruning went wrong, this should not be possible")
             else:

@@ -9,9 +9,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from prototree.branch import Branch
-from prototree.leaf import Leaf
-from prototree.node import Node
+from prototree.node import InternalNode, Leaf, Node
 from prototree.prototree import ProtoTree
 
 
@@ -45,7 +43,7 @@ def gen_vis(
 def _node_vis(node: Node, upsample_dir: str):
     if isinstance(node, Leaf):
         return _leaf_vis(node)
-    if isinstance(node, Branch):
+    if isinstance(node, InternalNode):
         return _branch_vis(node, upsample_dir)
 
 
@@ -84,7 +82,7 @@ def _leaf_vis(node: Leaf):
     return img
 
 
-def _branch_vis(node: Branch, upsample_dir: str):
+def _branch_vis(node: InternalNode, upsample_dir: str):
     branch_id = node.index
 
     img = Image.open(
@@ -157,20 +155,20 @@ def _gen_dot_nodes(
         s = '{}[image="{}" xlabel="{}" fontsize=6 labelfontcolor=gray50 fontname=Helvetica];\n'.format(
             node.index, filename, node.index
         )
-    if isinstance(node, Branch):
+    if isinstance(node, InternalNode):
         return (
             s
-            + _gen_dot_nodes(node.l, destination_folder, upsample_dir, classes)
-            + _gen_dot_nodes(node.r, destination_folder, upsample_dir, classes)
+            + _gen_dot_nodes(node.left, destination_folder, upsample_dir, classes)
+            + _gen_dot_nodes(node.right, destination_folder, upsample_dir, classes)
         )
     if isinstance(node, Leaf):
         return s
 
 
 def _gen_dot_edges(node: Node, classes: tuple):
-    if isinstance(node, Branch):
-        edge_l, targets_l = _gen_dot_edges(node.l, classes)
-        edge_r, targets_r = _gen_dot_edges(node.r, classes)
+    if isinstance(node, InternalNode):
+        edge_l, targets_l = _gen_dot_edges(node.left, classes)
+        edge_r, targets_r = _gen_dot_edges(node.right, classes)
         str_targets_l = (
             ",".join(str(t) for t in targets_l) if len(targets_l) > 0 else ""
         )
@@ -178,7 +176,7 @@ def _gen_dot_edges(node: Node, classes: tuple):
             ",".join(str(t) for t in targets_r) if len(targets_r) > 0 else ""
         )
         s = '{} -> {} [label="Absent" fontsize=10 tailport="s" headport="n" fontname=Helvetica];\n {} -> {} [label="Present" fontsize=10 tailport="s" headport="n" fontname=Helvetica];\n'.format(
-            node.index, node.l.index, node.index, node.r.index
+            node.index, node.left.index, node.index, node.right.index
         )
         return s + edge_l + edge_r, sorted(list(set(targets_l + targets_r)))
     if isinstance(node, Leaf):

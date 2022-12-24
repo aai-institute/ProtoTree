@@ -7,9 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from prototree.branch import Branch
-from prototree.leaf import Leaf
-from prototree.node import Node
+from prototree.node import InternalNode, Leaf, Node
 from util.func import min_pool2d
 from util.l2conv import L2Conv2D
 
@@ -32,15 +30,38 @@ class ProtoTree(nn.Module):
         kontschieder_normalization: bool = False,
         kontschieder_train=False,
         add_on_layers: nn.Module = None,
+        disable_derivative_free_leaf_optim=False,
     ):
         super().__init__()
         assert depth > 0
         assert num_classes > 0
 
+        def create_tree_from_node_index(index: int, cur_depth: int) -> Node:
+            if cur_depth == depth:
+                return Leaf(
+                    index,
+                    num_classes,
+                    kontschieder_normalization=kontschieder_normalization,
+                    log_probabilities=log_probabilities,
+                    disable_derivative_free_leaf_optim=disable_derivative_free_leaf_optim,
+                )
+            else:
+                next_index = index + 1
+                next_depth = cur_depth + 1
+                left = create_tree_from_node_index(next_index, next_depth)
+                right = create_tree_from_node_index(next_index + left.size, next_depth)
+                return InternalNode(
+                    index,
+                    left,
+                    right,
+                    log_probabilities=self._log_probabilities,
+                )
+
+        self._root = create_tree_from_node_index(0, 0)
+
         self._num_classes = num_classes
 
         # Build the tree
-        self._root = self._init_tree(num_classes, depth)
 
         self.num_features = num_features
         self.num_prototypes = self.num_branches
@@ -77,10 +98,6 @@ class ProtoTree(nn.Module):
     @property
     def num_classes(self) -> int:
         return self._num_classes
-
-    @property
-    def kontschieder_train(self):
-        return self._kontschieder_train
 
     @property
     def kontschieder_normalization(self):
@@ -242,9 +259,9 @@ class ProtoTree(nn.Module):
                 while node in self.branches:
                     routing[i] += [node]
                     if attr[node, "ps"][i].item() > threshold:
-                        node = node.r
+                        node = node.right
                     else:
-                        node = node.l
+                        node = node.left
                 routing[i] += [node]
 
             # Obtain output distributions of each leaf
@@ -276,7 +293,11 @@ class ProtoTree(nn.Module):
 
     @property
     def depth(self) -> int:
-        d = lambda node: 1 if isinstance(node, Leaf) else 1 + max(d(node.l), d(node.r))
+        d = (
+            lambda node: 1
+            if isinstance(node, Leaf)
+            else 1 + max(d(node.left), d(node.right))
+        )
         return d(self._root)
 
     @property
@@ -289,25 +310,25 @@ class ProtoTree(nn.Module):
 
     @property
     def nodes_by_index(self) -> dict:
-        return self._root.nodes_by_index
+        return self._root.descendants_by_index
 
     @property
     def node_depths(self) -> dict:
         def _assign_depths(node, d):
             if isinstance(node, Leaf):
                 return {node: d}
-            if isinstance(node, Branch):
+            if isinstance(node, InternalNode):
                 return {
                     node: d,
-                    **_assign_depths(node.r, d + 1),
-                    **_assign_depths(node.l, d + 1),
+                    **_assign_depths(node.right, d + 1),
+                    **_assign_depths(node.left, d + 1),
                 }
 
         return _assign_depths(self._root, 0)
 
     @property
     def branches(self) -> set:
-        return self._root.branches
+        return self._root.descendants
 
     @property
     def leaves(self) -> set:
@@ -315,7 +336,7 @@ class ProtoTree(nn.Module):
 
     @property
     def num_branches(self) -> int:
-        return self._root.num_branches
+        return self._root.num_descendants
 
     @property
     def num_leaves(self) -> int:
@@ -344,38 +365,16 @@ class ProtoTree(nn.Module):
     def load(directory_path: str):
         return torch.load(directory_path + "/model.pth")
 
-    def _init_tree(self, num_classes, depth: int) -> Node:
-        def _init_tree_recursive(i: int, d: int) -> Node:  # Recursively build the tree
-            if d == depth:
-                return Leaf(
-                    i,
-                    num_classes,
-                    kontschieder_normalization=self.kontschieder_normalization,
-                    log_probabilities=self.log_probabilities,
-                    disable_derivative_free_leaf_optim=self.disable_derivative_free_leaf_optim,
-                )
-            else:
-                left = _init_tree_recursive(i + 1, d + 1)
-                right = _init_tree_recursive(i + left.size + 1, d + 1)
-                return Branch(
-                    i,
-                    left,
-                    right,
-                    log_probabilities=self._log_probabilities,
-                )
-
-        return _init_tree_recursive(0, 0)
-
     def _set_parents(self) -> None:
         self._parents.clear()
         self._parents[self._root] = None
 
         def _set_parents_recursively(node: Node):
-            if isinstance(node, Branch):
-                self._parents[node.r] = node
-                self._parents[node.l] = node
-                _set_parents_recursively(node.r)
-                _set_parents_recursively(node.l)
+            if isinstance(node, InternalNode):
+                self._parents[node.right] = node
+                self._parents[node.left] = node
+                _set_parents_recursively(node.right)
+                _set_parents_recursively(node.left)
                 return
             if isinstance(node, Leaf):
                 return  # Nothing to do here!

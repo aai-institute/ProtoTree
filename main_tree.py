@@ -117,7 +117,7 @@ def run_tree(args: Namespace):
     tree.save(f"{log.checkpoint_dir}/tree_init")
     log.log_message(
         "Max depth %s, so %s internal nodes and %s leaves"
-        % (args.depth, tree.num_branches, tree.num_leaves)
+        % (args.depth, tree.num_descendants, tree.num_leaves)
     )
     analyse_output_shape(tree, trainloader, log, device)
 
@@ -179,7 +179,7 @@ def run_tree(args: Namespace):
         "Training Finished. Best training accuracy was %s, best test accuracy was %s\n"
         % (str(best_train_acc), str(best_test_acc))
     )
-    leaf_labels = analyse_leafs(
+    leaf_labels = analyse_leaves(
         tree, epoch + 1, len(classes), leaf_labels, args.pruning_threshold_leaves, log
     )
     log_leaf_distributions_analysis(tree, log)
@@ -209,7 +209,7 @@ def run_tree(args: Namespace):
     pruned_projected_tree = deepcopy(tree)
     # Analyse and evaluate pruned tree with projected prototypes
     average_distance_nearest_image(project_info, tree, log)
-    analyse_leafs(
+    analyse_leaves(
         tree, epoch + 3, len(classes), leaf_labels, pruning_threshold_leaves, log
     )
     log_leaf_distributions_analysis(tree, log)
@@ -251,7 +251,7 @@ def analyse_tree(
     testloader,
     eval_name="Eval",
 ):
-    leaf_labels = analyse_leafs(
+    leaf_labels = analyse_leaves(
         tree, epoch + 2, len(classes), leaf_labels, pruning_threshold_leaves, log
     )
     log_leaf_distributions_analysis(tree, log)
@@ -327,7 +327,7 @@ def train_single_epoch(
             checkpoint_dir=log.checkpoint_dir,
             name="best_train",
         )
-    leaf_labels = analyse_leafs(
+    leaf_labels = analyse_leaves(
         tree,
         epoch,
         len(classes),

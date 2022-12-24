@@ -1,12 +1,9 @@
-import argparse
-
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from prototree.prototree import ProtoTree
-from prototree.test import eval_ensemble
+# from prototree.test import eval_ensemble
 from util.log import Log
 
 
@@ -119,7 +116,7 @@ def analyse_output_shape(tree: ProtoTree, trainloader: DataLoader, log: Log, dev
 
 
 # TODO: this has to be called as leaf_labels = analyse_leaf_labels(leaf_labels...). Fix this pattern!
-def analyse_leafs(
+def analyse_leaves(
     tree: ProtoTree, epoch: int, k: int, leaf_labels: dict, threshold: float, log: Log
 ):
     with torch.no_grad():
@@ -187,190 +184,190 @@ def analyse_leafs(
                 )
     return leaf_labels
 
-
-def analyse_ensemble(
-    log,
-    args,
-    test_loader,
-    device,
-    trained_orig_trees,
-    trained_pruned_trees,
-    trained_pruned_projected_trees,
-    orig_test_accuracies,
-    pruned_test_accuracies,
-    pruned_projected_test_accuracies,
-    project_infos,
-    infos_sample_max,
-    infos_greedy,
-    infos_fidelity,
-):
-    print(
-        "\nAnalysing and evaluating ensemble with %s trees of height %s..."
-        % (len(trained_orig_trees), args.depth),
-        flush=True,
-    )
-    log.log_message(
-        "\n-----------------------------------------------------------------------------------------------------------------"
-    )
-    log.log_message(
-        "\nAnalysing and evaluating ensemble with %s trees of height %s..."
-        % (len(trained_orig_trees), args.depth)
-    )
-
-    """
-    CALCULATE MEAN AND STANDARD DEVIATION BETWEEN RUNS
-    """
-    log.log_message(
-        "Test accuracies of original individual trees: %s" % str(orig_test_accuracies)
-    )
-    log.log_message(
-        "Mean and standard deviation of accuracies of original individual trees: \n"
-        + "mean="
-        + str(np.mean(orig_test_accuracies))
-        + ", std="
-        + str(np.std(orig_test_accuracies))
-    )
-
-    log.log_message(
-        "Test accuracies of pruned individual trees: %s" % str(pruned_test_accuracies)
-    )
-    log.log_message(
-        "Mean and standard deviation of accuracies of pruned individual trees: \n"
-        + "mean="
-        + str(np.mean(pruned_test_accuracies))
-        + ", std="
-        + str(np.std(pruned_test_accuracies))
-    )
-
-    log.log_message(
-        "Test accuracies of pruned and projected individual trees: %s"
-        % str(pruned_projected_test_accuracies)
-    )
-    log.log_message(
-        "Mean and standard deviation of accuracies of pruned and projected individual trees:\n "
-        + "mean="
-        + str(np.mean(pruned_projected_test_accuracies))
-        + ", std="
-        + str(np.std(pruned_projected_test_accuracies))
-    )
-
-    """
-    CALCULATE MEAN NUMBER OF PROTOTYPES
-    """
-    nums_prototypes = []
-    for t in trained_pruned_trees:
-        nums_prototypes.append(t.num_branches)
-    log.log_message(
-        "Mean and standard deviation of number of prototypes in pruned trees:\n "
-        + "mean="
-        + str(np.mean(nums_prototypes))
-        + ", std="
-        + str(np.std(nums_prototypes))
-    )
-
-    """
-    CALCULATE MEAN DISTANCE TO NEAREST PROTOTYPE
-    """
-    distances = []
-    for i in range(len(trained_pruned_projected_trees)):
-        info = project_infos[i]
-        tree = trained_pruned_projected_trees[i]
-        distances += average_distance_nearest_image(info, tree, log, disable_log=True)
-    log.log_message(
-        "Mean and standard deviation of distance from prototype to nearest training patch:\n "
-        + "mean="
-        + str(np.mean(distances))
-        + ", std="
-        + str(np.std(distances))
-    )
-
-    """
-    CALCULATE MEAN AND STANDARD DEVIATION BETWEEN RUNS WITH DETERMINISTIC ROUTING
-    """
-    accuracies = []
-    for info in infos_sample_max:
-        accuracies.append(info["test_accuracy"])
-    log.log_message(
-        "Mean and standard deviation of accuracies of pruned and projected individual trees with sample_max routing:\n "
-        + "mean="
-        + str(np.mean(accuracies))
-        + ", std="
-        + str(np.std(accuracies))
-    )
-    accuracies = []
-    for info in infos_greedy:
-        accuracies.append(info["test_accuracy"])
-    log.log_message(
-        "Mean and standard deviation of accuracies of pruned and projected individual trees with greedy routing:\n "
-        + "mean="
-        + str(np.mean(accuracies))
-        + ", std="
-        + str(np.std(accuracies))
-    )
-
-    """
-    CALCULATE FIDELITY BETWEEN RUNS WITH DETERMINISTIC ROUTING
-    """
-    fidelities_sample_max = []
-    fidelities_greedy = []
-    for info in infos_fidelity:
-        fidelities_sample_max.append(info["distr_samplemax_fidelity"])
-        fidelities_greedy.append(info["distr_greedy_fidelity"])
-    log.log_message(
-        "Mean and standard deviation of fidelity of pruned and projected individual trees with sample_max routing:\n "
-        + "mean="
-        + str(np.mean(fidelities_sample_max))
-        + ", std="
-        + str(np.std(fidelities_sample_max))
-    )
-    log.log_message(
-        "Mean and standard deviation of fidelity of pruned and projected individual trees with greedy routing:\n "
-        + "mean="
-        + str(np.mean(fidelities_greedy))
-        + ", std="
-        + str(np.std(fidelities_greedy))
-    )
-
-    """
-    CALCULATE MEAN AND STANDARD DEVIATION OF PATH LENGTH WITH DETERMINISTIC ROUTING
-    """
-    depths_sample_max = []
-    depths_greedy = []
-    for i in range(len(trained_pruned_projected_trees)):
-        tree = trained_pruned_projected_trees[i]
-        eval_info_sample_max = infos_sample_max[i]
-        eval_info_greedy = infos_greedy[i]
-        depths_sample_max += get_avg_path_length(tree, eval_info_sample_max, log)
-        depths_greedy += get_avg_path_length(tree, eval_info_greedy, log)
-    log.log_message(
-        "Mean and standard deviation of path length of pruned and projected individual trees with sample_max routing:\n "
-        + "mean="
-        + str(np.mean(depths_sample_max))
-        + ", std="
-        + str(np.std(depths_sample_max))
-    )
-    log.log_message(
-        "Tree with sample_max deterministic routing. Longest path has length %s, shortest path has length %s"
-        % ((np.max(depths_sample_max)), np.min(depths_sample_max))
-    )
-    log.log_message(
-        "Mean and standard deviation of path length of pruned and projected individual trees with greedy routing:\n "
-        + "mean="
-        + str(np.mean(depths_greedy))
-        + ", std="
-        + str(np.std(depths_greedy))
-    )
-    log.log_message(
-        "Tree with greedy deterministic routing. Longest path has length %s, shortest path has length %s"
-        % ((np.max(depths_greedy)), np.min(depths_greedy))
-    )
-
-    """
-    EVALUATE ENSEMBLE OF PRUNED AND PROJECTED TREES
-    """
-    log.log_message(
-        "\nCalculating accuracy of tree ensemble with pruned and projected trees..."
-    )
-    eval_ensemble(
-        trained_pruned_projected_trees, test_loader, device, log, args, "distributed"
-    )
+#
+# def analyse_ensemble(
+#     log,
+#     args,
+#     test_loader,
+#     device,
+#     trained_orig_trees,
+#     trained_pruned_trees,
+#     trained_pruned_projected_trees,
+#     orig_test_accuracies,
+#     pruned_test_accuracies,
+#     pruned_projected_test_accuracies,
+#     project_infos,
+#     infos_sample_max,
+#     infos_greedy,
+#     infos_fidelity,
+# ):
+#     print(
+#         "\nAnalysing and evaluating ensemble with %s trees of height %s..."
+#         % (len(trained_orig_trees), args.depth),
+#         flush=True,
+#     )
+#     log.log_message(
+#         "\n-----------------------------------------------------------------------------------------------------------------"
+#     )
+#     log.log_message(
+#         "\nAnalysing and evaluating ensemble with %s trees of height %s..."
+#         % (len(trained_orig_trees), args.depth)
+#     )
+#
+#     """
+#     CALCULATE MEAN AND STANDARD DEVIATION BETWEEN RUNS
+#     """
+#     log.log_message(
+#         "Test accuracies of original individual trees: %s" % str(orig_test_accuracies)
+#     )
+#     log.log_message(
+#         "Mean and standard deviation of accuracies of original individual trees: \n"
+#         + "mean="
+#         + str(np.mean(orig_test_accuracies))
+#         + ", std="
+#         + str(np.std(orig_test_accuracies))
+#     )
+#
+#     log.log_message(
+#         "Test accuracies of pruned individual trees: %s" % str(pruned_test_accuracies)
+#     )
+#     log.log_message(
+#         "Mean and standard deviation of accuracies of pruned individual trees: \n"
+#         + "mean="
+#         + str(np.mean(pruned_test_accuracies))
+#         + ", std="
+#         + str(np.std(pruned_test_accuracies))
+#     )
+#
+#     log.log_message(
+#         "Test accuracies of pruned and projected individual trees: %s"
+#         % str(pruned_projected_test_accuracies)
+#     )
+#     log.log_message(
+#         "Mean and standard deviation of accuracies of pruned and projected individual trees:\n "
+#         + "mean="
+#         + str(np.mean(pruned_projected_test_accuracies))
+#         + ", std="
+#         + str(np.std(pruned_projected_test_accuracies))
+#     )
+#
+#     """
+#     CALCULATE MEAN NUMBER OF PROTOTYPES
+#     """
+#     nums_prototypes = []
+#     for t in trained_pruned_trees:
+#         nums_prototypes.append(t.num_descendants)
+#     log.log_message(
+#         "Mean and standard deviation of number of prototypes in pruned trees:\n "
+#         + "mean="
+#         + str(np.mean(nums_prototypes))
+#         + ", std="
+#         + str(np.std(nums_prototypes))
+#     )
+#
+#     """
+#     CALCULATE MEAN DISTANCE TO NEAREST PROTOTYPE
+#     """
+#     distances = []
+#     for i in range(len(trained_pruned_projected_trees)):
+#         info = project_infos[i]
+#         tree = trained_pruned_projected_trees[i]
+#         distances += average_distance_nearest_image(info, tree, log, disable_log=True)
+#     log.log_message(
+#         "Mean and standard deviation of distance from prototype to nearest training patch:\n "
+#         + "mean="
+#         + str(np.mean(distances))
+#         + ", std="
+#         + str(np.std(distances))
+#     )
+#
+#     """
+#     CALCULATE MEAN AND STANDARD DEVIATION BETWEEN RUNS WITH DETERMINISTIC ROUTING
+#     """
+#     accuracies = []
+#     for info in infos_sample_max:
+#         accuracies.append(info["test_accuracy"])
+#     log.log_message(
+#         "Mean and standard deviation of accuracies of pruned and projected individual trees with sample_max routing:\n "
+#         + "mean="
+#         + str(np.mean(accuracies))
+#         + ", std="
+#         + str(np.std(accuracies))
+#     )
+#     accuracies = []
+#     for info in infos_greedy:
+#         accuracies.append(info["test_accuracy"])
+#     log.log_message(
+#         "Mean and standard deviation of accuracies of pruned and projected individual trees with greedy routing:\n "
+#         + "mean="
+#         + str(np.mean(accuracies))
+#         + ", std="
+#         + str(np.std(accuracies))
+#     )
+#
+#     """
+#     CALCULATE FIDELITY BETWEEN RUNS WITH DETERMINISTIC ROUTING
+#     """
+#     fidelities_sample_max = []
+#     fidelities_greedy = []
+#     for info in infos_fidelity:
+#         fidelities_sample_max.append(info["distr_samplemax_fidelity"])
+#         fidelities_greedy.append(info["distr_greedy_fidelity"])
+#     log.log_message(
+#         "Mean and standard deviation of fidelity of pruned and projected individual trees with sample_max routing:\n "
+#         + "mean="
+#         + str(np.mean(fidelities_sample_max))
+#         + ", std="
+#         + str(np.std(fidelities_sample_max))
+#     )
+#     log.log_message(
+#         "Mean and standard deviation of fidelity of pruned and projected individual trees with greedy routing:\n "
+#         + "mean="
+#         + str(np.mean(fidelities_greedy))
+#         + ", std="
+#         + str(np.std(fidelities_greedy))
+#     )
+#
+#     """
+#     CALCULATE MEAN AND STANDARD DEVIATION OF PATH LENGTH WITH DETERMINISTIC ROUTING
+#     """
+#     depths_sample_max = []
+#     depths_greedy = []
+#     for i in range(len(trained_pruned_projected_trees)):
+#         tree = trained_pruned_projected_trees[i]
+#         eval_info_sample_max = infos_sample_max[i]
+#         eval_info_greedy = infos_greedy[i]
+#         depths_sample_max += get_avg_path_length(tree, eval_info_sample_max, log)
+#         depths_greedy += get_avg_path_length(tree, eval_info_greedy, log)
+#     log.log_message(
+#         "Mean and standard deviation of path length of pruned and projected individual trees with sample_max routing:\n "
+#         + "mean="
+#         + str(np.mean(depths_sample_max))
+#         + ", std="
+#         + str(np.std(depths_sample_max))
+#     )
+#     log.log_message(
+#         "Tree with sample_max deterministic routing. Longest path has length %s, shortest path has length %s"
+#         % ((np.max(depths_sample_max)), np.min(depths_sample_max))
+#     )
+#     log.log_message(
+#         "Mean and standard deviation of path length of pruned and projected individual trees with greedy routing:\n "
+#         + "mean="
+#         + str(np.mean(depths_greedy))
+#         + ", std="
+#         + str(np.std(depths_greedy))
+#     )
+#     log.log_message(
+#         "Tree with greedy deterministic routing. Longest path has length %s, shortest path has length %s"
+#         % ((np.max(depths_greedy)), np.min(depths_greedy))
+#     )
+#
+#     """
+#     EVALUATE ENSEMBLE OF PRUNED AND PROJECTED TREES
+#     """
+#     log.log_message(
+#         "\nCalculating accuracy of tree ensemble with pruned and projected trees..."
+#     )
+#     eval_ensemble(
+#         trained_pruned_projected_trees, test_loader, device, log, args, "distributed"
+#     )
