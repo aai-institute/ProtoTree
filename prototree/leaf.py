@@ -8,15 +8,22 @@ from prototree.node import Node
 
 
 class Leaf(Node):
-    def __init__(self, index: int, num_classes: int, args: argparse.Namespace):
+    def __init__(
+        self,
+        index: int,
+        num_classes: int,
+        kontschieder_normalization=False,
+        log_probabilities=False,
+        disable_derivative_free_leaf_optim=False,
+    ):
         super().__init__(index)
 
         # Initialize the distribution parameters
-        if args.disable_derivative_free_leaf_optim:
+        if disable_derivative_free_leaf_optim:
             self._dist_params = nn.Parameter(
                 torch.randn(num_classes), requires_grad=True
             )
-        elif args.kontschieder_normalization:
+        elif kontschieder_normalization:
             self._dist_params = nn.Parameter(
                 torch.ones(num_classes), requires_grad=False
             )
@@ -26,9 +33,12 @@ class Leaf(Node):
             )
 
         # Flag that indicates whether probabilities or log probabilities are computed
-        self._log_probabilities = args.log_probabilities
+        self.log_probabilities = log_probabilities
+        self.kontschieder_normalization = kontschieder_normalization
 
-        self._kontschieder_normalization = args.kontschieder_normalization
+    @property
+    def dist_params(self) -> torch.Tensor:
+        return self._dist_params
 
     def forward(self, xs: torch.Tensor, **kwargs):
 
@@ -43,7 +53,7 @@ class Leaf(Node):
         # Therefore, if this attribute is not present this node is assumed to not have a parent.
         # The probability of arriving at this node should thus be set to 1 (as this would be the root in this case)
         # The path probability is tracked for all x in the batch
-        if not self._log_probabilities:
+        if not self.log_probabilities:
             node_attr.setdefault((self, "pa"), torch.ones(batch_size, device=xs.device))
         else:
             node_attr.setdefault(
@@ -64,8 +74,8 @@ class Leaf(Node):
         return dists, node_attr
 
     def distribution(self) -> torch.Tensor:
-        if not self._kontschieder_normalization:
-            if self._log_probabilities:
+        if not self.kontschieder_normalization:
+            if self.log_probabilities:
                 return F.log_softmax(self._dist_params, dim=0)
             else:
                 # Return numerically stable softmax (see http://www.deeplearningbook.org/contents/numerical.html)
@@ -75,7 +85,7 @@ class Leaf(Node):
 
         else:
             # kontschieder_normalization's version that uses a normalization factor instead of softmax:
-            if self._log_probabilities:
+            if self.log_probabilities:
                 return torch.log(
                     (self._dist_params / torch.sum(self._dist_params)) + 1e-10
                 )  # add small epsilon for numerical stability

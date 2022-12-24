@@ -4,6 +4,7 @@ import os
 from util.args import load_args, save_args
 
 
+# TODO: won't work on windows, either fix or remove entirely
 class Log:
 
     """

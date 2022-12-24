@@ -1,6 +1,7 @@
 import argparse
 import os
 import pickle
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -22,22 +23,28 @@ class ProtoTree(nn.Module):
     def __init__(
         self,
         num_classes: int,
+        depth: int,
+        num_features: int,
+        W1: int,
+        H1: int,
         feature_net: torch.nn.Module,
-        args: argparse.Namespace,
-        add_on_layers: nn.Module = nn.Identity(),
+        log_probabilities: bool = False,
+        kontschieder_normalization: bool = False,
+        kontschieder_train=False,
+        add_on_layers: nn.Module = None,
     ):
         super().__init__()
-        assert args.depth > 0
+        assert depth > 0
         assert num_classes > 0
 
         self._num_classes = num_classes
 
         # Build the tree
-        self._root = self._init_tree(num_classes, args)
+        self._root = self._init_tree(num_classes, depth)
 
-        self.num_features = args.num_features
+        self.num_features = num_features
         self.num_prototypes = self.num_branches
-        self.prototype_shape = (args.W1, args.H1, args.num_features)
+        self.prototype_shape = (W1, H1, num_features)
 
         # Keep a dict that stores a reference to each node's parent
         # Key: node -> Value: the node's parent
@@ -47,22 +54,49 @@ class ProtoTree(nn.Module):
 
         # Set the feature network
         self._net = feature_net
-        self._add_on = add_on_layers
+        self._add_on = add_on_layers if add_on_layers is not None else nn.Identity()
 
         # Flag that indicates whether probabilities or log probabilities are computed
-        self._log_probabilities = args.log_probabilities
+        self._log_probabilities = log_probabilities
 
         # Flag that indicates whether a normalization factor should be used instead of softmax.
-        self._kontschieder_normalization = args.kontschieder_normalization
-        self._kontschieder_train = args.kontschieder_train
+        self._kontschieder_normalization = kontschieder_normalization
+        self._kontschieder_train = kontschieder_train
         # Map each decision node to an output of the feature net
-        self._out_map = {
-            n: i for i, n in zip(range(2 ** (args.depth) - 1), self.branches)
-        }
+        self._out_map = {n: i for i, n in zip(range(2**depth - 1), self.branches)}
 
-        self.prototype_layer = L2Conv2D(
-            self.num_prototypes, self.num_features, args.W1, args.H1
-        )
+        self.prototype_layer = L2Conv2D(self.num_prototypes, self.num_features, W1, H1)
+
+    def init_prototype_layer(self):
+        # TODO: wassup with the constants?
+        torch.nn.init.normal_(self.prototype_layer.prototype_vectors, mean=0.5, std=0.1)
+
+    def device(self):
+        return next(self.parameters()).device
+
+    @property
+    def num_classes(self) -> int:
+        return self._num_classes
+
+    @property
+    def kontschieder_train(self):
+        return self._kontschieder_train
+
+    @property
+    def kontschieder_normalization(self):
+        return self._kontschieder_normalization
+
+    @property
+    def log_probabilities(self) -> bool:
+        return self._log_probabilities
+
+    @property
+    def add_on(self):
+        return self._add_on
+
+    @property
+    def net(self):
+        return self._net
 
     @property
     def root(self) -> Node:
@@ -287,40 +321,47 @@ class ProtoTree(nn.Module):
     def num_leaves(self) -> int:
         return self._root.num_leaves
 
-    def save(self, directory_path: str):
-        # Make sure the target directory exists
-        if not os.path.isdir(directory_path):
-            os.mkdir(directory_path)
-        # Save the model to the target directory
-        with open(directory_path + "/model.pth", "wb") as f:
-            torch.save(self, f)
+    def save(self, basedir: str, file_name: str = "model.pth"):
+        self.eval()
+        basedir = Path(basedir)
+        basedir.mkdir(parents=True, exist_ok=True)
+        torch.save(self, basedir / file_name)
 
-    def save_state(self, directory_path: str):
-        # Make sure the target directory exists
-        if not os.path.isdir(directory_path):
-            os.mkdir(directory_path)
-        # Save the model to the target directory
-        with open(directory_path + "/model_state.pth", "wb") as f:
-            torch.save(self.state_dict(), f)
-        # Save the out_map of the model to the target directory
-        with open(directory_path + "/tree.pkl", "wb") as f:
+    def save_state(
+        self,
+        basedir: str,
+        state_file_name="model_state.pth",
+        pickle_file_name="tree.pkl",
+    ):
+        basedir = Path(basedir)
+        basedir.mkdir(parents=True, exist_ok=True)
+        torch.save(self.state_dict(), basedir / state_file_name)
+        # TODO: what's up with this?
+        with open(basedir / pickle_file_name, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
     def load(directory_path: str):
         return torch.load(directory_path + "/model.pth")
 
-    def _init_tree(self, num_classes, args: argparse.Namespace) -> Node:
+    def _init_tree(self, num_classes, depth: int) -> Node:
         def _init_tree_recursive(i: int, d: int) -> Node:  # Recursively build the tree
-            if d == args.depth:
-                return Leaf(i, num_classes, args)
+            if d == depth:
+                return Leaf(
+                    i,
+                    num_classes,
+                    kontschieder_normalization=self.kontschieder_normalization,
+                    log_probabilities=self.log_probabilities,
+                    disable_derivative_free_leaf_optim=self.disable_derivative_free_leaf_optim,
+                )
             else:
                 left = _init_tree_recursive(i + 1, d + 1)
+                right = _init_tree_recursive(i + left.size + 1, d + 1)
                 return Branch(
                     i,
                     left,
-                    _init_tree_recursive(i + left.size + 1, d + 1),
-                    args,
+                    right,
+                    log_probabilities=self._log_probabilities,
                 )
 
         return _init_tree_recursive(0, 0)

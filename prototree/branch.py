@@ -10,13 +10,13 @@ from prototree.node import Node
 
 
 class Branch(Node):
-    def __init__(self, index: int, l: Node, r: Node, args: argparse.Namespace):
+    def __init__(self, index: int, l: Node, r: Node, log_probabilities: bool = False):
         super().__init__(index)
         self.l = l
         self.r = r
 
         # Flag that indicates whether probabilities or log probabilities are computed
-        self._log_probabilities = args.log_probabilities
+        self._log_probabilities = log_probabilities
 
     def forward(self, xs: torch.Tensor, **kwargs):
 

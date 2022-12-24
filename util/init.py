@@ -1,6 +1,8 @@
 import argparse
 import os
 import pickle
+from pathlib import Path
+from typing import Union
 
 import torch
 
@@ -15,80 +17,109 @@ def load_state(directory_path: str, device):
     return tree
 
 
-def init_tree(tree: ProtoTree, optimizer, scheduler, device, args: argparse.Namespace):
+def init_tree(
+    tree: ProtoTree,
+    optimizer: torch.optim.Optimizer,
+    state_dict_dir_tree: Union[str, Path] = None,
+    state_dict_dir_net: Union[str, Path] = None,
+    disable_cuda=False,
+    freeze_epochs=0,
+    disable_derivative_free_leaf_optim=False,
+    scheduler: torch.optim.lr_scheduler.MultiStepLR = None,
+):
+    """
+
+    :param tree:
+    :param optimizer:
+    :param state_dict_dir_tree:
+    :param state_dict_dir_net:
+    :param scheduler: has to be passed and will be updated to reflect the amount of epochs already trained
+    :param disable_cuda:
+    :param freeze_epochs:
+    :param disable_derivative_free_leaf_optim:
+    :return:
+    """
     epoch = 1
-    mean = 0.5
-    std = 0.1
-    # load trained prototree if flag is set
 
-    # NOTE: TRAINING FURTHER FROM A CHECKPOINT DOESN'T SEEM TO WORK CORRECTLY. EVALUATING A TRAINED PROTOTREE FROM A CHECKPOINT DOES WORK.
-    if args.state_dict_dir_tree != "":
-        if not args.disable_cuda and torch.cuda.is_available():
-            device = torch.device("cuda:{}".format(torch.cuda.current_device()))
-        else:
-            device = torch.device("cpu")
-
-        if args.disable_cuda or not torch.cuda.is_available():
-            # tree = load_state(args.state_dict_dir_tree, device)
-            tree = torch.load(
-                args.state_dict_dir_tree + "/model.pth", map_location=device
-            )
-        else:
-            tree = torch.load(args.state_dict_dir_tree + "/model.pth")
-        tree.to(device=device)
-        try:
-            epoch = int(args.state_dict_dir_tree.split("epoch_")[-1]) + 1
-        except:
-            epoch = args.epochs + 1
-        print("Train further from epoch: ", epoch, flush=True)
-        optimizer.load_state_dict(
-            torch.load(
-                args.state_dict_dir_tree + "/optimizer_state.pth", map_location=device
-            )
+    # NOTE: TRAINING FURTHER FROM A CHECKPOINT DOESN'T SEEM TO WORK CORRECTLY.
+    # EVALUATING A TRAINED PROTOTREE FROM A CHECKPOINT DOES WORK.
+    if state_dict_dir_tree:
+        tree, epoch = _load_tree_and_reset_scheduler(
+            state_dict_dir_tree,
+            disable_cuda,
+            disable_derivative_free_leaf_optim,
+            freeze_epochs,
+            optimizer,
+            scheduler,
         )
 
-        if epoch > args.freeze_epochs:
-            for parameter in tree._net.parameters():
-                parameter.requires_grad = True
-        if not args.disable_derivative_free_leaf_optim:
-            for leaf in tree.leaves:
-                leaf._dist_params.requires_grad = False
-
-        if os.path.isfile(args.state_dict_dir_tree + "/scheduler_state.pth"):
-            # scheduler.load_state_dict(torch.load(args.state_dict_dir_tree+'/scheduler_state.pth'))
-            # print(scheduler.state_dict(),flush=True)
-            scheduler.last_epoch = epoch - 1
-            scheduler._step_count = epoch
-
-    elif args.state_dict_dir_net != "":  # load pretrained conv network
-        # initialize prototypes
-        torch.nn.init.normal_(
-            tree.prototype_layer.prototype_vectors, mean=mean, std=std
-        )
-        # strict is False so when loading pretrained model, ignore the linear classification layer
-        tree._net.load_state_dict(
-            torch.load(args.state_dict_dir_net + "/model_state.pth"), strict=False
-        )
-        tree._add_on.load_state_dict(
-            torch.load(args.state_dict_dir_net + "/model_state.pth"), strict=False
-        )
+    elif state_dict_dir_net != "":  # load pretrained conv network
+        _load_weights_to_tree(tree, state_dict_dir_net)
     else:
         with torch.no_grad():
-            # initialize prototypes
-            torch.nn.init.normal_(
-                tree.prototype_layer.prototype_vectors, mean=mean, std=std
-            )
-            tree._add_on.apply(init_weights_xavier)
+            tree.init_prototype_layer()
+            tree.add_on.apply(_xavier_on_conv)
     return tree, epoch
 
 
-def init_weights_xavier(m):
+def _load_weights_to_tree(tree: ProtoTree, state_dict_dir_net: Union[str, Path]):
+    state_dict_dir_net = Path(state_dict_dir_net)
+    # TODO: why here without no_grad?
+    tree.init_prototype_layer()
+    # strict is False so when loading pretrained model, ignore the linear classification layer
+    tree.net.load_state_dict(
+        torch.load(state_dict_dir_net / "model_state.pth"), strict=False
+    )
+    # TODO: We load this from the same file?!
+    tree.add_on.load_state_dict(
+        torch.load(state_dict_dir_net / "model_state.pth"), strict=False
+    )
+
+
+def _load_tree_and_reset_scheduler(
+    state_dict_dir_tree: Union[str, Path],
+    disable_cuda: bool,
+    disable_derivative_free_leaf_optim: bool,
+    freeze_epochs: int,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.MultiStepLR,
+):
+    state_dict_dir_tree = Path(state_dict_dir_tree)
+    if not disable_cuda and torch.cuda.is_available():
+        device = torch.device("cuda:{}".format(torch.cuda.current_device()))
+    else:
+        device = torch.device("cpu")
+    # TODO: remove hardcoded stuff
+    tree = torch.load(state_dict_dir_tree / "model.pth", map_location=device)
+    # TODO: this can be buggy, it seems. Horrible way of recovering the epoch
+    epoch = int(state_dict_dir_tree.split("epoch_")[-1]) + 1
+    print("Train further from epoch: ", epoch, flush=True)
+    optimizer.load_state_dict(
+        torch.load(state_dict_dir_tree / "optimizer_state.pth", map_location=device)
+    )
+    if epoch > freeze_epochs:
+        for parameter in tree.net.parameters():
+            parameter.requires_grad = True
+    if not disable_derivative_free_leaf_optim:
+        for leaf in tree.leaves:
+            # TODO: mutating private fields
+            leaf._dist_params.requires_grad = False
+
+    if (state_dict_dir_tree / "scheduler_state.pth").exists():
+        # TODO: wtf? mutating fields, including private ones...
+        scheduler.last_epoch = epoch - 1
+        scheduler._step_count = epoch
+
+    return tree, epoch
+
+
+def _xavier_on_conv(m):
     if type(m) == torch.nn.Conv2d:
         torch.nn.init.xavier_normal_(
             m.weight, gain=torch.nn.init.calculate_gain("sigmoid")
         )
 
 
-def init_weights_kaiming(m):
+def _kaiming_on_conv(m):
     if type(m) == torch.nn.Conv2d:
         torch.nn.init.kaiming_normal_(m.weight, nonlinearity="relu")

@@ -25,14 +25,14 @@ def nodes_to_prune_based_on_leaf_dists_threshold(
 def has_max_prob_lower_threshold(node: Node, threshold: float):
     if isinstance(node, Branch):
         for leaf in node.leaves:
-            if leaf._log_probabilities:
+            if leaf.log_probabilities:
                 if torch.max(torch.exp(leaf.distribution())).item() > threshold:
                     return False
             else:
                 if torch.max(leaf.distribution()).item() > threshold:
                     return False
     elif isinstance(node, Leaf):
-        if node._log_probabilities:
+        if node.log_probabilities:
             if torch.max(torch.exp(node.distribution())).item() > threshold:
                 return False
         else:

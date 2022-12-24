@@ -10,6 +10,7 @@ from features.densenet_features import (
     densenet201_features,
 )
 from features.resnet_features import (
+    ResNet_features,
     resnet18_features,
     resnet34_features,
     resnet50_features,
@@ -51,17 +52,26 @@ base_architecture_to_features = {
     "vgg19_bn": vgg19_bn_features,
 }
 
-"""
-    Create network with pretrained features and 1x1 convolutional layer
-
-"""
-
-
-def get_network(num_in_channels: int, args: argparse.Namespace):
+# Create network with pretrained features and 1x1 convolutional layer
+def get_network(num_features: int, net="resnet50_inat", pretrained=True):
     # Define a conv net for estimating the probabilities at each decision node
-    features = base_architecture_to_features[args.net](
-        pretrained=not args.disable_pretrained
+    features = base_architecture_to_features[net](pretrained=pretrained)
+    first_add_on_layer_in_channels = get_add_on_layer_in_channels(features)
+
+    add_on_layer = nn.Sequential(
+        nn.Conv2d(
+            in_channels=first_add_on_layer_in_channels,
+            out_channels=num_features,
+            kernel_size=1,
+            bias=False,
+        ),
+        nn.Sigmoid(),
     )
+    return features, add_on_layer
+
+
+# TODO: fix signature and method
+def get_add_on_layer_in_channels(features: ResNet_features):
     features_name = str(features).upper()
     if features_name.startswith("VGG") or features_name.startswith("RES"):
         first_add_on_layer_in_channels = [
@@ -73,33 +83,21 @@ def get_network(num_in_channels: int, args: argparse.Namespace):
         ][-1].num_features
     else:
         raise Exception("other base base_architecture NOT implemented")
-
-    add_on_layers = nn.Sequential(
-        nn.Conv2d(
-            in_channels=first_add_on_layer_in_channels,
-            out_channels=args.num_features,
-            kernel_size=1,
-            bias=False,
-        ),
-        nn.Sigmoid(),
-    )
-    return features, add_on_layers
+    return first_add_on_layer_in_channels
 
 
 def freeze(
-    tree: ProtoTree,
     epoch: int,
     params_to_freeze: list,
-    params_to_train: list,
-    args: argparse.Namespace,
     log: Log,
+    freeze_epochs: int,
 ):
-    if args.freeze_epochs > 0:
+    if freeze_epochs > 0:
         if epoch == 1:
             log.log_message("\nNetwork frozen")
             for parameter in params_to_freeze:
                 parameter.requires_grad = False
-        elif epoch == args.freeze_epochs + 1:
+        elif epoch == freeze_epochs + 1:
             log.log_message("\nNetwork unfrozen")
             for parameter in params_to_freeze:
                 parameter.requires_grad = True

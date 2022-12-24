@@ -37,9 +37,11 @@ def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
     return pred_depths
 
 
-def log_learning_rates(optimizer, args: argparse.Namespace, log: Log):
+def log_learning_rates(
+    optimizer, net: str, log: Log, disable_derivative_free_leaf_optim=False
+):
     log.log_message("Learning rate net: " + str(optimizer.param_groups[0]["lr"]))
-    if "resnet50_inat" in args.net:
+    if "resnet50_inat" in net:
         log.log_message("Learning rate block: " + str(optimizer.param_groups[1]["lr"]))
         log.log_message(
             "Learning rate net 1x1 conv: " + str(optimizer.param_groups[2]["lr"])
@@ -48,7 +50,7 @@ def log_learning_rates(optimizer, args: argparse.Namespace, log: Log):
         log.log_message(
             "Learning rate net 1x1 conv: " + str(optimizer.param_groups[1]["lr"])
         )
-    if args.disable_derivative_free_leaf_optim:
+    if disable_derivative_free_leaf_optim:
         log.log_message(
             "Learning rate prototypes: " + str(optimizer.param_groups[-2]["lr"])
         )
@@ -85,11 +87,11 @@ def average_distance_nearest_image(
     return distances
 
 
-def analyse_leaf_distributions(tree: ProtoTree, log: Log):
+def log_leaf_distributions_analysis(tree: ProtoTree, log: Log):
     # print for experimental purposes
     max_values = []
     for leaf in tree.leaves:
-        if leaf._log_probabilities:
+        if leaf.log_probabilities:
             max_values.append(torch.max(torch.exp(leaf.distribution())).item())
         else:
             max_values.append(torch.max(leaf.distribution()).item())
@@ -116,6 +118,7 @@ def analyse_output_shape(tree: ProtoTree, trainloader: DataLoader, log: Log, dev
         )
 
 
+# TODO: this has to be called as leaf_labels = analyse_leaf_labels(leaf_labels...). Fix this pattern!
 def analyse_leafs(
     tree: ProtoTree, epoch: int, k: int, leaf_labels: dict, threshold: float, log: Log
 ):
@@ -123,7 +126,7 @@ def analyse_leafs(
         if tree.depth <= 4:
             log.log_message("class distributions of leaves:")
             for leaf in tree._root.leaves:
-                if leaf._log_probabilities:
+                if leaf.log_probabilities:
                     log.log_message(
                         str(leaf.index)
                         + ", "
@@ -147,7 +150,7 @@ def analyse_leafs(
         for leaf in tree.leaves:
             label = torch.argmax(leaf._dist_params).item()
 
-            if leaf._log_probabilities:
+            if leaf.log_probabilities:
                 value = torch.max(torch.exp(leaf.distribution())).item()
             else:
                 value = torch.max(leaf.distribution()).item()

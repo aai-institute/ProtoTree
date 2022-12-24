@@ -1,16 +1,15 @@
 import argparse
 import os
 import pickle
-import random
+from typing import Literal
 
-import numpy as np
 import torch
 import torch.optim
+from torch.nn import Parameter
 
-"""
-    Utility functions for handling parsed arguments
+from prototree.prototree import ProtoTree
 
-"""
+# Utility functions for handling parsed arguments
 
 
 def get_args() -> argparse.Namespace:
@@ -26,7 +25,10 @@ def get_args() -> argparse.Namespace:
         "--net",
         type=str,
         default="resnet50_inat",
-        help="Base network used in the tree. Pretrained network on iNaturalist is only available for resnet50_inat (default). Others are pretrained on ImageNet. Options are: resnet18, resnet34, resnet50, resnet50_inat, resnet101, resnet152, densenet121, densenet169, densenet201, densenet161, vgg11, vgg13, vgg16, vgg19, vgg11_bn, vgg13_bn, vgg16_bn or vgg19_bn",
+        help="Base network used in the tree. Pretrained network on iNaturalist is only available for resnet50_inat "
+        "(default). Others are pretrained on ImageNet. Options are: resnet18, resnet34, resnet50, resnet50_inat, "
+        "resnet101, resnet152, densenet121, densenet169, densenet201, densenet161, vgg11, vgg13, vgg16, vgg19, "
+        "vgg11_bn, vgg13_bn, vgg16_bn or vgg19_bn",
     )
     parser.add_argument(
         "--batch_size",
@@ -74,7 +76,8 @@ def get_args() -> argparse.Namespace:
         "--lr_pi",
         type=float,
         default=0.001,
-        help="The optimizer learning rate for the leaf distributions (only used if disable_derivative_free_leaf_optim flag is set",
+        help="The optimizer learning rate for the leaf distributions (only used if disable_derivative_free_leaf_optim "
+        "flag is set",
     )
     parser.add_argument(
         "--momentum",
@@ -157,27 +160,34 @@ def get_args() -> argparse.Namespace:
         "--upsample_threshold",
         type=float,
         default=0.98,
-        help="Threshold (between 0 and 1) for visualizing the nearest patch of an image after upsampling. The higher this threshold, the larger the patches.",
+        help="Threshold (between 0 and 1) for visualizing the nearest patch of an image after upsampling. The higher "
+        "this threshold, the larger the patches.",
     )
     parser.add_argument(
         "--disable_pretrained",
         action="store_true",
-        help="When set, the backbone network is initialized with random weights instead of being pretrained on another dataset). When not set, resnet50_inat is initalized with weights from iNaturalist2017. Other networks are initialized with weights from ImageNet",
+        help="When set, the backbone network is initialized with random weights instead of being pretrained on "
+        "another dataset). When not set, resnet50_inat is initalized with weights from iNaturalist2017. Other "
+        "networks are initialized with weights from ImageNet",
     )
     parser.add_argument(
         "--disable_derivative_free_leaf_optim",
         action="store_true",
-        help="Flag that optimizes the leafs with gradient descent when set instead of using the derivative-free algorithm",
+        help="Flag that optimizes the leafs with gradient descent when set instead of using the derivative-free "
+        "algorithm",
     )
     parser.add_argument(
         "--kontschieder_train",
         action="store_true",
-        help="Flag that first trains the leaves for one epoch, and then trains the rest of ProtoTree (instead of interleaving leaf and other updates). Computationally more expensive.",
+        help="Flag that first trains the leaves for one epoch, and then trains the rest of ProtoTree (instead of "
+        "interleaving leaf and other updates). Computationally more expensive.",
     )
     parser.add_argument(
         "--kontschieder_normalization",
         action="store_true",
-        help="Flag that disables softmax but uses a normalization factor to convert the leaf parameters to a probabilitiy distribution, as done by Kontschieder et al. (2015). Will iterate over the data 10 times to update the leaves. Computationally more expensive.",
+        help="Flag that disables softmax but uses a normalization factor to convert the leaf parameters to a "
+        "probability distribution, as done by Kontschieder et al. (2015). Will iterate over the data 10 times "
+        "to update the leaves. Computationally more expensive.",
     )
     parser.add_argument(
         "--log_probabilities",
@@ -188,7 +198,8 @@ def get_args() -> argparse.Namespace:
         "--pruning_threshold_leaves",
         type=float,
         default=0.01,
-        help="An internal node will be pruned when the maximum class probability in the distributions of all leaves below this node are lower than this threshold.",
+        help="An internal node will be pruned when the maximum class probability in the distributions of all leaves"
+        " below this node are lower than this threshold.",
     )
     parser.add_argument(
         "--nr_trees_ensemble",
@@ -225,7 +236,7 @@ def save_args(args: argparse.Namespace, directory_path: str) -> None:
     :param args: The arguments to be saved
     :param directory_path: The path to the directory where the arguments should be saved
     """
-    # If the specified directory does not exists, create it
+    # If the specified directory does not exist, create it
     if not os.path.isdir(directory_path):
         os.mkdir(directory_path)
     # Save the args in a text file
@@ -253,140 +264,98 @@ def load_args(directory_path: str) -> argparse.Namespace:
     return args
 
 
-def get_optimizer(tree, args: argparse.Namespace) -> torch.optim.Optimizer:
-    """
-    Construct the optimizer as dictated by the parsed arguments
-    :param tree: The tree that should be optimized
-    :param args: Parsed arguments containing hyperparameters. The '--optimizer' argument specifies which type of
-                 optimizer will be used. Optimizer specific arguments (such as learning rate and momentum) can be passed
-                 this way as well
-    :return: the optimizer corresponding to the parsed arguments, parameter set that can be frozen, and parameter set of the net that will be trained
+def get_optimizer(
+    tree: ProtoTree,
+    optimizer: Literal["SGD", "Adam", "AdamW"],
+    net: str,
+    dataset: str,
+    momentum: float,
+    weight_decay: float,
+    lr: float,
+    lr_block: float,
+    lr_pi: float,
+    lr_net: float,
+    disable_derivative_free_leaf_optim=True,
+) -> tuple[torch.optim.Optimizer, list[Parameter], list[Parameter]]:
     """
 
-    optim_type = args.optimizer
-    # create parameter groups
+    :param tree:
+    :param optimizer:
+    :param net:
+    :param dataset:
+    :param momentum:
+    :param lr_block:
+    :param weight_decay:
+    :param lr:
+    :param lr_pi:
+    :param lr_net:
+    :param disable_derivative_free_leaf_optim:
+    :return: the optimizer, parameter set that can be frozen, and parameter set of the net that will be trained
+    """
+
+    optim_type = optimizer
     params_to_freeze = []
     params_to_train = []
 
     dist_params = []
     for name, param in tree.named_parameters():
+        # TODO: what is this?
         if "dist_params" in name:
             dist_params.append(param)
     # set up optimizer
-    if "resnet50_inat" in args.net or (
-        "resnet50" in args.net and args.dataset == "CARS"
+    if "resnet50_inat" in net or (
+        "resnet50" in net and dataset == "CARS"
     ):  # to reproduce experimental results
         # freeze resnet50 except last convolutional layer
-        for name, param in tree._net.named_parameters():
+        for name, param in tree.net.named_parameters():
+            # TODO: improve this logic
             if "layer4.2" not in name:
                 params_to_freeze.append(param)
             else:
                 params_to_train.append(param)
 
-        if optim_type == "SGD":
-            paramlist = [
-                {
-                    "params": params_to_freeze,
-                    "lr": args.lr_net,
-                    "weight_decay_rate": args.weight_decay,
-                    "momentum": args.momentum,
-                },
-                {
-                    "params": params_to_train,
-                    "lr": args.lr_block,
-                    "weight_decay_rate": args.weight_decay,
-                    "momentum": args.momentum,
-                },
-                {
-                    "params": tree._add_on.parameters(),
-                    "lr": args.lr_block,
-                    "weight_decay_rate": args.weight_decay,
-                    "momentum": args.momentum,
-                },
-                {
-                    "params": tree.prototype_layer.parameters(),
-                    "lr": args.lr,
-                    "weight_decay_rate": 0,
-                    "momentum": 0,
-                },
-            ]
-            if args.disable_derivative_free_leaf_optim:
-                paramlist.append(
-                    {"params": dist_params, "lr": args.lr_pi, "weight_decay_rate": 0}
-                )
-        else:
-            paramlist = [
-                {
-                    "params": params_to_freeze,
-                    "lr": args.lr_net,
-                    "weight_decay_rate": args.weight_decay,
-                },
-                {
-                    "params": params_to_train,
-                    "lr": args.lr_block,
-                    "weight_decay_rate": args.weight_decay,
-                },
-                {
-                    "params": tree._add_on.parameters(),
-                    "lr": args.lr_block,
-                    "weight_decay_rate": args.weight_decay,
-                },
-                {
-                    "params": tree.prototype_layer.parameters(),
-                    "lr": args.lr,
-                    "weight_decay_rate": 0,
-                },
-            ]
-
-            if args.disable_derivative_free_leaf_optim:
-                paramlist.append(
-                    {"params": dist_params, "lr": args.lr_pi, "weight_decay_rate": 0}
-                )
-
-    else:  # other network architectures
-        for name, param in tree._net.named_parameters():
-            params_to_freeze.append(param)
-        paramlist = [
+        param_list = [
             {
                 "params": params_to_freeze,
-                "lr": args.lr_net,
-                "weight_decay_rate": args.weight_decay,
+                "lr": lr_net,
+                "weight_decay_rate": weight_decay,
             },
             {
-                "params": tree._add_on.parameters(),
-                "lr": args.lr_block,
-                "weight_decay_rate": args.weight_decay,
+                "params": params_to_train,
+                "lr": lr_block,
+                "weight_decay_rate": weight_decay,
+            },
+            {
+                "params": tree.add_on.parameters(),
+                "lr": lr_block,
+                "weight_decay_rate": weight_decay,
             },
             {
                 "params": tree.prototype_layer.parameters(),
-                "lr": args.lr,
+                "lr": lr,
                 "weight_decay_rate": 0,
             },
         ]
-        if args.disable_derivative_free_leaf_optim:
-            paramlist.append(
-                {"params": dist_params, "lr": args.lr_pi, "weight_decay_rate": 0}
+        if disable_derivative_free_leaf_optim:
+            param_list.append(
+                {"params": dist_params, "lr": lr_pi, "weight_decay_rate": 0}
             )
 
     if optim_type == "SGD":
-        return (
-            torch.optim.SGD(paramlist, lr=args.lr, momentum=args.momentum),
-            params_to_freeze,
-            params_to_train,
+        # TODO: why no momentum for the prototype layer?
+        # add momentum to the first three entries of paramlist
+        for i in range(3):
+            param_list[i]["momentum"] = momentum
+        # TODO: why pass momentum here explicitly again? Which one is taken?
+        optimizer = torch.optim.SGD(param_list, lr=lr, momentum=momentum)
+    elif optim_type == "Adam":
+        optimizer = torch.optim.Adam(param_list, lr=lr, eps=1e-07)
+    elif optim_type == "AdamW":
+        optimizer = torch.optim.AdamW(
+            param_list, lr=lr, eps=1e-07, weight_decay=weight_decay
         )
-    if optim_type == "Adam":
-        return (
-            torch.optim.Adam(paramlist, lr=args.lr, eps=1e-07),
-            params_to_freeze,
-            params_to_train,
+    else:
+        raise ValueError(
+            f"Unknown optimizer type: {optim_type}. Supported optimizers are SGD, Adam, and AdamW."
         )
-    if optim_type == "AdamW":
-        return (
-            torch.optim.AdamW(
-                paramlist, lr=args.lr, eps=1e-07, weight_decay=args.weight_decay
-            ),
-            params_to_freeze,
-            params_to_train,
-        )
-
-    raise Exception("Unknown optimizer argument given!")
+    return optimizer, params_to_freeze, params_to_train

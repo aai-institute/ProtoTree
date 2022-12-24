@@ -1,5 +1,4 @@
-import argparse
-from copy import deepcopy
+import logging
 
 import torch
 import torch.nn.functional as F
@@ -11,20 +10,20 @@ from tqdm import tqdm
 from prototree.prototree import ProtoTree
 from util.log import Log
 
+logger = logging.getLogger(__name__)
+
 
 def train_epoch(
     tree: ProtoTree,
     train_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     epoch: int,
-    disable_derivative_free_leaf_optim: bool,
-    device,
+    disable_derivative_free_leaf_optim: bool = False,
     log: Log = None,
     log_prefix: str = "log_train_epochs",
     progress_prefix: str = "Train Epoch",
 ) -> dict:
-
-    tree = tree.to(device)
+    device = tree.device()
     # Make sure the model is in eval mode
     tree.eval()
     # Store info about the procedure
@@ -40,7 +39,7 @@ def train_epoch(
         for leaf in tree.leaves:
             _old_dist_params[leaf] = leaf._dist_params.detach().clone()
         # Optimize class distributions in leafs
-        eye = torch.eye(tree._num_classes).to(device)
+        eye = torch.eye(tree._num_classes).to()
 
     # Show progress on progress bar
     train_iter = tqdm(
@@ -64,10 +63,11 @@ def train_epoch(
         # Learn prototypes and network with gradient descent.
         # If disable_derivative_free_leaf_optim, leaves are optimized with gradient descent as well.
         # Compute the loss
-        if tree._log_probabilities:
-            loss = F.nll_loss(ys_pred, ys)
-        else:
-            loss = F.nll_loss(torch.log(ys_pred), ys)
+        loss = (
+            F.nll_loss(ys_pred, ys)
+            if tree.log_probabilities
+            else F.nll_loss(torch.log(ys_pred), ys)
+        )
 
         # Compute the gradient
         loss.backward()
@@ -102,6 +102,7 @@ def train_epoch(
                             / ys_pred,
                             dim=0,
                         )
+                    # TODO: WTF! Mutating a private field
                     leaf._dist_params -= _old_dist_params[leaf] / nr_batches
                     F.relu_(
                         leaf._dist_params
@@ -129,17 +130,33 @@ def train_epoch(
     return train_info
 
 
+# TODO: remove the massive duplication
 def train_epoch_kontschieder(
     tree: ProtoTree,
     train_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     epoch: int,
-    disable_derivative_free_leaf_optim: bool,
     device,
     log: Log = None,
     log_prefix: str = "log_train_epochs",
     progress_prefix: str = "Train Epoch",
+    disable_derivative_free_leaf_optim: bool = False,
+    kontschieder_normalization=False,
 ) -> dict:
+    """
+
+    :param tree:
+    :param train_loader:
+    :param optimizer:
+    :param epoch:
+    :param disable_derivative_free_leaf_optim:
+    :param device:
+    :param log:
+    :param log_prefix:
+    :param progress_prefix:
+    :param kontschieder_normalization:
+    :return: dict with two entries - loss and train_accuracy
+    """
 
     tree = tree.to(device)
 
@@ -161,7 +178,7 @@ def train_epoch_kontschieder(
             "WARNING: kontschieder arguments will be ignored when training leaves with gradient descent"
         )
     else:
-        if tree._kontschieder_normalization:
+        if kontschieder_normalization:
             # Iterate over the dataset multiple times to learn leaves following Kontschieder's approach
             for _ in range(10):
                 # Train leaves with derivative-free algorithm using normalization factor
@@ -188,7 +205,7 @@ def train_epoch_kontschieder(
         # Perform a forward pass through the network
         ys_pred, _ = tree.forward(xs)
         # Compute the loss
-        if tree._log_probabilities:
+        if tree.log_probabilities:
             loss = F.nll_loss(ys_pred, ys)
         else:
             loss = F.nll_loss(torch.log(ys_pred), ys)
@@ -235,7 +252,7 @@ def train_leaves_epoch(
         for leaf in tree.leaves:
             _old_dist_params[leaf] = leaf._dist_params.detach().clone()
         # Optimize class distributions in leafs
-        eye = torch.eye(tree._num_classes).to(device)
+        eye = torch.eye(tree.num_classes).to(device)
 
         # Show progress on progress bar
         train_iter = tqdm(
@@ -258,7 +275,7 @@ def train_leaves_epoch(
             out, info = tree.forward(xs)
             target = eye[ys]  # shape (batchsize, num_classes)
             for leaf in tree.leaves:
-                if tree._log_probabilities:
+                if tree.log_probabilities:
                     # log version
                     update = torch.exp(
                         torch.logsumexp(
