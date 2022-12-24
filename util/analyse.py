@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from prototree.prototree import ProtoTree
+
 # from prototree.test import eval_ensemble
 from util.log import Log
 
@@ -183,6 +184,7 @@ def analyse_leaves(
                     % str(changed_prev_higher / float(len(leafs_higher_than)))
                 )
     return leaf_labels
+
 
 #
 # def analyse_ensemble(

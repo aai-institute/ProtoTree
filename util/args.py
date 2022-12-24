@@ -1,7 +1,8 @@
 import argparse
 import os
 import pickle
-from typing import Literal
+from pathlib import Path
+from typing import Literal, Union
 
 import torch
 import torch.optim
@@ -18,7 +19,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset",
         type=str,
-        default="CUB-200-2011",
+        default="CUB",
         help="Data set on which the ProtoTree should be trained",
     )
     parser.add_argument(
@@ -228,7 +229,7 @@ def get_milestones(args: argparse.Namespace):
     return milestones_list
 
 
-def save_args(args: argparse.Namespace, directory_path: str) -> None:
+def save_args(args: argparse.Namespace, directory_path: Union[str, Path]) -> None:
     """
     Save the arguments in the specified directory as
         - a text file called 'args.txt'
@@ -236,11 +237,10 @@ def save_args(args: argparse.Namespace, directory_path: str) -> None:
     :param args: The arguments to be saved
     :param directory_path: The path to the directory where the arguments should be saved
     """
-    # If the specified directory does not exist, create it
-    if not os.path.isdir(directory_path):
-        os.mkdir(directory_path)
+    directory_path = Path(directory_path)
+    directory_path.mkdir(parents=True, exist_ok=True)
     # Save the args in a text file
-    with open(directory_path + "/args.txt", "w") as f:
+    with open(directory_path / "args.txt", "w") as f:
         for arg in vars(args):
             val = getattr(args, arg)
             if isinstance(
@@ -249,17 +249,17 @@ def save_args(args: argparse.Namespace, directory_path: str) -> None:
                 val = f"'{val}'"
             f.write("{}: {}\n".format(arg, val))
     # Pickle the args for possible reuse
-    with open(directory_path + "/args.pickle", "wb") as f:
+    with open(directory_path / "args.pickle", "wb") as f:
         pickle.dump(args, f)
 
 
-def load_args(directory_path: str) -> argparse.Namespace:
+def load_args(directory_path: Union[str, Path]) -> argparse.Namespace:
     """
     Load the pickled arguments from the specified directory
     :param directory_path: The path to the directory from which the arguments should be loaded
     :return: the unpickled arguments
     """
-    with open(directory_path + "/args.pickle", "rb") as f:
+    with open(directory_path / "args.pickle", "rb") as f:
         args = pickle.load(f)
     return args
 

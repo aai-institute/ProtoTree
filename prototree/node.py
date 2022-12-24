@@ -112,7 +112,9 @@ class InternalNode(Node):
             r_dists, _ = self.right.forward(xs, **kwargs)  # shape: (bs, k)
             # Weight the probability distributions by the decision node's output
             p_stop = p_stop.view(batch_size, 1)
-            return (1 - p_stop) * l_dists + p_stop * r_dists, node_attr  # shape: (bs, k)
+            return (
+                1 - p_stop
+            ) * l_dists + p_stop * r_dists, node_attr  # shape: (bs, k)
         else:
             # Store decision node probabilities as node attribute
             node_attr[self, "p_stop"] = p_stop
@@ -228,7 +230,9 @@ class Leaf(Node):
         # The probability of arriving at this node should thus be set to 1 (as this would be the root in this case)
         # The path probability is tracked for all x in the batch
         if not self.log_probabilities:
-            node_attr.setdefault((self, "p_arrival"), torch.ones(batch_size, device=xs.device))
+            node_attr.setdefault(
+                (self, "p_arrival"), torch.ones(batch_size, device=xs.device)
+            )
         else:
             node_attr.setdefault(
                 (self, "p_arrival"), torch.zeros(batch_size, device=xs.device)

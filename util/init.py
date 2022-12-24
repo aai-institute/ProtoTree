@@ -52,8 +52,8 @@ def init_tree(
             optimizer,
             scheduler,
         )
-
-    elif state_dict_dir_net != "":  # load pretrained conv network
+    # load pretrained conv network
+    elif state_dict_dir_net:
         _load_weights_to_tree(tree, state_dict_dir_net)
     else:
         with torch.no_grad():

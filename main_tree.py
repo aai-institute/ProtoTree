@@ -74,6 +74,16 @@ def run_tree(args: Namespace):
     epochs = args.epochs
     kontschieder_train = args.kontschieder_train
     kontschieder_normalization = args.kontschieder_normalization
+    # TODO: rename in args
+    optim_type = args.optimizer
+
+    # Net architecture args
+    net = args.net
+    pretrained = True
+    H1 = args.H1
+    W1 = args.W1
+    depth = args.depth
+    num_features = args.num_features
 
     log = get_log(log_dir)
     save_args(args, log.metadata_dir)
@@ -85,21 +95,27 @@ def run_tree(args: Namespace):
     )
 
     # Create a convolutional network based on arguments and add 1x1 conv layer
-    features_net, add_on_layers = get_network(num_channels, args)
+    features_net, add_on_layers = get_network(
+        num_channels, net=net, pretrained=pretrained
+    )
     tree = ProtoTree(
         num_classes=len(classes),
+        num_features=num_features,
+        depth=depth,
         feature_net=features_net,
         add_on_layers=add_on_layers,
+        H1=H1,
+        W1=W1,
     )
     tree = tree.to(device=device)
 
     optimizer, params_to_freeze, params_to_train = get_optimizer(
         tree,
+        optim_type,
         net,
         dataset,
         momentum,
         weight_decay,
-        lr_block,
         lr,
         lr_block,
         lr_pi,
@@ -184,61 +200,61 @@ def run_tree(args: Namespace):
     )
     log_leaf_distributions_analysis(tree, log)
 
-    # prune
-    pruned_tree = deepcopy(tree)
-    prune(pruned_tree, pruning_threshold_leaves, log)
-    leaf_labels, pruned_test_acc = analyse_tree(
-        tree,
-        classes,
-        epoch,
-        leaf_labels,
-        log,
-        pruning_threshold_leaves,
-        testloader,
-        eval_name="pruned",
-    )
-    save_tree(pruned_tree, optimizer, scheduler, log.checkpoint_dir, name="pruned")
-
-    # find "real image" prototypes through projection
-    # TODO: don't overwrite tree...
-    project_info, tree = project_with_class_constraints(
-        deepcopy(pruned_tree), projectloader, device, args, log
-    )
-    name = "pruned_and_projected"
-    save_tree(tree, optimizer, scheduler, log.checkpoint_dir, name=name)
-    pruned_projected_tree = deepcopy(tree)
-    # Analyse and evaluate pruned tree with projected prototypes
-    average_distance_nearest_image(project_info, tree, log)
-    analyse_leaves(
-        tree, epoch + 3, len(classes), leaf_labels, pruning_threshold_leaves, log
-    )
-    log_leaf_distributions_analysis(tree, log)
-    eval_info = eval_tree(tree, testloader, name, device, log)
-    pruned_projected_test_acc = eval_info["test_accuracy"]
-    eval_info_samplemax = eval_tree(tree, testloader, name, device, log, "sample_max")
-    get_avg_path_length(tree, eval_info_samplemax, log)
-    eval_info_greedy = eval_tree(tree, testloader, name, device, log, "greedy")
-    get_avg_path_length(tree, eval_info_greedy, log)
-    fidelity_info = eval_fidelity(tree, testloader, device, log)
-
-    # Upsample prototype for visualization
-    project_info = upsample(tree, project_info, projectloader, name, args, log)
-    # visualize tree
-    gen_vis(tree, name, args, classes)
-
-    # TODO: simplify this, it is actually never used...
-    return (
-        tree.to("cpu"),
-        pruned_tree.to("cpu"),
-        pruned_projected_tree.to("cpu"),
-        test_acc,
-        pruned_test_acc,
-        pruned_projected_test_acc,
-        project_info,
-        eval_info_samplemax,
-        eval_info_greedy,
-        fidelity_info,
-    )
+    # # prune
+    # pruned_tree = deepcopy(tree)
+    # prune(pruned_tree, pruning_threshold_leaves, log)
+    # leaf_labels, pruned_test_acc = analyse_tree(
+    #     tree,
+    #     classes,
+    #     epoch,
+    #     leaf_labels,
+    #     log,
+    #     pruning_threshold_leaves,
+    #     testloader,
+    #     eval_name="pruned",
+    # )
+    # save_tree(pruned_tree, optimizer, scheduler, log.checkpoint_dir, name="pruned")
+    #
+    # # find "real image" prototypes through projection
+    # # TODO: don't overwrite tree...
+    # project_info, tree = project_with_class_constraints(
+    #     deepcopy(pruned_tree), projectloader, device, args, log
+    # )
+    # name = "pruned_and_projected"
+    # save_tree(tree, optimizer, scheduler, log.checkpoint_dir, name=name)
+    # pruned_projected_tree = deepcopy(tree)
+    # # Analyse and evaluate pruned tree with projected prototypes
+    # average_distance_nearest_image(project_info, tree, log)
+    # analyse_leaves(
+    #     tree, epoch + 3, len(classes), leaf_labels, pruning_threshold_leaves, log
+    # )
+    # log_leaf_distributions_analysis(tree, log)
+    # eval_info = eval_tree(tree, testloader, name, device, log)
+    # pruned_projected_test_acc = eval_info["test_accuracy"]
+    # eval_info_samplemax = eval_tree(tree, testloader, name, device, log, "sample_max")
+    # get_avg_path_length(tree, eval_info_samplemax, log)
+    # eval_info_greedy = eval_tree(tree, testloader, name, device, log, "greedy")
+    # get_avg_path_length(tree, eval_info_greedy, log)
+    # fidelity_info = eval_fidelity(tree, testloader, device, log)
+    #
+    # # Upsample prototype for visualization
+    # project_info = upsample(tree, project_info, projectloader, name, args, log)
+    # # visualize tree
+    # gen_vis(tree, name, args, classes)
+    #
+    # # TODO: simplify this, it is actually never used...
+    # return (
+    #     tree.to("cpu"),
+    #     pruned_tree.to("cpu"),
+    #     pruned_projected_tree.to("cpu"),
+    #     test_acc,
+    #     pruned_test_acc,
+    #     pruned_projected_test_acc,
+    #     project_info,
+    #     eval_info_samplemax,
+    #     eval_info_greedy,
+    #     fidelity_info,
+    # )
 
 
 def analyse_tree(

@@ -1,5 +1,3 @@
-import argparse
-import os
 import pickle
 from pathlib import Path
 
@@ -12,6 +10,7 @@ from util.func import min_pool2d
 from util.l2conv import L2Conv2D
 
 
+# TODO: inherit from Node?
 class ProtoTree(nn.Module):
 
     ARGUMENTS = ["depth", "num_features", "W1", "H1", "log_probabilities"]
@@ -54,7 +53,7 @@ class ProtoTree(nn.Module):
                     index,
                     left,
                     right,
-                    log_probabilities=self._log_probabilities,
+                    log_probabilities=log_probabilities,
                 )
 
         self._root = create_tree_from_node_index(0, 0)
@@ -64,7 +63,7 @@ class ProtoTree(nn.Module):
         # Build the tree
 
         self.num_features = num_features
-        self.num_prototypes = self.num_branches
+        self.num_prototypes = self.num_descendants
         self.prototype_shape = (W1, H1, num_features)
 
         # Keep a dict that stores a reference to each node's parent
@@ -84,7 +83,7 @@ class ProtoTree(nn.Module):
         self._kontschieder_normalization = kontschieder_normalization
         self._kontschieder_train = kontschieder_train
         # Map each decision node to an output of the feature net
-        self._out_map = {n: i for i, n in zip(range(2**depth - 1), self.branches)}
+        self._out_map = {n: i for i, n in zip(range(2**depth - 1), self.descendants)}
 
         self.prototype_layer = L2Conv2D(self.num_prototypes, self.num_features, W1, H1)
 
@@ -211,7 +210,7 @@ class ProtoTree(nn.Module):
         # Store the probability of arriving at all nodes in the decision tree
         info["pa_tensor"] = {n.index: attr[n, "pa"].unsqueeze(1) for n in self.nodes}
         # Store the output probabilities of all decision nodes in the tree
-        info["ps"] = {n.index: attr[n, "ps"].unsqueeze(1) for n in self.branches}
+        info["ps"] = {n.index: attr[n, "ps"].unsqueeze(1) for n in self.descendants}
 
         # Generate the output based on the chosen sampling strategy
         if sampling_strategy == ProtoTree.SAMPLING_STRATEGIES[0]:  # Distributed
@@ -256,7 +255,7 @@ class ProtoTree(nn.Module):
             # Keep track of all nodes encountered
             for i in range(batch_size):
                 node = self._root
-                while node in self.branches:
+                while node in self.descendants:
                     routing[i] += [node]
                     if attr[node, "ps"][i].item() > threshold:
                         node = node.right
@@ -309,7 +308,7 @@ class ProtoTree(nn.Module):
         return self._root.nodes
 
     @property
-    def nodes_by_index(self) -> dict:
+    def descendants_by_index(self) -> dict:
         return self._root.descendants_by_index
 
     @property
@@ -327,7 +326,7 @@ class ProtoTree(nn.Module):
         return _assign_depths(self._root, 0)
 
     @property
-    def branches(self) -> set:
+    def descendants(self) -> set:
         return self._root.descendants
 
     @property
@@ -335,7 +334,7 @@ class ProtoTree(nn.Module):
         return self._root.leaves
 
     @property
-    def num_branches(self) -> int:
+    def num_descendants(self) -> int:
         return self._root.num_descendants
 
     @property
