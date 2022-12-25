@@ -25,7 +25,7 @@ def get_local_expl_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset",
         type=str,
-        default="CUB-200-2011",
+        default="CUB",
         help="Data set on which the ProtoTree was trained",
     )
     parser.add_argument(
@@ -57,10 +57,10 @@ def get_local_expl_args() -> argparse.Namespace:
         "--upsample_threshold",
         type=float,
         default=0.98,
-        help="Threshold (between 0 and 1) for visualizing the nearest patch of an image after upsampling. The higher this threshold, the larger the patches.",
+        help="Threshold (between 0 and 1) for visualizing the nearest patch of an image after upsampling. The higher "
+        "this threshold, the larger the patches.",
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def explain_local(args):
@@ -77,7 +77,7 @@ def explain_local(args):
     # Obtain the dataset and dataloaders
     args.batch_size = 64  # placeholder
     args.augment = True  # placeholder
-    _, _, _, classes, _ = get_dataloaders(args)
+    _, _, _, classes = get_dataloaders(args)
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
     normalize = transforms.Normalize(mean=mean, std=std)

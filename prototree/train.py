@@ -37,9 +37,9 @@ def train_epoch(
     with torch.no_grad():
         _old_dist_params = dict()
         for leaf in tree.leaves:
-            _old_dist_params[leaf] = leaf._dist_params.detach().clone()
+            _old_dist_params[leaf] = leaf.dist_params.detach().clone()
         # Optimize class distributions in leafs
-        eye = torch.eye(tree._num_classes).to()
+        eye = torch.eye(tree.num_classes, device=tree.device())
 
     # Show progress on progress bar
     train_iter = tqdm(
@@ -103,11 +103,11 @@ def train_epoch(
                             dim=0,
                         )
                     # TODO: WTF! Mutating a private field
-                    leaf._dist_params -= _old_dist_params[leaf] / nr_batches
+                    leaf.dist_params -= _old_dist_params[leaf] / nr_batches
                     F.relu_(
-                        leaf._dist_params
+                        leaf.dist_params
                     )  # dist_params values can get slightly negative because of floating point issues. therefore, set to zero.
-                    leaf._dist_params += update
+                    leaf.dist_params += update
 
         # Count the number of correct classifications
         ys_pred_max = torch.argmax(ys_pred, dim=1)
@@ -250,7 +250,7 @@ def train_leaves_epoch(
     with torch.no_grad():
         _old_dist_params = dict()
         for leaf in tree.leaves:
-            _old_dist_params[leaf] = leaf._dist_params.detach().clone()
+            _old_dist_params[leaf] = leaf.dist_params.detach().clone()
         # Optimize class distributions in leafs
         eye = torch.eye(tree.num_classes).to(device)
 
@@ -267,7 +267,7 @@ def train_leaves_epoch(
 
         # Create empty tensor for each leaf that will be filled with new values
         for leaf in tree.leaves:
-            update_sum[leaf] = torch.zeros_like(leaf._dist_params)
+            update_sum[leaf] = torch.zeros_like(leaf.dist_params)
 
         for i, (xs, ys) in train_iter:
             xs, ys = xs.to(device), ys.to(device)
@@ -295,5 +295,5 @@ def train_leaves_epoch(
                 update_sum[leaf] += update
 
         for leaf in tree.leaves:
-            leaf._dist_params -= leaf._dist_params  # set current dist params to zero
-            leaf._dist_params += update_sum[leaf]  # give dist params new value
+            leaf.dist_params -= leaf.dist_params  # set current dist params to zero
+            leaf.dist_params += update_sum[leaf]  # give dist params new value

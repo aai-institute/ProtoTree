@@ -128,7 +128,7 @@ def analyse_leaves(
                     log.log_message(
                         str(leaf.index)
                         + ", "
-                        + str(leaf._dist_params)
+                        + str(leaf.dist_params)
                         + ", "
                         + str(torch.exp(leaf.distribution()))
                     )
@@ -136,7 +136,7 @@ def analyse_leaves(
                     log.log_message(
                         str(leaf.index)
                         + ", "
-                        + str(leaf._dist_params)
+                        + str(leaf.dist_params)
                         + ", "
                         + str(leaf.distribution())
                     )
@@ -146,7 +146,7 @@ def analyse_leaves(
         classes_covered = []
 
         for leaf in tree.leaves:
-            label = torch.argmax(leaf._dist_params).item()
+            label = torch.argmax(leaf.dist_params).item()
 
             if leaf.log_probabilities:
                 value = torch.max(torch.exp(leaf.distribution())).item()

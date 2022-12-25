@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from config import dataset_dir
+from config import dataset_dir, project_dir, test_dir, train_dir
 
 
 # TODO: simplify signature
@@ -59,7 +59,7 @@ def get_dataloaders(
         test_set, batch_size=batch_size, shuffle=False, pin_memory=pin_memory
     )
     print("Num classes (k) = ", len(classes), flush=True)
-    return train_loader, project_loader, test_loader, classes, c
+    return train_loader, project_loader, test_loader, classes
 
 
 def get_birds(augment_train_set=True, img_size=224) -> tuple:
@@ -71,9 +71,6 @@ def get_birds(augment_train_set=True, img_size=224) -> tuple:
     """
     # TODO: move those to config.py
     # TODO 2: we actually train on the corners, why? Is this to reveal biases?
-    train_dir = dataset_dir / "train_corners"
-    project_dir = dataset_dir / "train_crop"
-    test_dir = dataset_dir / "test_full"
 
     shape = (3, img_size, img_size)
     mean = (0.485, 0.456, 0.406)
@@ -107,6 +104,7 @@ def get_birds(augment_train_set=True, img_size=224) -> tuple:
     else:
         transform = base_transform
 
+    # TODO: relax hardcoded datasets, make this into a generic loader
     train_set = ImageFolder(train_dir, transform=transform)
     project_set = ImageFolder(project_dir, transform=base_transform)
     test_set = ImageFolder(test_dir, transform=base_transform)

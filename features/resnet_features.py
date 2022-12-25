@@ -130,9 +130,10 @@ class ResNet_features(nn.Module):
     the average pooling and final fully convolutional layer is removed
     """
 
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False):
+    def __init__(self, block, layers, zero_init_residual=False):
         super(ResNet_features, self).__init__()
 
+        # TODO: this is later modified in _make_layer! Goddamn
         self.inplanes = 64
 
         # the first convolutional layer before the structured sequence of blocks
@@ -191,6 +192,7 @@ class ResNet_features(nn.Module):
         # only the first block has downsample that is possibly not None
         layers.append(block(self.inplanes, planes, stride, downsample))
 
+        # TODO: what is up with that? This is modified 5 times over
         self.inplanes = planes * block.expansion
         for _ in range(1, num_blocks):
             layers.append(block(self.inplanes, planes))

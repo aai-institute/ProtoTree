@@ -196,25 +196,21 @@ class Leaf(Node):
 
         # Initialize the distribution parameters
         if disable_derivative_free_leaf_optim:
-            self._dist_params = nn.Parameter(
+            self.dist_params = nn.Parameter(
                 torch.randn(num_classes), requires_grad=True
             )
         elif kontschieder_normalization:
-            self._dist_params = nn.Parameter(
+            self.dist_params = nn.Parameter(
                 torch.ones(num_classes), requires_grad=False
             )
         else:
-            self._dist_params = nn.Parameter(
+            self.dist_params = nn.Parameter(
                 torch.zeros(num_classes), requires_grad=False
             )
 
         # Flag that indicates whether probabilities or log probabilities are computed
         self.log_probabilities = log_probabilities
         self.kontschieder_normalization = kontschieder_normalization
-
-    @property
-    def dist_params(self) -> torch.Tensor:
-        return self._dist_params
 
     def forward(self, xs: torch.Tensor, **kwargs):
 
@@ -254,29 +250,27 @@ class Leaf(Node):
     def distribution(self) -> torch.Tensor:
         if not self.kontschieder_normalization:
             if self.log_probabilities:
-                return F.log_softmax(self._dist_params, dim=0)
+                return F.log_softmax(self.dist_params, dim=0)
             else:
                 # Return numerically stable softmax (see http://www.deeplearningbook.org/contents/numerical.html)
-                return F.softmax(
-                    self._dist_params - torch.max(self._dist_params), dim=0
-                )
+                return F.softmax(self.dist_params - torch.max(self.dist_params), dim=0)
 
         else:
             # kontschieder_normalization's version that uses a normalization factor instead of softmax:
             if self.log_probabilities:
                 return torch.log(
-                    (self._dist_params / torch.sum(self._dist_params)) + 1e-10
+                    (self.dist_params / torch.sum(self.dist_params)) + 1e-10
                 )  # add small epsilon for numerical stability
             else:
-                return self._dist_params / torch.sum(self._dist_params)
+                return self.dist_params / torch.sum(self.dist_params)
 
     @property
     def requires_grad(self) -> bool:
-        return self._dist_params.requires_grad
+        return self.dist_params.requires_grad
 
     @requires_grad.setter
     def requires_grad(self, val: bool):
-        self._dist_params.requires_grad = val
+        self.dist_params.requires_grad = val
 
     @property
     def size(self) -> int:

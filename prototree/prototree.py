@@ -21,7 +21,7 @@ class ProtoTree(nn.Module):
         self,
         num_classes: int,
         depth: int,
-        num_features: int,
+        out_channels: int,
         W1: int,
         H1: int,
         feature_net: torch.nn.Module,
@@ -62,9 +62,10 @@ class ProtoTree(nn.Module):
 
         # Build the tree
 
-        self.num_features = num_features
+        self.out_channels = out_channels
         self.num_prototypes = self.num_descendants
-        self.prototype_shape = (W1, H1, num_features)
+        # TODO: remove, query self.prototype_layer instead
+        self.prototype_shape = (W1, H1, self.out_channels)
 
         # Keep a dict that stores a reference to each node's parent
         # Key: node -> Value: the node's parent
@@ -85,7 +86,7 @@ class ProtoTree(nn.Module):
         # Map each decision node to an output of the feature net
         self._out_map = {n: i for i, n in zip(range(2**depth - 1), self.descendants)}
 
-        self.prototype_layer = L2Conv2D(self.num_prototypes, self.num_features, W1, H1)
+        self.prototype_layer = L2Conv2D(self.num_prototypes, self.out_channels, W1, H1)
 
     def init_prototype_layer(self):
         # TODO: wassup with the constants?
@@ -159,11 +160,9 @@ class ProtoTree(nn.Module):
         sampling_strategy: str = SAMPLING_STRATEGIES[0],  # `distributed` by default
         **kwargs,
     ) -> tuple:
-        assert sampling_strategy in ProtoTree.SAMPLING_STRATEGIES
-
-        """
-            PERFORM A FORWARD PASS THROUGH THE FEATURE NET
-        """
+        assert (
+            sampling_strategy in ProtoTree.SAMPLING_STRATEGIES
+        ), f"Got sampling_strategy={sampling_strategy}, expected one of {ProtoTree.SAMPLING_STRATEGIES}"
 
         # Perform a forward pass with the conv net
         features = self._net(xs)
@@ -175,9 +174,8 @@ class ProtoTree(nn.Module):
         """
 
         # Use the features to compute the distances from the prototypes
-        distances = self.prototype_layer(
-            features
-        )  # Shape: (batch_size, num_prototypes, W, H)
+        # Shape: (batch_size, num_prototypes, W, H)
+        distances = self.prototype_layer(features)
 
         # Perform global min pooling to see the minimal distance for each prototype to any patch of the input image
         min_distances = min_pool2d(distances, kernel_size=(W, H))
@@ -208,9 +206,13 @@ class ProtoTree(nn.Module):
 
         info = dict()
         # Store the probability of arriving at all nodes in the decision tree
-        info["pa_tensor"] = {n.index: attr[n, "pa"].unsqueeze(1) for n in self.nodes}
+        info["pa_tensor"] = {
+            n.index: attr[n, "p_arrival"].unsqueeze(1) for n in self.nodes
+        }
         # Store the output probabilities of all decision nodes in the tree
-        info["ps"] = {n.index: attr[n, "ps"].unsqueeze(1) for n in self.descendants}
+        info["p_stop"] = {
+            n.index: attr[n, "p_stop"].unsqueeze(1) for n in self.descendants
+        }
 
         # Generate the output based on the chosen sampling strategy
         if sampling_strategy == ProtoTree.SAMPLING_STRATEGIES[0]:  # Distributed
@@ -222,7 +224,7 @@ class ProtoTree(nn.Module):
             leaves = list(self.leaves)
             # Obtain path probabilities of arriving at each leaf
             pas = [
-                attr[l, "pa"].view(batch_size, 1) for l in leaves
+                attr[l, "p_arrival"].view(batch_size, 1) for l in leaves
             ]  # All shaped (bs, 1)
             # Obtain output distributions of each leaf
             dss = [
@@ -257,7 +259,7 @@ class ProtoTree(nn.Module):
                 node = self._root
                 while node in self.descendants:
                     routing[i] += [node]
-                    if attr[node, "ps"][i].item() > threshold:
+                    if attr[node, "p_stop"][i].item() > threshold:
                         node = node.right
                     else:
                         node = node.left

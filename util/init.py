@@ -103,7 +103,7 @@ def _load_tree_and_reset_scheduler(
     if not disable_derivative_free_leaf_optim:
         for leaf in tree.leaves:
             # TODO: mutating private fields
-            leaf._dist_params.requires_grad = False
+            leaf.dist_params.requires_grad = False
 
     if (state_dict_dir_tree / "scheduler_state.pth").exists():
         # TODO: wtf? mutating fields, including private ones...

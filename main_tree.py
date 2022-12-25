@@ -51,15 +51,20 @@ def get_log(log_dir: str):
 
 
 def run_tree(args: Namespace):
+    # data
     dataset = args.dataset
-    disable_cuda = args.disable_cuda
-    batch_size = args.batch_size
     log_dir = args.log_dir
+
+    # training hardware
+    disable_cuda = args.disable_cuda
+    # batch_size = args.batch_size
+    batch_size = 32
     milestones = args.milestones
     gamma = args.gamma
     pruning_threshold_leaves = args.pruning_threshold_leaves
-    freeze_epochs = args.freeze_epochs
-    net = args.net
+
+    # freeze_epochs = args.freeze_epochs
+    freeze_epochs = 0
 
     # Optimizer args
     lr = args.lr
@@ -70,8 +75,10 @@ def run_tree(args: Namespace):
     weight_decay = args.weight_decay
     disable_derivative_free_leaf_optim = args.disable_derivative_free_leaf_optim
 
-    # Training args
-    epochs = args.epochs
+    # Training loop args
+    # epochs = args.epochs
+    epochs = 10
+    evaluate_each_epoch = 3
     kontschieder_train = args.kontschieder_train
     kontschieder_normalization = args.kontschieder_normalization
     # TODO: rename in args
@@ -83,31 +90,19 @@ def run_tree(args: Namespace):
     H1 = args.H1
     W1 = args.W1
     depth = args.depth
-    num_features = args.num_features
+    out_channels = args.num_features
 
     log = get_log(log_dir)
     save_args(args, log.metadata_dir)
 
-    device = get_device(disable_cuda, log)
-
-    trainloader, projectloader, testloader, classes, num_channels = get_dataloaders(
+    train_loader, project_loader, test_loader, classes = get_dataloaders(
         dataset=dataset, disable_cuda=disable_cuda, batch_size=batch_size
     )
 
-    # Create a convolutional network based on arguments and add 1x1 conv layer
-    features_net, add_on_layers = get_network(
-        num_channels, net=net, pretrained=pretrained
-    )
-    tree = ProtoTree(
-        num_classes=len(classes),
-        num_features=num_features,
-        depth=depth,
-        feature_net=features_net,
-        add_on_layers=add_on_layers,
-        H1=H1,
-        W1=W1,
-    )
-    tree = tree.to(device=device)
+    tree = create_proto_tree(H1, W1, classes, depth, net, out_channels, pretrained)
+    device = get_device(disable_cuda, log)
+    print(f"Running on {device=}")
+    tree = tree.to(device)
 
     optimizer, params_to_freeze, params_to_train = get_optimizer(
         tree,
@@ -130,65 +125,67 @@ def run_tree(args: Namespace):
     # TODO: I removed the loading part, the paths to load from would previously be read off the args
     tree, epoch = init_tree(tree, optimizer, scheduler=scheduler)
 
-    tree.save(f"{log.checkpoint_dir}/tree_init")
+    # tree.save(f"{log.checkpoint_dir}/tree_init")
     log.log_message(
         "Max depth %s, so %s internal nodes and %s leaves"
-        % (args.depth, tree.num_descendants, tree.num_leaves)
+        % (depth, tree.num_descendants, tree.num_leaves)
     )
-    analyse_output_shape(tree, trainloader, log, device)
+    analyse_output_shape(tree, train_loader, log, device)
 
     leaf_labels = dict()
     best_train_acc = 0.0
     best_test_acc = 0.0
     test_acc = 0.0
     # train and evaluate
-    if epoch < epochs + 1:
-        for epoch in range(epoch, args.epochs + 1):
-            best_train_acc, leaf_labels, train_info = train_single_epoch(
-                best_train_acc,
-                classes,
-                disable_derivative_free_leaf_optim,
-                epoch,
-                freeze_epochs,
-                kontschieder_normalization,
-                kontschieder_train,
-                leaf_labels,
-                log,
-                net,
-                optimizer,
-                params_to_freeze,
-                scheduler,
-                trainloader,
-                tree,
-                pruning_threshold_leaves,
-            )
+    # if epoch < epochs + 1:
+    for epoch in range(epoch, epochs + 1):
+        # TODO: this also saves the stuff, separate this out
+        best_train_acc, leaf_labels, train_info = train_single_epoch(
+            best_train_acc,
+            classes,
+            disable_derivative_free_leaf_optim,
+            epoch,
+            freeze_epochs,
+            kontschieder_normalization,
+            kontschieder_train,
+            leaf_labels,
+            log,
+            net,
+            optimizer,
+            params_to_freeze,
+            scheduler,
+            train_loader,
+            tree,
+            pruning_threshold_leaves,
+        )
 
-            # Evaluate tree
-            if epoch % 10 == 0 or epoch == epochs:
-                eval_info = eval_tree(tree, testloader, epoch, device, log)
-                test_acc = eval_info["test_accuracy"]
-                if test_acc > best_test_acc:
-                    best_test_acc = test_acc
-                    tree.save(f"{log.checkpoint_dir}/best_test_model")
-            log.log_values(
-                "log_epoch_overview",
-                epoch,
-                test_acc,
-                train_info["train_accuracy"],
-                train_info["loss"],
+        # Evaluate tree
+        if epoch % evaluate_each_epoch == 0 or epoch == epochs:
+            eval_info = eval_tree(
+                tree, test_loader, log, eval_name=f"Testing after epoch: {epoch}"
             )
-            scheduler.step()
+            test_acc = eval_info["test_accuracy"]
+            if test_acc > best_test_acc:
+                best_test_acc = test_acc
+                tree.save(f"{log.checkpoint_dir}/best_test_model")
+        log.log_values(
+            "log_epoch_overview",
+            epoch,
+            test_acc,
+            train_info["train_accuracy"],
+            train_info["loss"],
+        )
     # only evaluate and for some reason also save, I disabled it for now
-    else:  # tree was loaded and not trained, so evaluate only
-        raise NotImplementedError("This is not implemented yet")
-        # eval_info = eval(tree, testloader, epoch, device, log)
-        # test_acc = eval_info["test_accuracy"]
-        # save_tree(
-        #     tree, optimizer, scheduler, log.checkpoint_dir, "best_test_model"
-        # )
-        # log.log_values(
-        #     "log_epoch_overview", epoch, eval_info["test_accuracy"], "n.a.", "n.a."
-        # )
+    # else:  # tree was loaded and not trained, so evaluate only
+    #     raise NotImplementedError("This is not implemented yet")
+    # eval_info = eval(tree, test_loader, epoch, device, log)
+    # test_acc = eval_info["test_accuracy"]
+    # save_tree(
+    #     tree, optimizer, scheduler, log.checkpoint_dir, "best_test_model"
+    # )
+    # log.log_values(
+    #     "log_epoch_overview", epoch, eval_info["test_accuracy"], "n.a.", "n.a."
+    # )
 
     # EVALUATE AND ANALYSE TRAINED TREE
     log.log_message(
@@ -196,7 +193,7 @@ def run_tree(args: Namespace):
         % (str(best_train_acc), str(best_test_acc))
     )
     leaf_labels = analyse_leaves(
-        tree, epoch + 1, len(classes), leaf_labels, args.pruning_threshold_leaves, log
+        tree, epoch + 1, len(classes), leaf_labels, pruning_threshold_leaves, log
     )
     log_leaf_distributions_analysis(tree, log)
 
@@ -210,7 +207,7 @@ def run_tree(args: Namespace):
     #     leaf_labels,
     #     log,
     #     pruning_threshold_leaves,
-    #     testloader,
+    #     test_loader,
     #     eval_name="pruned",
     # )
     # save_tree(pruned_tree, optimizer, scheduler, log.checkpoint_dir, name="pruned")
@@ -218,7 +215,7 @@ def run_tree(args: Namespace):
     # # find "real image" prototypes through projection
     # # TODO: don't overwrite tree...
     # project_info, tree = project_with_class_constraints(
-    #     deepcopy(pruned_tree), projectloader, device, args, log
+    #     deepcopy(pruned_tree), project_loader, device, args, log
     # )
     # name = "pruned_and_projected"
     # save_tree(tree, optimizer, scheduler, log.checkpoint_dir, name=name)
@@ -229,16 +226,16 @@ def run_tree(args: Namespace):
     #     tree, epoch + 3, len(classes), leaf_labels, pruning_threshold_leaves, log
     # )
     # log_leaf_distributions_analysis(tree, log)
-    # eval_info = eval_tree(tree, testloader, name, device, log)
+    # eval_info = eval_tree(tree, test_loader, name, device, log)
     # pruned_projected_test_acc = eval_info["test_accuracy"]
-    # eval_info_samplemax = eval_tree(tree, testloader, name, device, log, "sample_max")
+    # eval_info_samplemax = eval_tree(tree, test_loader, name, device, log, "sample_max")
     # get_avg_path_length(tree, eval_info_samplemax, log)
-    # eval_info_greedy = eval_tree(tree, testloader, name, device, log, "greedy")
+    # eval_info_greedy = eval_tree(tree, test_loader, name, device, log, "greedy")
     # get_avg_path_length(tree, eval_info_greedy, log)
-    # fidelity_info = eval_fidelity(tree, testloader, device, log)
+    # fidelity_info = eval_fidelity(tree, test_loader, device, log)
     #
     # # Upsample prototype for visualization
-    # project_info = upsample(tree, project_info, projectloader, name, args, log)
+    # project_info = upsample(tree, project_info, project_loader, name, args, log)
     # # visualize tree
     # gen_vis(tree, name, args, classes)
     #
@@ -255,6 +252,23 @@ def run_tree(args: Namespace):
     #     eval_info_greedy,
     #     fidelity_info,
     # )
+
+
+def create_proto_tree(H1, W1, classes, depth, net, out_channels, pretrained):
+    # Create a convolutional network based on arguments and add 1x1 conv layer
+    features_net, add_on_layers = get_network(
+        out_channels, net=net, pretrained=pretrained
+    )
+    tree = ProtoTree(
+        num_classes=len(classes),
+        out_channels=out_channels,
+        depth=depth,
+        feature_net=features_net,
+        add_on_layers=add_on_layers,
+        H1=H1,
+        W1=W1,
+    )
+    return tree
 
 
 def analyse_tree(
@@ -322,27 +336,28 @@ def train_single_epoch(
         log,
         "log_train_epochs",
     )
-    # TODO: do we need that much saving?
-    save_tree(
-        tree, optimizer, scheduler, checkpoint_dir=log.checkpoint_dir, name="latest"
-    )
-    if epoch % 10 == 0:
-        save_tree(
-            tree,
-            optimizer,
-            scheduler,
-            checkpoint_dir=log.checkpoint_dir,
-            name=f"epoch_{epoch}",
-        )
+    # # TODO: do we need that much saving?
+    # save_tree(
+    #     tree, optimizer, scheduler, checkpoint_dir=log.checkpoint_dir, name="latest"
+    # )
+    # # TODO: move
+    # if epoch % 3 == 0:
+    #     save_tree(
+    #         tree,
+    #         optimizer,
+    #         scheduler,
+    #         checkpoint_dir=log.checkpoint_dir,
+    #         name=f"epoch_{epoch}",
+    #     )
     train_accuracy = train_info["train_accuracy"]
-    if train_accuracy > best_train_acc:
-        save_tree(
-            tree,
-            optimizer,
-            scheduler,
-            checkpoint_dir=log.checkpoint_dir,
-            name="best_train",
-        )
+    # if train_accuracy > best_train_acc:
+    #     save_tree(
+    #         tree,
+    #         optimizer,
+    #         scheduler,
+    #         checkpoint_dir=log.checkpoint_dir,
+    #         name="best_train",
+    #     )
     leaf_labels = analyse_leaves(
         tree,
         epoch,
@@ -351,6 +366,7 @@ def train_single_epoch(
         pruning_threshold_leaves,
         log,
     )
+    scheduler.step()
     return train_accuracy, leaf_labels, train_info
 
 
