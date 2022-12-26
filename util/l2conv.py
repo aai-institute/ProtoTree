@@ -9,17 +9,19 @@ class L2Conv2D(nn.Module):
     Convolutional layer that computes the squared L2 distance instead of the conventional inner product.
     """
 
-    def __init__(self, num_prototypes, num_feature_channels, w_1, h_1):
+    def __init__(self, num_prototypes: int, input_channels: int, w1: int, h1: int):
         """
         Create a new L2Conv2D layer
         :param num_prototypes: The number of prototypes in the layer
-        :param num_feature_channels: The number of channels in the input features
-        :param w_1: Width of the prototypes
-        :param h_1: Height of the prototypes
+        :param input_channels: The number of channels in the input features
+        :param w1: Width of the prototypes
+        :param h1: Height of the prototypes
         """
         super().__init__()
-        # Each prototype is a latent representation of shape (num_features, w_1, h_1)
-        prototype_shape = (num_prototypes, num_feature_channels, w_1, h_1)
+        self.num_prototypes = num_prototypes
+        self.prototype_shape = (w1, h1, input_channels)
+        # TODO: make consistent ordering!!
+        prototype_shape = (num_prototypes, input_channels, w1, h1)
         self.prototype_vectors = nn.Parameter(
             torch.randn(prototype_shape), requires_grad=True
         )

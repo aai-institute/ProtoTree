@@ -185,7 +185,7 @@ def gen_pred_vis(
     # Save an image containing the model output
     output_path = destination_folder + "/node_vis/output.jpg"
     leaf_ix = pred_info["out_leaf_ix"][0]
-    leaf = tree.nodes_by_index[leaf_ix]
+    leaf = tree.descendants_by_index[leaf_ix]
     decision_path = tree.path_to(leaf)
 
     upsample_local(tree, sample, sample_dir, folder_name, img_name, decision_path, args)

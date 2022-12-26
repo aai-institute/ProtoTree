@@ -1,5 +1,6 @@
 import pickle
 from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 import torch
@@ -35,7 +36,9 @@ class ProtoTree(nn.Module):
         assert depth > 0
         assert num_classes > 0
 
-        def create_tree_from_node_index(index: int, cur_depth: int) -> Node:
+        def create_tree_from_node_index(
+            index: int, cur_depth: int
+        ) -> Union[InternalNode, Leaf]:
             if cur_depth == depth:
                 return Leaf(
                     index,
@@ -60,17 +63,13 @@ class ProtoTree(nn.Module):
 
         self._num_classes = num_classes
 
-        # Build the tree
-
         self.out_channels = out_channels
         self.num_prototypes = self.num_descendants
-        # TODO: remove, query self.prototype_layer instead
-        self.prototype_shape = (W1, H1, self.out_channels)
 
         # Keep a dict that stores a reference to each node's parent
         # Key: node -> Value: the node's parent
         # The root of the tree is mapped to None
-        self._parents = dict()
+        self.node2parent: dict[Node, Optional[InternalNode]] = {}
         self._set_parents()  # Traverse the tree to build the self._parents dict
 
         # Set the feature network
@@ -94,6 +93,14 @@ class ProtoTree(nn.Module):
 
     def device(self):
         return next(self.parameters()).device
+
+    @property
+    def prototype_shape(self):
+        return self.prototype_layer.prototype_shape
+
+    @property
+    def root(self) -> InternalNode:
+        return self._root
 
     @property
     def num_classes(self) -> int:
@@ -313,8 +320,9 @@ class ProtoTree(nn.Module):
     def descendants_by_index(self) -> dict:
         return self._root.descendants_by_index
 
+    # TODO: this shouldn't be a property (among many other properties)
     @property
-    def node_depths(self) -> dict:
+    def node_depths(self) -> dict[Node, int]:
         def _assign_depths(node, d):
             if isinstance(node, Leaf):
                 return {node: d}
@@ -325,23 +333,23 @@ class ProtoTree(nn.Module):
                     **_assign_depths(node.left, d + 1),
                 }
 
-        return _assign_depths(self._root, 0)
+        return _assign_depths(self.root, 0)
 
     @property
     def descendants(self) -> set:
-        return self._root.descendants
+        return self.root.descendants
 
     @property
     def leaves(self) -> set:
-        return self._root.leaves
+        return self.root.leaves
 
     @property
     def num_descendants(self) -> int:
-        return self._root.num_descendants
+        return self.root.num_descendants
 
     @property
     def num_leaves(self) -> int:
-        return self._root.num_leaves
+        return self.root.num_leaves
 
     def save(self, basedir: str, file_name: str = "model.pth"):
         self.eval()
@@ -366,14 +374,15 @@ class ProtoTree(nn.Module):
     def load(directory_path: str):
         return torch.load(directory_path + "/model.pth")
 
+    # TODO: move whole parent logic to tree (i.e. to node and root node in particular) instead of this class
     def _set_parents(self) -> None:
-        self._parents.clear()
-        self._parents[self._root] = None
+        self.node2parent.clear()
+        self.node2parent[self.root] = None
 
         def _set_parents_recursively(node: Node):
             if isinstance(node, InternalNode):
-                self._parents[node.right] = node
-                self._parents[node.left] = node
+                self.node2parent[node.right] = node
+                self.node2parent[node.left] = node
                 _set_parents_recursively(node.right)
                 _set_parents_recursively(node.left)
                 return
@@ -382,12 +391,12 @@ class ProtoTree(nn.Module):
             raise Exception("Unrecognized node type!")
 
         # Set all parents by traversing the tree starting from the root
-        _set_parents_recursively(self._root)
+        _set_parents_recursively(self.root)
 
     def path_to(self, node: Node):
         assert node in self.leaves or node in self.branches
         path = [node]
-        while isinstance(self._parents[node], Node):
-            node = self._parents[node]
+        while isinstance(self.node2parent[node], Node):
+            node = self.node2parent[node]
             path = [node] + path
         return path

@@ -44,61 +44,66 @@ def has_max_prob_lower_threshold(node: Node, threshold: float):
 
 
 # Prune tree
-def prune(tree: ProtoTree, pruning_threshold_leaves: float, log: Log) -> list:
+def prune(tree: ProtoTree, pruning_threshold_leaves: float, log: Log):
     log.log_message("\nPruning...")
     log.log_message(
-        "Before pruning: %s branches and %s leaves"
-        % (tree.num_branches, tree.num_leaves)
+        f"Before pruning: {tree.num_descendants} descendants and {tree.num_leaves} leaves"
     )
-    num_prototypes_before = tree.num_branches
+    num_prototypes_before = tree.num_descendants
     node_idxs_to_prune = nodes_to_prune_based_on_leaf_dists_threshold(
         tree, pruning_threshold_leaves
     )
     to_prune = deepcopy(node_idxs_to_prune)
     # remove children from prune_list of nodes that would already be pruned
     for node_idx in node_idxs_to_prune:
-        if isinstance(tree.nodes_by_index[node_idx], InternalNode):
+        if isinstance(tree.descendants_by_index[node_idx], InternalNode):
             if node_idx > 0:  # parent cannot be root since root would then be removed
-                for child in tree.nodes_by_index[node_idx].nodes:
+                for child in tree.descendants_by_index[node_idx].nodes:
                     if child.index in to_prune and child.index != node_idx:
                         to_prune.remove(child.index)
 
+    # TODO: Jesus Christ...
     for node_idx in to_prune:
-        node = tree.nodes_by_index[node_idx]
-        parent = tree._parents[node]
+        node = tree.descendants_by_index[node_idx]
+        parent = tree.node2parent[node]
         if parent.index > 0:  # parent cannot be root since root would then be removed
             if node == parent.left:
-                if parent == tree._parents[parent].left:
+                if parent == tree.node2parent[parent].left:
                     # make right child of parent the left child of parent of parent
-                    tree._parents[parent.right] = tree._parents[parent]
-                    tree._parents[parent].left = parent.right
-                elif parent == tree._parents[parent].right:
+                    tree.node2parent[parent.right] = tree.node2parent[parent]
+                    tree.node2parent[parent].left = parent.right
+                elif parent == tree.node2parent[parent].right:
                     # make right child of parent the right child of parent of parent
-                    tree._parents[parent.right] = tree._parents[parent]
-                    tree._parents[parent].right = parent.right
+                    tree.node2parent[parent.right] = tree.node2parent[parent]
+                    tree.node2parent[parent].right = parent.right
                 else:
                     raise Exception("Pruning went wrong, this should not be possible")
 
             elif node == parent.right:
-                if parent == tree._parents[parent].left:
+                if parent == tree.node2parent[parent].left:
                     # make left child or parent the left child of parent of parent
-                    tree._parents[parent.left] = tree._parents[parent]
-                    tree._parents[parent].left = parent.left
-                elif parent == tree._parents[parent].right:
+                    tree.node2parent[parent.left] = tree.node2parent[parent]
+                    tree.node2parent[parent].left = parent.left
+                elif parent == tree.node2parent[parent].right:
                     # make left child of parent the right child of parent of parent
-                    tree._parents[parent.left] = tree._parents[parent]
-                    tree._parents[parent].right = parent.left
+                    tree.node2parent[parent.left] = tree.node2parent[parent]
+                    tree.node2parent[parent].right = parent.left
                 else:
-                    raise Exception("Pruning went wrong, this should not be possible")
+                    raise RuntimeError(
+                        "Pruning went wrong, this should not be possible"
+                    )
             else:
-                raise Exception("Pruning went wrong, this should not be possible")
+                raise RuntimeError("Pruning went wrong, this should not be possible")
 
     log.log_message(
         "After pruning: %s branches and %s leaves"
-        % (tree.num_branches, tree.num_leaves)
+        % (tree.num_descendants, tree.num_leaves)
     )
     log.log_message(
         "Fraction of prototypes pruned: %s"
-        % ((num_prototypes_before - tree.num_branches) / float(num_prototypes_before))
+        % (
+            (num_prototypes_before - tree.num_descendants)
+            / float(num_prototypes_before)
+        )
         + "\n"
     )

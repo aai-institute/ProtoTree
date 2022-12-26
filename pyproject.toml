@@ -2,6 +2,8 @@
 # See https://black.readthedocs.io/en/stable/compatible_configs.html
 [tool.isort]
 profile = "black"
+skip_glob = ["data/*", "runs/*"]
+
 
 [build-system]
 requires = ["setuptools >= 40.6.0", "wheel"]

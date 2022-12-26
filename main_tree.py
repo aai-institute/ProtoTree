@@ -61,7 +61,10 @@ def run_tree(args: Namespace):
     batch_size = 32
     milestones = args.milestones
     gamma = args.gamma
-    pruning_threshold_leaves = args.pruning_threshold_leaves
+    # TODO: this cannot come from args, needs to be adjusted to num of classes!!
+    # pruning_threshold_leaves = args.pruning_threshold_leaves
+    pruning_threshold_percentage = 0.1
+    pruning_threshold_leaves = 1 / 3 * (1 + pruning_threshold_percentage)
 
     # freeze_epochs = args.freeze_epochs
     freeze_epochs = 0
@@ -77,7 +80,7 @@ def run_tree(args: Namespace):
 
     # Training loop args
     # epochs = args.epochs
-    epochs = 10
+    epochs = 7
     evaluate_each_epoch = 3
     kontschieder_train = args.kontschieder_train
     kontschieder_normalization = args.kontschieder_normalization
@@ -140,8 +143,7 @@ def run_tree(args: Namespace):
     # if epoch < epochs + 1:
     for epoch in range(epoch, epochs + 1):
         # TODO: this also saves the stuff, separate this out
-        best_train_acc, leaf_labels, train_info = train_single_epoch(
-            best_train_acc,
+        leaf_labels, train_info = train_single_epoch(
             classes,
             disable_derivative_free_leaf_optim,
             epoch,
@@ -192,24 +194,25 @@ def run_tree(args: Namespace):
         "Training Finished. Best training accuracy was %s, best test accuracy was %s\n"
         % (str(best_train_acc), str(best_test_acc))
     )
-    leaf_labels = analyse_leaves(
+    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
         tree, epoch + 1, len(classes), leaf_labels, pruning_threshold_leaves, log
     )
-    log_leaf_distributions_analysis(tree, log)
+    # TODO: this logs a long array, removing it for now
+    # log_leaf_distributions_analysis(tree, log)
 
-    # # prune
-    # pruned_tree = deepcopy(tree)
-    # prune(pruned_tree, pruning_threshold_leaves, log)
-    # leaf_labels, pruned_test_acc = analyse_tree(
-    #     tree,
-    #     classes,
-    #     epoch,
-    #     leaf_labels,
-    #     log,
-    #     pruning_threshold_leaves,
-    #     test_loader,
-    #     eval_name="pruned",
-    # )
+    # prune
+    pruned_tree = deepcopy(tree)
+    prune(pruned_tree, pruning_threshold_leaves, log)
+    leaf_labels, pruned_test_acc = analyse_tree(
+        tree,
+        classes,
+        epoch,
+        leaf_labels,
+        log,
+        pruning_threshold_leaves,
+        test_loader,
+        eval_name="pruned",
+    )
     # save_tree(pruned_tree, optimizer, scheduler, log.checkpoint_dir, name="pruned")
     #
     # # find "real image" prototypes through projection
@@ -271,6 +274,7 @@ def create_proto_tree(H1, W1, classes, depth, net, out_channels, pretrained):
     return tree
 
 
+# TODO: rename, split up
 def analyse_tree(
     tree,
     classes,
@@ -281,10 +285,24 @@ def analyse_tree(
     testloader,
     eval_name="Eval",
 ):
-    leaf_labels = analyse_leaves(
+    """
+    Does a whole bunch of logging to some secret log file
+
+    :param tree:
+    :param classes:
+    :param epoch:
+    :param leaf_labels:
+    :param log:
+    :param pruning_threshold_leaves:
+    :param testloader:
+    :param eval_name:
+    :return:
+    """
+    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
         tree, epoch + 2, len(classes), leaf_labels, pruning_threshold_leaves, log
     )
-    log_leaf_distributions_analysis(tree, log)
+    # TODO: this just logs a long array, really not necessary
+    # log_leaf_distributions_analysis(tree, log)
     eval_info = eval_tree(tree, testloader, log, eval_name=eval_name)
     pruned_test_acc = eval_info["test_accuracy"]
     return leaf_labels, pruned_test_acc
@@ -292,7 +310,6 @@ def analyse_tree(
 
 # TODO: just kill me now...
 def train_single_epoch(
-    best_train_acc,
     classes,
     disable_derivative_free_leaf_optim,
     epoch,
@@ -336,29 +353,8 @@ def train_single_epoch(
         log,
         "log_train_epochs",
     )
-    # # TODO: do we need that much saving?
-    # save_tree(
-    #     tree, optimizer, scheduler, checkpoint_dir=log.checkpoint_dir, name="latest"
-    # )
-    # # TODO: move
-    # if epoch % 3 == 0:
-    #     save_tree(
-    #         tree,
-    #         optimizer,
-    #         scheduler,
-    #         checkpoint_dir=log.checkpoint_dir,
-    #         name=f"epoch_{epoch}",
-    #     )
-    train_accuracy = train_info["train_accuracy"]
-    # if train_accuracy > best_train_acc:
-    #     save_tree(
-    #         tree,
-    #         optimizer,
-    #         scheduler,
-    #         checkpoint_dir=log.checkpoint_dir,
-    #         name="best_train",
-    #     )
-    leaf_labels = analyse_leaves(
+
+    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
         tree,
         epoch,
         len(classes),
@@ -367,7 +363,7 @@ def train_single_epoch(
         log,
     )
     scheduler.step()
-    return train_accuracy, leaf_labels, train_info
+    return leaf_labels, train_info
 
 
 def get_device(disable_cuda, log):

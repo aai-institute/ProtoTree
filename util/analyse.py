@@ -8,33 +8,6 @@ from prototree.prototree import ProtoTree
 from util.log import Log
 
 
-def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
-    # If possible, get the depth of the leaf corresponding to the decision
-    if "out_leaf_ix" not in info.keys():
-        log.log_message(
-            "Soft tree with distributed routing. Path length is always %s across all nodes"
-            % (tree.depth)
-        )
-    else:  # greedy or sample_max routing
-        depths = tree.node_depths
-        # Get a dict mapping all node indices to the node objects
-        node_ixs = tree.nodes_by_index
-        ixs = info[
-            "out_leaf_ix"
-        ]  # Get all indices of the leaves corresponding to the decisions
-        pred_depths = [depths[node_ixs[ix]] for ix in ixs]  # Add them to the collection
-        avg_depth = sum(pred_depths) / float(len(pred_depths))
-        log.log_message(
-            "Tree with deterministic routing. Average path length is %s with std %s"
-            % ((avg_depth), np.std(pred_depths))
-        )
-        log.log_message(
-            "Tree with deterministic routing. Longest path has length %s, shortest path has length %s"
-            % ((np.max(pred_depths)), np.min(pred_depths))
-        )
-    return pred_depths
-
-
 def log_learning_rates(
     optimizer, net: str, log: Log, disable_derivative_free_leaf_optim=False
 ):
@@ -117,29 +90,20 @@ def analyse_output_shape(tree: ProtoTree, trainloader: DataLoader, log: Log, dev
 
 
 # TODO: this has to be called as leaf_labels = analyse_leaf_labels(leaf_labels...). Fix this pattern!
-def analyse_leaves(
+# TODO: the new name says it all, refactor this!
+def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
     tree: ProtoTree, epoch: int, k: int, leaf_labels: dict, threshold: float, log: Log
 ):
     with torch.no_grad():
         if tree.depth <= 4:
             log.log_message("class distributions of leaves:")
-            for leaf in tree._root.leaves:
+            for leaf in tree.root.leaves:
                 if leaf.log_probabilities:
-                    log.log_message(
-                        str(leaf.index)
-                        + ", "
-                        + str(leaf.dist_params)
-                        + ", "
-                        + str(torch.exp(leaf.distribution()))
-                    )
+                    dist = torch.exp(leaf.distribution())
                 else:
-                    log.log_message(
-                        str(leaf.index)
-                        + ", "
-                        + str(leaf.dist_params)
-                        + ", "
-                        + str(leaf.distribution())
-                    )
+                    dist = leaf.distribution()
+                # logged to a CSV?
+                log.log_message(f"{leaf.index},{leaf.dist_params},{dist}")
 
         leaf_labels[epoch] = []
         leafs_higher_than = []
@@ -156,15 +120,13 @@ def analyse_leaves(
                 leafs_higher_than.append(leaf.index)
             leaf_labels[epoch].append((leaf.index, label))
             classes_covered.append(label)
-        log.log_message(
-            "\nLeafs with max > %s: %s" % (threshold, len(leafs_higher_than))
-        )
+        log.log_message(f"\nLeafs with max > {threshold}: {len(leafs_higher_than)}")
 
         class_without_leaf = 0
         for c in range(k):
             if c not in classes_covered:
                 class_without_leaf += 1
-        log.log_message("Classes without leaf: %s" % str(class_without_leaf))
+        log.log_message(f"Classes without leaf: {class_without_leaf}")
 
         if len(leaf_labels.keys()) >= 2:
             changed_prev = 0
@@ -175,15 +137,41 @@ def analyse_leaves(
                     if pair[0] in leafs_higher_than:
                         changed_prev_higher += 1
             log.log_message(
-                "Fraction changed pairs w.r.t previous epoch: %s"
-                % str(changed_prev / float(tree.num_leaves))
+                f"Fraction changed pairs w.r.t previous epoch: "
+                f"{changed_prev / float(tree.num_leaves)}"
             )
             if len(leafs_higher_than) > 0:
                 log.log_message(
-                    "Fraction changed leafs with max > threshold w.r.t previous epoch: %s"
-                    % str(changed_prev_higher / float(len(leafs_higher_than)))
+                    f"Fraction changed leafs with max > threshold w.r.t previous epoch: "
+                    f"{changed_prev_higher / len(leafs_higher_than)}"
                 )
     return leaf_labels
+
+
+# TODO: this is broken, see return warning
+# NOTE: only used in the ensemble, commenting out for now
+# def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
+#     # If possible, get the depth of the leaf corresponding to the decision
+#     if "out_leaf_ix" not in info.keys():
+#         log.log_message(
+#             f"Soft tree with distributed routing. Path length is always {tree.depth} across all nodes"
+#         )
+#     else:  # greedy or sample_max routing
+#         depths = tree.node_depths
+#         # Get a dict mapping all node indices to the node objects
+#         node_ixs = tree.descendants_by_index
+#         ixs = info[
+#             "out_leaf_ix"
+#         ]  # Get all indices of the leaves corresponding to the decisions
+#         pred_depths = [depths[node_ixs[ix]] for ix in ixs]  # Add them to the collection
+#         avg_depth = sum(pred_depths) / float(len(pred_depths))
+#         log.log_message(
+#             f"Tree with deterministic routing. Average path length is {avg_depth} with std {np.std(pred_depths)}"
+#         )
+#         log.log_message(
+#             f"Tree with deterministic routing. Longest path has length {np.max(pred_depths)}, shortest path has length {np.min(pred_depths)}"
+#         )
+#     return pred_depths
 
 
 #
