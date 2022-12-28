@@ -48,16 +48,12 @@ def train_epoch(
         desc=progress_prefix + " %s" % epoch,
         ncols=0,
     )
+    tree.train()
     # Iterate through the data set to update leaves, prototypes and network
     for i, (xs, ys) in train_iter:
-        # Make sure the model is in train mode
-        tree.train()
-        # Reset the gradients
         optimizer.zero_grad()
-
         xs, ys = xs.to(device), ys.to(device)
 
-        # Perform a forward pass through the network
         ys_pred, info = tree.forward(xs)
 
         # Learn prototypes and network with gradient descent.

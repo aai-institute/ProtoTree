@@ -2,8 +2,7 @@ import argparse
 import copy
 import math
 import os
-import subprocess
-from subprocess import check_call
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -14,37 +13,41 @@ from prototree.prototree import ProtoTree
 
 
 def gen_vis(
-    tree: ProtoTree, folder_name: str, args: argparse.Namespace, classes: tuple
+    tree: ProtoTree,
+    folder_name: str,
+    classes: tuple,
+    log_dir,
+    dir_for_saving_images,
 ):
-    destination_folder = os.path.join(args.log_dir, folder_name)
-    upsample_dir = os.path.join(
-        os.path.join(args.log_dir, args.dir_for_saving_images), folder_name
-    )
-    if not os.path.isdir(destination_folder):
-        os.mkdir(destination_folder)
-    if not os.path.isdir(destination_folder + "/node_vis"):
-        os.mkdir(destination_folder + "/node_vis")
+    log_dir = Path(log_dir)
+    destination_folder = log_dir / folder_name
+    upsample_dir = log_dir / dir_for_saving_images / folder_name
+    node_vis_dir = destination_folder / "node_vis"
+
+    node_vis_dir.mkdir(parents=True, exist_ok=True)
+    upsample_dir.mkdir(parents=True, exist_ok=True)
 
     with torch.no_grad():
         s = 'digraph T {margin=0;ranksep=".03";nodesep="0.05";splines="false";\n'
         s += 'node [shape=rect, label=""];\n'
-        s += _gen_dot_nodes(tree._root, destination_folder, upsample_dir, classes)
-        s += _gen_dot_edges(tree._root, classes)[0]
+        s += _gen_dot_nodes(tree.root, destination_folder, upsample_dir, classes)
+        s += _gen_dot_edges(tree.root, classes)[0]
         s += "}\n"
 
     with open(os.path.join(destination_folder, "treevis.dot"), "w") as f:
         f.write(s)
 
-    from_p = os.path.join(destination_folder, "treevis.dot")
-    to_pdf = os.path.join(destination_folder, "treevis.pdf")
-    check_call("dot -Tpdf -Gmargin=0 %s -o %s" % (from_p, to_pdf), shell=True)
+    # TODO: this requires dot to be installed. We probably don't want a pdf anyway
+    # from_p = os.path.join(destination_folder, "treevis.dot")
+    # to_pdf = os.path.join(destination_folder, "treevis.pdf")
+    # check_call(f"dot -Tpdf -Gmargin=0 {from_p} -o {to_pdf}", shell=True)
 
 
 def _node_vis(node: Node, upsample_dir: str):
     if isinstance(node, Leaf):
         return _leaf_vis(node)
     if isinstance(node, InternalNode):
-        return _branch_vis(node, upsample_dir)
+        return _internal_node_vis(node, upsample_dir)
 
 
 def _leaf_vis(node: Leaf):
@@ -82,23 +85,25 @@ def _leaf_vis(node: Leaf):
     return img
 
 
-def _branch_vis(node: InternalNode, upsample_dir: str):
-    branch_id = node.index
-
+def _internal_node_vis(node: InternalNode, upsample_dir: str):
+    internal_node_id = node.index
+    # TODO: move hardcoded strings to config
     img = Image.open(
-        os.path.join(upsample_dir, "%s_nearest_patch_of_image.png" % branch_id)
+        os.path.join(upsample_dir, f"{internal_node_id}_nearest_patch_of_image.png")
     )
     bb = Image.open(
         os.path.join(
-            upsample_dir, "%s_bounding_box_nearest_patch_of_image.png" % branch_id
+            upsample_dir, f"{internal_node_id}_bounding_box_nearest_patch_of_image.png"
         )
     )
-    map = Image.open(
-        os.path.join(upsample_dir, "%s_heatmap_original_image.png" % branch_id)
-    )
+    # TODO: was map ever used?
+    # map = Image.open(
+    #     os.path.join(upsample_dir, f"{internal_node_id}_heatmap_original_image.png")
+    # )
     w, h = img.size
     wbb, hbb = bb.size
 
+    # TODO: this is profoundly broken
     if wbb < 100 and hbb < 100:
         cs = wbb, hbb
     else:
@@ -148,12 +153,14 @@ def _gen_dot_nodes(
     filename = "{}/node_vis/node_{}_vis.jpg".format(destination_folder, node.index)
     img.save(filename)
     if isinstance(node, Leaf):
-        s = '{}[imagepos="tc" imagescale=height image="{}" label="{}" labelloc=b fontsize=10 penwidth=0 fontname=Helvetica];\n'.format(
-            node.index, filename, str_targets
+        s = (
+            f'{node.index}[imagepos="tc" imagescale=height image="{filename}" '
+            f'label="{str_targets}" labelloc=b fontsize=10 penwidth=0 fontname=Helvetica];\n'
         )
     else:
-        s = '{}[image="{}" xlabel="{}" fontsize=6 labelfontcolor=gray50 fontname=Helvetica];\n'.format(
-            node.index, filename, node.index
+        s = (
+            f'{node.index}[image="{filename}" xlabel="{node.index}" '
+            f"fontsize=6 labelfontcolor=gray50 fontname=Helvetica];\n"
         )
     if isinstance(node, InternalNode):
         return (
@@ -169,14 +176,17 @@ def _gen_dot_edges(node: Node, classes: tuple):
     if isinstance(node, InternalNode):
         edge_l, targets_l = _gen_dot_edges(node.left, classes)
         edge_r, targets_r = _gen_dot_edges(node.right, classes)
+        # TODO: unused vars
         str_targets_l = (
             ",".join(str(t) for t in targets_l) if len(targets_l) > 0 else ""
         )
         str_targets_r = (
             ",".join(str(t) for t in targets_r) if len(targets_r) > 0 else ""
         )
-        s = '{} -> {} [label="Absent" fontsize=10 tailport="s" headport="n" fontname=Helvetica];\n {} -> {} [label="Present" fontsize=10 tailport="s" headport="n" fontname=Helvetica];\n'.format(
-            node.index, node.left.index, node.index, node.right.index
+        s = (
+            f'{node.index} -> {node.left.index} [label="Absent" fontsize=10 tailport="s" headport="n" '
+            f"fontname=Helvetica];\n {node.index} -> "
+            f'{node.right.index} [label="Present" fontsize=10 tailport="s" headport="n" fontname=Helvetica];\n'
         )
         return s + edge_l + edge_r, sorted(list(set(targets_l + targets_r)))
     if isinstance(node, Leaf):

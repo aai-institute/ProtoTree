@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 
 import cv2
 import matplotlib.pyplot as plt
@@ -15,23 +16,23 @@ from util.log import Log
 # adapted from protopnet
 def upsample(
     tree: ProtoTree,
+    upsample_threshold: float,
     project_info: dict,
     project_loader: DataLoader,
     folder_name: str,
-    args: argparse.Namespace,
     log: Log,
+    log_dir,
+    dir_for_saving_images
 ):
-    dir = os.path.join(
-        os.path.join(args.log_dir, args.dir_for_saving_images), folder_name
-    )
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    log_dir = Path(log_dir)
+    dir = log_dir/dir_for_saving_images/folder_name
+    dir.mkdir(parents=True, exist_ok=True)
     with torch.no_grad():
         sim_maps, project_info = get_similarity_maps(tree, project_info, log)
         log.log_message("\nUpsampling prototypes for visualization...")
         imgs = project_loader.dataset.imgs
-        for node, j in tree._out_map.items():
-            if node in tree.branches:  # do not upsample when node is pruned
+        for node, j in tree.out_map.items():
+            if node in tree.internal_nodes:  # do not upsample when node is pruned
                 prototype_info = project_info[j]
                 decision_node_idx = prototype_info["node_ix"]
                 x = Image.open(imgs[prototype_info["input_image_ix"]][0])
@@ -115,7 +116,7 @@ def upsample(
                 )
 
                 high_act_patch_indices = find_high_activation_crop(
-                    upsampled_prototype_pattern, args.upsample_threshold
+                    upsampled_prototype_pattern, upsample_threshold
                 )
                 high_act_patch = x_np[
                     high_act_patch_indices[0] : high_act_patch_indices[1],

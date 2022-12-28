@@ -38,7 +38,7 @@ def upsample_local(
         sim_map = torch.exp(-distances_batch[0, :, :, :]).cpu().numpy()
     for i, node in enumerate(decision_path[:-1]):
         decision_node_idx = node.index
-        node_id = tree._out_map[node]
+        node_id = tree.out_map[node]
         img = Image.open(sample_dir)
         x_np = np.asarray(img)
         x_np = np.float32(x_np) / 255
@@ -145,9 +145,7 @@ def gen_pred_vis(
     folder_name: str,
     args: argparse.Namespace,
     classes: tuple,
-    pred_kwargs: dict = None,
 ):
-    pred_kwargs = pred_kwargs or dict()  # TODO -- assert deterministic routing
 
     # Create dir to store visualization
     img_name = sample_dir.split("/")[-1].split(".")[-2]
@@ -170,9 +168,7 @@ def gen_pred_vis(
 
     # Get the model prediction
     with torch.no_grad():
-        pred, pred_info = tree.forward(
-            sample, sampling_strategy="greedy", **pred_kwargs
-        )
+        pred, pred_info = tree.forward(sample, sampling_strategy="greedy")
         probs = pred_info["ps"]
         label_ix = torch.argmax(pred, dim=1)[0].item()
         assert "out_leaf_ix" in pred_info.keys()
@@ -185,7 +181,7 @@ def gen_pred_vis(
     # Save an image containing the model output
     output_path = destination_folder + "/node_vis/output.jpg"
     leaf_ix = pred_info["out_leaf_ix"][0]
-    leaf = tree.descendants_by_index[leaf_ix]
+    leaf = tree.node_by_index[leaf_ix]
     decision_path = tree.path_to(leaf)
 
     upsample_local(tree, sample, sample_dir, folder_name, img_name, decision_path, args)

@@ -1,4 +1,5 @@
 import argparse
+from collections import defaultdict
 
 import numpy as np
 import torch
@@ -124,7 +125,6 @@ from util.log import Log
 def project_with_class_constraints(
     tree: ProtoTree,
     project_loader: DataLoader,
-    device,
     log: Log,
     progress_prefix: str = "Projection",
 ) -> tuple[ProtoTree, dict]:
@@ -160,17 +160,18 @@ def project_with_class_constraints(
         batch_size = xs.shape[0]
         # For each internal node, collect the leaf labels in the subtree with this node as root.
         # Only images from these classes can be used for projection.
-        leaf_labels_subtree = dict()
+        # TODO: move to node method or delete
+        node_id_to_leaf_predicted_labels: dict[int, set[int]] = {}
 
-        for branch, j in tree._out_map.items():
-            leaf_labels_subtree[branch.index] = set()
-            for leaf in branch.leaves:
-                leaf_labels_subtree[branch.index].add(
-                    torch.argmax(leaf.distribution()).item()
-                )
+        # TODO 1: this uses out_map instead of relying on nodes. Has strange interferences with prune.
+        #   I think prune doesn't modify the out_map. All out_map related code should be removed!
+        for node in tree.out_map:
+            node_id_to_leaf_predicted_labels[node.index] = {
+                leaf.predicted_label() for leaf in node.leaves
+            }
 
         for i, (xs, ys) in projection_iter:
-            xs, ys = xs.to(device), ys.to(device)
+            xs, ys = xs.to(tree.device()), ys.to(tree.device())
             # Get the features and distances
             # - features_batch: features tensor (shared by all prototypes)
             #   shape: (batch_size, D, W, H)
@@ -191,7 +192,7 @@ def project_with_class_constraints(
 
             # Iterate over all decision nodes/prototypes
             for node, j in out_map.items():
-                leaf_labels = leaf_labels_subtree[node.index]
+                leaf_labels = node_id_to_leaf_predicted_labels[node.index]
                 # Iterate over all items in the batch
                 # Select the features/distances that are relevant to this prototype
                 # - distances: distances of the prototype to the latent patches
@@ -230,9 +231,10 @@ def project_with_class_constraints(
             # Update the progress bar if required
             projection_iter.set_postfix_str(f"Batch: {i + 1}/{len(project_loader)}")
 
-            del features_batch
-            del distances_batch
-            del out_map
+            # TODO: why the del? Commented out for now
+            # del features_batch
+            # del distances_batch
+            # del out_map
 
         # Copy the patches to the prototype layer weights
         # TODO: the fuck is this? I commented it out

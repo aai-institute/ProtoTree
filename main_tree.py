@@ -3,6 +3,8 @@ from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
+import lovely_tensors
+
 from prototree.project import project_with_class_constraints
 from prototree.prune import prune
 from prototree.test import eval_fidelity, eval_tree
@@ -14,6 +16,8 @@ from util.data import get_dataloaders
 from util.init import init_tree
 from util.net import freeze, get_network
 from util.visualize import gen_vis
+
+lovely_tensors.monkey_patch()
 
 
 def save_tree(
@@ -50,42 +54,45 @@ def get_log(log_dir: str):
     return log
 
 
-def run_tree(args: Namespace):
-    # data
+def run_tree(args: Namespace, skip_visualization=True):
+    # data and paths
     dataset = args.dataset
     log_dir = args.log_dir
+    dir_for_saving_images = args.dir_for_saving_images
 
     # training hardware
-    disable_cuda = args.disable_cuda
-    # batch_size = args.batch_size
-    batch_size = 32
     milestones = args.milestones
     gamma = args.gamma
-    # TODO: this cannot come from args, needs to be adjusted to num of classes!!
-    # pruning_threshold_leaves = args.pruning_threshold_leaves
-    pruning_threshold_percentage = 0.1
-    pruning_threshold_leaves = 1 / 3 * (1 + pruning_threshold_percentage)
-
-    # freeze_epochs = args.freeze_epochs
-    freeze_epochs = 0
 
     # Optimizer args
+    optim_type = args.optimizer
+    # batch_size = args.batch_size
+    batch_size = 32
     lr = args.lr
     lr_block = args.lr_block
     lr_net = args.lr_net
     lr_pi = args.lr_pi
     momentum = args.momentum
     weight_decay = args.weight_decay
-    disable_derivative_free_leaf_optim = args.disable_derivative_free_leaf_optim
 
     # Training loop args
     # epochs = args.epochs
-    epochs = 7
-    evaluate_each_epoch = 3
+    disable_cuda = args.disable_cuda
+    epochs = 10
+    evaluate_each_epoch = 20
+    # NOTE: after this, part of the net becomes unfrozen and loaded to GPU, which may cause memory errors
+    # freeze_epochs = args.freeze_epochs
+    freeze_epochs = 0
+
+    # prototree specifics
+    upsample_threshold = args.upsample_threshold
     kontschieder_train = args.kontschieder_train
     kontschieder_normalization = args.kontschieder_normalization
-    # TODO: rename in args
-    optim_type = args.optimizer
+    disable_derivative_free_leaf_optim = args.disable_derivative_free_leaf_optim
+    # TODO: this cannot come from args, needs to be adjusted to num of classes!!
+    # pruning_threshold_leaves = args.pruning_threshold_leaves
+    pruning_threshold_percentage = 0.1
+    pruning_threshold_leaves = 1 / 3 * (1 + pruning_threshold_percentage)
 
     # Net architecture args
     net = args.net
@@ -131,7 +138,7 @@ def run_tree(args: Namespace):
     # tree.save(f"{log.checkpoint_dir}/tree_init")
     log.log_message(
         "Max depth %s, so %s internal nodes and %s leaves"
-        % (depth, tree.num_descendants, tree.num_leaves)
+        % (depth, tree.num_internal_nodes, tree.num_leaves)
     )
     analyse_output_shape(tree, train_loader, log, device)
 
@@ -217,44 +224,50 @@ def run_tree(args: Namespace):
     #
     # # find "real image" prototypes through projection
     # # TODO: don't overwrite tree...
-    # project_info, tree = project_with_class_constraints(
-    #     deepcopy(pruned_tree), project_loader, device, args, log
-    # )
-    # name = "pruned_and_projected"
-    # save_tree(tree, optimizer, scheduler, log.checkpoint_dir, name=name)
-    # pruned_projected_tree = deepcopy(tree)
-    # # Analyse and evaluate pruned tree with projected prototypes
-    # average_distance_nearest_image(project_info, tree, log)
-    # analyse_leaves(
-    #     tree, epoch + 3, len(classes), leaf_labels, pruning_threshold_leaves, log
-    # )
-    # log_leaf_distributions_analysis(tree, log)
-    # eval_info = eval_tree(tree, test_loader, name, device, log)
-    # pruned_projected_test_acc = eval_info["test_accuracy"]
-    # eval_info_samplemax = eval_tree(tree, test_loader, name, device, log, "sample_max")
-    # get_avg_path_length(tree, eval_info_samplemax, log)
-    # eval_info_greedy = eval_tree(tree, test_loader, name, device, log, "greedy")
-    # get_avg_path_length(tree, eval_info_greedy, log)
-    # fidelity_info = eval_fidelity(tree, test_loader, device, log)
-    #
-    # # Upsample prototype for visualization
-    # project_info = upsample(tree, project_info, project_loader, name, args, log)
-    # # visualize tree
-    # gen_vis(tree, name, args, classes)
-    #
-    # # TODO: simplify this, it is actually never used...
-    # return (
-    #     tree.to("cpu"),
-    #     pruned_tree.to("cpu"),
-    #     pruned_projected_tree.to("cpu"),
-    #     test_acc,
-    #     pruned_test_acc,
-    #     pruned_projected_test_acc,
-    #     project_info,
-    #     eval_info_samplemax,
-    #     eval_info_greedy,
-    #     fidelity_info,
-    # )
+    projected_pruned_tree, project_info = project_with_class_constraints(
+        deepcopy(pruned_tree), project_loader, log
+    )
+    name = "pruned_and_projected"
+    # save_tree(projected_pruned_tree, optimizer, scheduler, log.checkpoint_dir, name=name)
+    # Analyse and evaluate pruned tree with projected prototypes
+    average_distance_nearest_image(project_info, projected_pruned_tree, log)
+    add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
+        projected_pruned_tree,
+        epoch + 3,
+        len(classes),
+        leaf_labels,
+        pruning_threshold_leaves,
+        log,
+    )
+    log_leaf_distributions_analysis(projected_pruned_tree, log)
+    eval_info = eval_tree(projected_pruned_tree, test_loader, log, eval_name=name)
+    pruned_projected_test_acc = eval_info["test_accuracy"]
+    log.log_message(f"Test after pruning and projection: {pruned_projected_test_acc}")
+    eval_info_samplemax = eval_tree(
+        projected_pruned_tree,
+        test_loader,
+        log,
+        sampling_strategy="sample_max",
+        eval_name=name,
+    )
+    get_avg_path_length(projected_pruned_tree, eval_info_samplemax, log)
+    eval_info_greedy = eval_tree(
+        projected_pruned_tree,
+        test_loader,
+        log,
+        sampling_strategy="greedy",
+        eval_name=name,
+    )
+    get_avg_path_length(projected_pruned_tree, eval_info_greedy, log)
+    fidelity_info = eval_fidelity(projected_pruned_tree, test_loader, device, log)
+
+    if not skip_visualization:
+        # Upsample prototype for visualization
+        upsample(
+            projected_pruned_tree, upsample_threshold, project_info, project_loader, name, log, log_dir, dir_for_saving_images
+        )
+        # visualize tree
+        gen_vis(projected_pruned_tree, name, classes, log_dir, dir_for_saving_images)
 
 
 def create_proto_tree(H1, W1, classes, depth, net, out_channels, pretrained):
@@ -377,4 +390,4 @@ def get_device(disable_cuda, log):
 
 
 if __name__ == "__main__":
-    run_tree(get_args())
+    run_tree(get_args(), skip_visualization=True)

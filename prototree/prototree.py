@@ -1,4 +1,5 @@
 import pickle
+from copy import copy
 from pathlib import Path
 from typing import Optional, Union
 
@@ -13,7 +14,6 @@ from util.l2conv import L2Conv2D
 
 # TODO: inherit from Node?
 class ProtoTree(nn.Module):
-
     ARGUMENTS = ["depth", "num_features", "W1", "H1", "log_probabilities"]
 
     SAMPLING_STRATEGIES = ["distributed", "sample_max", "greedy"]
@@ -26,7 +26,7 @@ class ProtoTree(nn.Module):
         W1: int,
         H1: int,
         feature_net: torch.nn.Module,
-        log_probabilities: bool = False,
+        log_probabilities: bool = True,
         kontschieder_normalization: bool = False,
         kontschieder_train=False,
         add_on_layers: nn.Module = None,
@@ -64,7 +64,7 @@ class ProtoTree(nn.Module):
         self._num_classes = num_classes
 
         self.out_channels = out_channels
-        self.num_prototypes = self.num_descendants
+        self.num_prototypes = self.num_internal_nodes
 
         # Keep a dict that stores a reference to each node's parent
         # Key: node -> Value: the node's parent
@@ -83,7 +83,11 @@ class ProtoTree(nn.Module):
         self._kontschieder_normalization = kontschieder_normalization
         self._kontschieder_train = kontschieder_train
         # Map each decision node to an output of the feature net
-        self._out_map = {n: i for i, n in zip(range(2**depth - 1), self.descendants)}
+        # TODO: that's not really true, and why do we need this at all? Can't we use node id?
+        #   This is used for retrieving outputs from some indexed list...
+        self.out_map: dict[Node, int] = {
+            n: i for i, n in zip(range(2**depth - 1), self.internal_nodes)
+        }
 
         self.prototype_layer = L2Conv2D(self.num_prototypes, self.out_channels, W1, H1)
 
@@ -161,19 +165,22 @@ class ProtoTree(nn.Module):
         for param in self._add_on.parameters():
             param.requires_grad = val
 
+    def extract_features(self, x: torch.Tensor):
+        x = self.net(x)
+        x = self.add_on(x)
+        return x
+
     def forward(
         self,
         xs: torch.Tensor,
         sampling_strategy: str = SAMPLING_STRATEGIES[0],  # `distributed` by default
-        **kwargs,
     ) -> tuple:
         assert (
             sampling_strategy in ProtoTree.SAMPLING_STRATEGIES
         ), f"Got sampling_strategy={sampling_strategy}, expected one of {ProtoTree.SAMPLING_STRATEGIES}"
 
         # Perform a forward pass with the conv net
-        features = self._net(xs)
-        features = self._add_on(features)
+        features = self.extract_features(xs)
         bs, D, W, H = features.shape
 
         """
@@ -188,37 +195,35 @@ class ProtoTree(nn.Module):
         min_distances = min_pool2d(distances, kernel_size=(W, H))
         min_distances = min_distances.view(bs, self.num_prototypes)
 
-        if not self._log_probabilities:
-            similarities = torch.exp(-min_distances)
-        else:
-            # Omit the exp since we require log probabilities
-            similarities = -min_distances
+        similarities = -min_distances
+        if not self.log_probabilities:
+            similarities = torch.exp(similarities)
 
-        # Add the conv net output to the kwargs dict to be passed to the decision nodes in the tree
         # Split (or chunk) the conv net output tensor of shape (batch_size, num_decision_nodes) into individual tensors
         # of shape (batch_size, 1) containing the logits that are relevant to single decision nodes
-        kwargs["conv_net_output"] = similarities.chunk(similarities.size(1), dim=1)
+        # TODO: here is something important, tightly coupled with out_map construction
+        #   This turns it into a list. Do we need chunk? Can't we just use it directly?
+        #   The variable should be renamed to something more meaningful.
+        similarities = similarities.chunk(similarities.size(1), dim=1)
         # Add the mapping of decision nodes to conv net outputs to the kwargs dict to be passed to the decision nodes in
-        # the tree
-        kwargs["out_map"] = dict(
-            self._out_map
-        )  # Use a copy of self._out_map, as the original should not be modified
+        # the tree. Use a copy, as the original should not be modified
+        out_map = copy(self.out_map)
 
         """
             PERFORM A FORWARD PASS THROUGH THE TREE GIVEN THE COMPUTED SIMILARITIES
         """
 
         # Perform a forward pass through the tree
-        out, attr = self._root.forward(xs, **kwargs)
+        out, attr = self.root.forward(xs, similarities=similarities, out_map=out_map)
 
         info = dict()
         # Store the probability of arriving at all nodes in the decision tree
         info["pa_tensor"] = {
-            n.index: attr[n, "p_arrival"].unsqueeze(1) for n in self.nodes
+            n.index: attr[n, "p_arrival"].unsqueeze(1) for n in self.all_nodes
         }
         # Store the output probabilities of all decision nodes in the tree
-        info["p_stop"] = {
-            n.index: attr[n, "p_stop"].unsqueeze(1) for n in self.descendants
+        info["p_right"] = {
+            n.index: attr[n, "p_right"].unsqueeze(1) for n in self.internal_nodes
         }
 
         # Generate the output based on the chosen sampling strategy
@@ -264,9 +269,9 @@ class ProtoTree(nn.Module):
             # Keep track of all nodes encountered
             for i in range(batch_size):
                 node = self._root
-                while node in self.descendants:
+                while node in self.internal_nodes:
                     routing[i] += [node]
-                    if attr[node, "p_stop"][i].item() > threshold:
+                    if attr[node, "p_right"][i].item() > threshold:
                         node = node.right
                     else:
                         node = node.left
@@ -287,65 +292,52 @@ class ProtoTree(nn.Module):
         raise Exception("Sampling strategy not recognized!")
 
     def forward_partial(self, xs: torch.Tensor) -> tuple:
-
-        # Perform a forward pass with the conv net
-        features = self._net(xs)
-        features = self._add_on(features)
-
-        # Use the features to compute the distances from the prototypes
-        distances = self.prototype_layer(
-            features
-        )  # Shape: (batch_size, num_prototypes, W, H)
-
-        return features, distances, dict(self._out_map)
+        features = self.extract_features(xs)
+        # (batch_size, num_prototypes, W, H)
+        distances = self.prototype_layer(features)
+        return features, distances, copy(self.out_map)
 
     @property
     def depth(self) -> int:
-        d = (
-            lambda node: 1
-            if isinstance(node, Leaf)
-            else 1 + max(d(node.left), d(node.right))
-        )
-        return d(self._root)
+        return self.root.depth
 
     @property
     def size(self) -> int:
-        return self._root.size
+        return self.root.size
+
+    # TODO: don't descendants already contain leaves? Seems like this method is redundant.
+    @property
+    def all_nodes(self) -> set:
+        return self.root.descendants
 
     @property
-    def nodes(self) -> set:
-        return self._root.nodes
-
-    @property
-    def descendants_by_index(self) -> dict:
-        return self._root.descendants_by_index
+    def node_by_index(self) -> dict:
+        return self.root.node_by_index
 
     # TODO: this shouldn't be a property (among many other properties)
     @property
     def node_depths(self) -> dict[Node, int]:
-        def _assign_depths(node, d):
-            if isinstance(node, Leaf):
-                return {node: d}
-            if isinstance(node, InternalNode):
-                return {
-                    node: d,
-                    **_assign_depths(node.right, d + 1),
-                    **_assign_depths(node.left, d + 1),
-                }
+        node2depth = {}
 
-        return _assign_depths(self.root, 0)
+        def assign_depths(node, cur_depth):
+            node2depth[node] = cur_depth
+            for child in node.child_nodes:
+                assign_depths(child, cur_depth + 1)
+
+        assign_depths(self.root, 0)
+        return node2depth
 
     @property
-    def descendants(self) -> set:
-        return self.root.descendants
+    def internal_nodes(self) -> set:
+        return self.root.descendant_internal_nodes
 
     @property
     def leaves(self) -> set:
         return self.root.leaves
 
     @property
-    def num_descendants(self) -> int:
-        return self.root.num_descendants
+    def num_internal_nodes(self) -> int:
+        return self.root.num_internal_nodes
 
     @property
     def num_leaves(self) -> int:
@@ -394,7 +386,7 @@ class ProtoTree(nn.Module):
         _set_parents_recursively(self.root)
 
     def path_to(self, node: Node):
-        assert node in self.leaves or node in self.branches
+        assert node in self.leaves or node in self.internal_nodes
         path = [node]
         while isinstance(self.node2parent[node], Node):
             node = self.node2parent[node]

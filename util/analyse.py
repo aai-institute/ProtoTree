@@ -38,14 +38,15 @@ def average_distance_nearest_image(
     project_info: dict, tree: ProtoTree, log: Log, disable_log=False
 ):
     distances = []
-    for node, j in tree._out_map.items():
-        if node in tree.branches:
+    for node, j in tree.out_map.items():
+        if node in tree.internal_nodes:
             distances.append(project_info[j]["distance"])
-            if not disable_log:
-                log.log_message(
-                    "Node %s has nearest distance %s"
-                    % (node.index, project_info[j]["distance"])
-                )
+            # TODO: this is too verbose
+            # if not disable_log:
+            #     log.log_message(
+            #         "Node %s has nearest distance %s"
+            #         % (node.index, project_info[j]["distance"])
+            #     )
     if not disable_log:
         log.log_message(
             "Euclidean distances from latent prototypes in tree to nearest image patch: %s"
@@ -92,7 +93,12 @@ def analyse_output_shape(tree: ProtoTree, trainloader: DataLoader, log: Log, dev
 # TODO: this has to be called as leaf_labels = analyse_leaf_labels(leaf_labels...). Fix this pattern!
 # TODO: the new name says it all, refactor this!
 def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
-    tree: ProtoTree, epoch: int, k: int, leaf_labels: dict, threshold: float, log: Log
+    tree: ProtoTree,
+    epoch: int,
+    num_classes: int,
+    leaf_labels: dict,
+    threshold: float,
+    log: Log,
 ):
     with torch.no_grad():
         if tree.depth <= 4:
@@ -123,8 +129,8 @@ def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
         log.log_message(f"\nLeafs with max > {threshold}: {len(leafs_higher_than)}")
 
         class_without_leaf = 0
-        for c in range(k):
-            if c not in classes_covered:
+        for class_label in range(num_classes):
+            if class_label not in classes_covered:
                 class_without_leaf += 1
         log.log_message(f"Classes without leaf: {class_without_leaf}")
 
@@ -149,29 +155,28 @@ def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
 
 
 # TODO: this is broken, see return warning
-# NOTE: only used in the ensemble, commenting out for now
-# def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
-#     # If possible, get the depth of the leaf corresponding to the decision
-#     if "out_leaf_ix" not in info.keys():
-#         log.log_message(
-#             f"Soft tree with distributed routing. Path length is always {tree.depth} across all nodes"
-#         )
-#     else:  # greedy or sample_max routing
-#         depths = tree.node_depths
-#         # Get a dict mapping all node indices to the node objects
-#         node_ixs = tree.descendants_by_index
-#         ixs = info[
-#             "out_leaf_ix"
-#         ]  # Get all indices of the leaves corresponding to the decisions
-#         pred_depths = [depths[node_ixs[ix]] for ix in ixs]  # Add them to the collection
-#         avg_depth = sum(pred_depths) / float(len(pred_depths))
-#         log.log_message(
-#             f"Tree with deterministic routing. Average path length is {avg_depth} with std {np.std(pred_depths)}"
-#         )
-#         log.log_message(
-#             f"Tree with deterministic routing. Longest path has length {np.max(pred_depths)}, shortest path has length {np.min(pred_depths)}"
-#         )
-#     return pred_depths
+def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
+    # If possible, get the depth of the leaf corresponding to the decision
+    if "out_leaf_ix" not in info.keys():
+        log.log_message(
+            f"Soft tree with distributed routing. Path length is always {tree.depth} across all nodes"
+        )
+    else:  # greedy or sample_max routing
+        depths = tree.node_depths
+        # Get a dict mapping all node indices to the node objects
+        node_ixs = tree.node_by_index
+        ixs = info[
+            "out_leaf_ix"
+        ]  # Get all indices of the leaves corresponding to the decisions
+        pred_depths = [depths[node_ixs[ix]] for ix in ixs]  # Add them to the collection
+        avg_depth = sum(pred_depths) / float(len(pred_depths))
+        log.log_message(
+            f"Tree with deterministic routing. Average path length is {avg_depth} with std {np.std(pred_depths)}"
+        )
+        log.log_message(
+            f"Tree with deterministic routing. Longest path has length {np.max(pred_depths)}, shortest path has length {np.min(pred_depths)}"
+        )
+    return pred_depths
 
 
 #
