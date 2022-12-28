@@ -22,10 +22,10 @@ def upsample(
     folder_name: str,
     log: Log,
     log_dir,
-    dir_for_saving_images
+    dir_for_saving_images,
 ):
     log_dir = Path(log_dir)
-    dir = log_dir/dir_for_saving_images/folder_name
+    dir = log_dir / dir_for_saving_images / folder_name
     dir.mkdir(parents=True, exist_ok=True)
     with torch.no_grad():
         sim_maps, project_info = get_similarity_maps(tree, project_info, log)

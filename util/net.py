@@ -52,52 +52,43 @@ base_architecture_to_features = {
     "vgg19_bn": vgg19_bn_features,
 }
 
-# Create network with pretrained features and 1x1 convolutional layer
-def get_network(num_features: int, net="resnet50_inat", pretrained=True):
-    # Define a conv net for estimating the probabilities at each decision node
-    features = base_architecture_to_features[net](pretrained=pretrained)
-    first_add_on_layer_in_channels = get_add_on_layer_in_channels(features)
+
+def get_prototree_base_networks(
+    out_channels: int, net="resnet50_inat", pretrained=True
+) -> tuple[nn.Module, nn.Module]:
+    """
+    Returns the backbone network with pretrained features and a 1x1 convolutional layer with the selected
+    out_channels that should be added at top, i.e. passed as add_on_layers to ProtoTree
+
+    :param out_channels:
+    :param net:
+    :param pretrained:
+    :return: (backbone_convnet, add_one_layers)
+    """
+    feature_convnet = base_architecture_to_features[net](pretrained=pretrained)
 
     add_on_layer = nn.Sequential(
         nn.Conv2d(
-            in_channels=first_add_on_layer_in_channels,
-            out_channels=num_features,
+            in_channels=num_out_channels(feature_convnet),
+            out_channels=out_channels,
             kernel_size=1,
             bias=False,
         ),
         nn.Sigmoid(),
     )
-    return features, add_on_layer
+    return feature_convnet, add_on_layer
 
 
-# TODO: fix signature and method
-def get_add_on_layer_in_channels(features: ResNet_features):
-    features_name = str(features).upper()
-    if features_name.startswith("VGG") or features_name.startswith("RES"):
-        first_add_on_layer_in_channels = [
-            i for i in features.modules() if isinstance(i, nn.Conv2d)
-        ][-1].out_channels
-    elif features_name.startswith("DENSE"):
-        first_add_on_layer_in_channels = [
-            i for i in features.modules() if isinstance(i, nn.BatchNorm2d)
+def num_out_channels(convnet: nn.Module):
+    convnet_name = str(convnet).upper()
+    if convnet_name.startswith("VGG") or convnet_name.startswith("RES"):
+        n_out_channels = [i for i in convnet.modules() if isinstance(i, nn.Conv2d)][
+            -1
+        ].out_channels
+    elif convnet_name.startswith("DENSE"):
+        n_out_channels = [
+            i for i in convnet.modules() if isinstance(i, nn.BatchNorm2d)
         ][-1].num_features
     else:
-        raise Exception("other base base_architecture NOT implemented")
-    return first_add_on_layer_in_channels
-
-
-def freeze(
-    epoch: int,
-    params_to_freeze: list,
-    log: Log,
-    freeze_epochs: int,
-):
-    if freeze_epochs > 0:
-        if epoch == 1:
-            log.log_message("\nNetwork frozen")
-            for parameter in params_to_freeze:
-                parameter.requires_grad = False
-        elif epoch == freeze_epochs + 1:
-            log.log_message("\nNetwork unfrozen")
-            for parameter in params_to_freeze:
-                parameter.requires_grad = True
+        raise ValueError(f"base_architecture {convnet_name} NOT implemented")
+    return n_out_channels

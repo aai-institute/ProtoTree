@@ -17,7 +17,7 @@ def load_state(directory_path: str, device):
     return tree
 
 
-def init_tree(
+def load_things_into_tree(
     tree: ProtoTree,
     optimizer: torch.optim.Optimizer,
     state_dict_dir_tree: Union[str, Path] = None,
@@ -39,7 +39,7 @@ def init_tree(
     :param disable_derivative_free_leaf_optim:
     :return:
     """
-    epoch = 1
+    epoch = 0
 
     # NOTE: TRAINING FURTHER FROM A CHECKPOINT DOESN'T SEEM TO WORK CORRECTLY.
     # EVALUATING A TRAINED PROTOTREE FROM A CHECKPOINT DOES WORK.
@@ -56,10 +56,14 @@ def init_tree(
     elif state_dict_dir_net:
         _load_weights_to_tree(tree, state_dict_dir_net)
     else:
-        with torch.no_grad():
-            tree.init_prototype_layer()
-            tree.add_on.apply(_xavier_on_conv)
+        init_tree_weights(tree)
     return tree, epoch
+
+
+def init_tree_weights(tree: ProtoTree):
+    with torch.no_grad():
+        tree.init_prototype_layer()
+        tree.add_on.apply(_xavier_on_conv)
 
 
 def _load_weights_to_tree(tree: ProtoTree, state_dict_dir_net: Union[str, Path]):

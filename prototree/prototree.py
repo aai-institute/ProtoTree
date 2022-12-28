@@ -170,6 +170,7 @@ class ProtoTree(nn.Module):
         x = self.add_on(x)
         return x
 
+    # TODO: convoluted, multiple returns in the middle of code, lots of duplication. Simplify this!
     def forward(
         self,
         xs: torch.Tensor,
@@ -258,6 +259,7 @@ class ProtoTree(nn.Module):
             info["out_leaf_ix"] = [leaves[i.item()].index for i in ix]
 
             return dists, info
+
         if sampling_strategy == ProtoTree.SAMPLING_STRATEGIES[2]:  # Greedy
             # At every decision node, the child with highest probability will be chosen
             batch_size = xs.size(0)

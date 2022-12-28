@@ -77,8 +77,7 @@ def train_epoch(
             with torch.no_grad():
                 target = eye[ys]  # shape (batchsize, num_classes)
                 for leaf in tree.leaves:
-                    if tree._log_probabilities:
-                        # log version
+                    if tree.log_probabilities:
                         update = torch.exp(
                             torch.logsumexp(
                                 info["pa_tensor"][leaf.index]
@@ -98,11 +97,9 @@ def train_epoch(
                             / ys_pred,
                             dim=0,
                         )
-                    # TODO: WTF! Mutating a private field
                     leaf.dist_params -= _old_dist_params[leaf] / nr_batches
-                    F.relu_(
-                        leaf.dist_params
-                    )  # dist_params values can get slightly negative because of floating point issues. therefore, set to zero.
+                    # dist_params values can get slightly negative because of floating point issues. therefore, set to zero.
+                    F.relu_(leaf.dist_params)
                     leaf.dist_params += update
 
         # Count the number of correct classifications
