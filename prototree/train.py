@@ -23,91 +23,76 @@ def train_epoch(
     log_prefix: str = "log_train_epochs",
     progress_prefix: str = "Train Epoch",
 ) -> dict:
-    device = tree.device()
-    # Make sure the model is in eval mode
+    # TODO: combine this block with the leaf distribution optimization below into a single, separate function
     tree.eval()
-    # Store info about the procedure
-    train_info = dict()
-    total_loss = 0.0
-    total_acc = 0.0
-    # Create a log if required
-    log_loss = f"{log_prefix}_losses"
-
     nr_batches = float(len(train_loader))
-    with torch.no_grad():
-        _old_dist_params = dict()
-        for leaf in tree.leaves:
-            _old_dist_params[leaf] = leaf.dist_params.detach().clone()
-        # Optimize class distributions in leafs
-        eye = torch.eye(tree.num_classes, device=tree.device())
+    # with torch.no_grad():
+    #     _old_dist_params = {
+    #         leaf: leaf.dist_params.detach().clone() for leaf in tree.leaves
+    #     }
 
     # Show progress on progress bar
     train_iter = tqdm(
-        enumerate(train_loader),
-        total=len(train_loader),
-        desc=progress_prefix + " %s" % epoch,
-        ncols=0,
+        train_loader,
+        desc=f"{progress_prefix} {epoch}",
     )
     tree.train()
+
     # Iterate through the data set to update leaves, prototypes and network
-    for i, (xs, ys) in train_iter:
+    eye = torch.eye(tree.num_classes, device=tree.device)
+    total_loss = 0.0
+    total_acc = 0.0
+    for i, (xs, ys) in enumerate(train_iter):
         optimizer.zero_grad()
-        xs, ys = xs.to(device), ys.to(device)
+        # TODO: to we need to send them to the device? pin_memory=True should be enough
+        xs, ys = xs.to(tree.device), ys.to(tree.device)
 
-        ys_pred, info = tree.forward(xs)
+        y_pred_proba, info = tree.forward(xs)
+        logits = y_pred_proba if tree.log_probabilities else torch.log(y_pred_proba)
 
-        # Learn prototypes and network with gradient descent.
-        # If disable_derivative_free_leaf_optim, leaves are optimized with gradient descent as well.
-        # Compute the loss
-        loss = (
-            F.nll_loss(ys_pred, ys)
-            if tree.log_probabilities
-            else F.nll_loss(torch.log(ys_pred), ys)
-        )
-
-        # Compute the gradient
+        loss = F.nll_loss(logits, ys)
         loss.backward()
-        # Update model parameters
         optimizer.step()
 
+        # TODO: remove option of this being false. Also, remove option of configuring log_probabilities
         if not disable_derivative_free_leaf_optim:
-            # Update leaves with derivate-free algorithm
+            # Update leaves with derivative-free algorithm
             # Make sure the tree is in eval mode
-            tree.eval()
+            target = eye[ys]  # shape (batchsize, num_classes), one-hot encoding of ys
+            tree.eval()  # TODO: is this necessary?
             with torch.no_grad():
-                target = eye[ys]  # shape (batchsize, num_classes)
                 for leaf in tree.leaves:
+                    # shape (batchsize, 1)
+                    p_arrival = info["p_arrival"][leaf.index].unsqueeze(1)
+                    # shape (num_classes)
+                    dist = leaf.distribution()
+
                     if tree.log_probabilities:
-                        update = torch.exp(
-                            torch.logsumexp(
-                                info["pa_tensor"][leaf.index]
-                                + leaf.distribution()
-                                + torch.log(target)
-                                - ys_pred,
-                                dim=0,
-                            )
-                        )
-                    else:
-                        update = torch.sum(
-                            (
-                                info["pa_tensor"][leaf.index]
-                                * leaf.distribution()
-                                * target
-                            )
-                            / ys_pred,
+                        log_update = torch.logsumexp(
+                            p_arrival + dist + torch.log(target) - y_pred_proba,
                             dim=0,
                         )
-                    leaf.dist_params -= _old_dist_params[leaf] / nr_batches
-                    # dist_params values can get slightly negative because of floating point issues. therefore, set to zero.
-                    F.relu_(leaf.dist_params)
+                        update = torch.exp(log_update)
+                    else:
+                        update = torch.sum(
+                            p_arrival * dist * target / y_pred_proba, dim=0
+                        )
+
+                    # TODO: is this still normalized?
+                    leaf.dist_params *= 1 - 1 / nr_batches
                     leaf.dist_params += update
+                    # dist_params values can get slightly negative because of floating point issues, so set to zero.
+                    # TODO: previously this line had no effect, I reinstated it. I hope it doesn't break stuff...
+                    F.relu(leaf.dist_params, inplace=True)
 
         # Count the number of correct classifications
-        ys_pred_max = torch.argmax(ys_pred, dim=1)
+        ys_pred_max = torch.argmax(y_pred_proba, dim=1)
 
+        # TODO: use some accuracy evaluation and logging from a library (talking about reinventing the wheel...)
         correct = torch.sum(torch.eq(ys_pred_max, ys))
         acc = correct.item() / float(len(xs))
 
+        # TODO: is this needed?
         train_iter.set_postfix_str(
             f"Batch [{i + 1}/{len(train_loader)}], Loss: {loss.item():.3f}, Acc: {acc:.3f}"
         )
@@ -115,12 +100,14 @@ def train_epoch(
         total_loss += loss.item()
         total_acc += acc
 
+        # TODO: move this outside, remove dependency on epoch and probably also all log stuff
         if log is not None:
-            log.log_values(log_loss, epoch, i + 1, loss.item(), acc)
+            log.log_values(f"{log_prefix}_losses", epoch, i + 1, loss.item(), acc)
 
-    train_info["loss"] = total_loss / float(i + 1)
-    train_info["train_accuracy"] = total_acc / float(i + 1)
-    return train_info
+    return {
+        "loss": total_loss / (nr_batches + 1),
+        "train_accuracy": total_acc / (nr_batches + 1),
+    }
 
 
 # TODO: remove the massive duplication
@@ -272,7 +259,7 @@ def train_leaves_epoch(
                     # log version
                     update = torch.exp(
                         torch.logsumexp(
-                            info["pa_tensor"][leaf.index]
+                            info["p_arrival"][leaf.index]
                             + leaf.distribution()
                             + torch.log(target)
                             - out,
@@ -281,7 +268,7 @@ def train_leaves_epoch(
                     )
                 else:
                     update = torch.sum(
-                        (info["pa_tensor"][leaf.index] * leaf.distribution() * target)
+                        (info["p_arrival"][leaf.index] * leaf.distribution() * target)
                         / out,
                         dim=0,
                     )

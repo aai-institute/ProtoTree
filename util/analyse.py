@@ -59,38 +59,7 @@ def average_distance_nearest_image(
     return distances
 
 
-def log_leaf_distributions_analysis(tree: ProtoTree, log: Log):
-    # print for experimental purposes
-    max_values = []
-    for leaf in tree.leaves:
-        if leaf.log_probabilities:
-            max_values.append(torch.max(torch.exp(leaf.distribution())).item())
-        else:
-            max_values.append(torch.max(leaf.distribution()).item())
-    max_values.sort()
-    log.log_message("Max values in softmax leaf distributions: \n" + str(max_values))
-
-
-def analyse_output_shape(tree: ProtoTree, trainloader: DataLoader, log: Log, device):
-    with torch.no_grad():
-        # Get a batch of training data
-        xs, ys = next(iter(trainloader))
-        xs, ys = xs.to(device), ys.to(device)
-        log.log_message("Image input shape: " + str(xs[0, :, :, :].shape))
-        log.log_message(
-            "Features output shape (without 1x1 conv layer): "
-            + str(tree._net(xs).shape)
-        )
-        log.log_message(
-            "Convolutional output shape (with 1x1 conv layer): "
-            + str(tree._add_on(tree._net(xs)).shape)
-        )
-        log.log_message(
-            "Prototypes shape: " + str(tree.prototype_layer.prototype_vectors.shape)
-        )
-
-
-# TODO: this has to be called as leaf_labels = analyse_leaf_labels(leaf_labels...). Fix this pattern!
+# TODO: this has to be called as leaf_labels = func(leaf_labels...). Fix this pattern!
 # TODO: the new name says it all, refactor this!
 def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
     tree: ProtoTree,
@@ -154,7 +123,7 @@ def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
     return leaf_labels
 
 
-# TODO: this is broken, see return warning
+# TODO: this is broken, see IDE warning at return statement
 def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
     # If possible, get the depth of the leaf corresponding to the decision
     if "out_leaf_ix" not in info.keys():

@@ -34,7 +34,7 @@ def upsample_local(
     if not os.path.exists(dir):
         os.makedirs(dir)
     with torch.no_grad():
-        _, distances_batch, _ = tree.forward_partial(sample)
+        distances_batch = tree.extract_prototype_distances(sample)
         sim_map = torch.exp(-distances_batch[0, :, :, :]).cpu().numpy()
     for i, node in enumerate(decision_path[:-1]):
         decision_node_idx = node.index

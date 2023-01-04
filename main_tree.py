@@ -2,23 +2,27 @@ from argparse import Namespace
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
-from typing import Sequence
 
-import lovely_tensors
+import torch
+from torch.utils.data import DataLoader
 
 from prototree.project import project_with_class_constraints
+from prototree.prototree import ProtoTree
 from prototree.prune import prune
 from prototree.test import eval_fidelity, eval_tree
 from prototree.train import train_epoch, train_epoch_kontschieder
 from prototree.upsample import upsample
-from util.analyse import *
-from util.args import get_args, get_optimizer, save_args
+from util.analyse import (
+    add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis,
+    average_distance_nearest_image,
+    get_avg_path_length,
+)
+from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
-from util.init import init_tree_weights, load_things_into_tree
-from util.net import freeze, get_prototree_base_networks
-from util.visualize import gen_vis
-
-lovely_tensors.monkey_patch()
+from util.init import init_tree_weights
+from util.log import Log
+from util.net import get_prototree_base_networks
+from util.visualize import generate_tree_visualization
 
 
 def save_tree(
@@ -79,9 +83,10 @@ def run_tree(args: Namespace, skip_visualization=True):
     # Training loop args
     # epochs = args.epochs
     disable_cuda = args.disable_cuda
-    epochs = 10
+    epochs = 2
     evaluate_each_epoch = 20
-    # NOTE: after this, part of the net becomes unfrozen and loaded to GPU, which may cause memory errors
+    # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
+    # which may cause surprising memory errors after the training was already running for a while
     # freeze_epochs = args.freeze_epochs
     freeze_epochs = 0
 
@@ -89,7 +94,8 @@ def run_tree(args: Namespace, skip_visualization=True):
     upsample_threshold = args.upsample_threshold
     kontschieder_train = args.kontschieder_train
     kontschieder_normalization = args.kontschieder_normalization
-    disable_derivative_free_leaf_optim = args.disable_derivative_free_leaf_optim
+    # This option should always be true, at least for now
+    # disable_derivative_free_leaf_optim = args.disable_derivative_free_leaf_optim
     # TODO: this cannot come from args, needs to be adjusted to num of classes!!
     # pruning_threshold_leaves = args.pruning_threshold_leaves
     pruning_threshold_percentage = 0.1
@@ -98,8 +104,8 @@ def run_tree(args: Namespace, skip_visualization=True):
     # Net architecture args
     net = args.net
     pretrained = True
-    H1 = args.H1
-    W1 = args.W1
+    h_prototype = 2
+    w_prototype = 2
     depth = args.depth
     out_channels = args.num_features
 
@@ -109,8 +115,10 @@ def run_tree(args: Namespace, skip_visualization=True):
         dataset=dataset, disable_cuda=disable_cuda, batch_size=batch_size
     )
     num_classes = len(test_loader.dataset.classes)
-    log.log_message(f"Num classes (k): {len(num_classes)}")
-    tree = create_proto_tree(H1, W1, num_classes, depth, net, out_channels, pretrained)
+    log.log_message(f"Num classes (k): {num_classes}")
+    tree = create_proto_tree(
+        h_prototype, w_prototype, num_classes, depth, net, out_channels, pretrained
+    )
 
     device = get_device(disable_cuda)
     print(f"Running on {device=}")
@@ -127,7 +135,6 @@ def run_tree(args: Namespace, skip_visualization=True):
         lr_block,
         lr_pi,
         lr_net,
-        disable_derivative_free_leaf_optim=disable_derivative_free_leaf_optim,
     )
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=milestones, gamma=gamma
@@ -138,15 +145,13 @@ def run_tree(args: Namespace, skip_visualization=True):
         "Max depth %s, so %s internal nodes and %s leaves"
         % (depth, tree.num_internal_nodes, tree.num_leaves)
     )
-    analyse_output_shape(tree, train_loader, log, device)
 
     leaf_labels = dict()
-    best_train_acc = 0.0
-    best_test_acc = 0.0
     test_acc = 0.0
-    # train and evaluate
-    # if epoch < epochs + 1:
-    def time_to_evaluate(epoch: int):
+
+    def should_evaluate(epoch: int):
+        if evaluate_each_epoch > 0 and epoch == 0:
+            return False
         return epoch % evaluate_each_epoch == 0 or epoch == epochs
 
     params_frozen = False
@@ -166,30 +171,27 @@ def run_tree(args: Namespace, skip_visualization=True):
     if freeze_epochs > 0:
         log.log_message(f"\nFreezing network for {freeze_epochs} epochs.")
         freeze()
-    for epoch in range(epochs + 1):
+    for epoch in range(epochs):
         if params_frozen and epoch > freeze_epochs:
             log.log_message(f"\nUnfreezing network at {epoch=}.")
             unfreeze()
 
         leaf_labels, train_info = train_single_epoch(
             num_classes,
-            disable_derivative_free_leaf_optim,
             epoch,
-            freeze_epochs,
             kontschieder_normalization,
             kontschieder_train,
             leaf_labels,
             log,
             net,
             optimizer,
-            params_to_freeze,
             train_loader,
             tree,
             pruning_threshold_leaves,
         )
         scheduler.step()
 
-        if time_to_evaluate(epoch):
+        if should_evaluate(epoch):
             eval_info = eval_tree(
                 tree, test_loader, log, eval_name=f"Testing after epoch: {epoch}"
             )
@@ -217,24 +219,21 @@ def run_tree(args: Namespace, skip_visualization=True):
     # )
 
     # EVALUATE AND ANALYSE TRAINED TREE
-    log.log_message(
-        "Training Finished. Best training accuracy was %s, best test accuracy was %s\n"
-        % (str(best_train_acc), str(best_test_acc))
-    )
+    print(f"Training Finished.")
     leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
-        tree, epoch + 1, num_classes, leaf_labels, pruning_threshold_leaves, log
+        tree, epochs - 1, num_classes, leaf_labels, pruning_threshold_leaves, log
     )
     # TODO: this logs a long array, removing it for now
     # log_leaf_distributions_analysis(tree, log)
 
     # prune
-    pruned_tree = deepcopy(tree)
-    prune(pruned_tree, pruning_threshold_leaves, log)
+    pruned_tree = _get_pruned_tree(tree, pruning_threshold_leaves, log)
+
     # todo: pass actual class labels?
     leaf_labels, pruned_test_acc = analyse_tree(
         tree,
         range(num_classes),
-        epoch,
+        epochs - 1,
         leaf_labels,
         log,
         pruning_threshold_leaves,
@@ -253,13 +252,13 @@ def run_tree(args: Namespace, skip_visualization=True):
     average_distance_nearest_image(project_info, projected_pruned_tree, log)
     add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
         projected_pruned_tree,
+        # TODO: wassup with +3?
         epoch + 3,
         num_classes,
         leaf_labels,
         pruning_threshold_leaves,
         log,
     )
-    log_leaf_distributions_analysis(projected_pruned_tree, log)
     eval_info = eval_tree(projected_pruned_tree, test_loader, log, eval_name=name)
     log.log_message(f"Test after pruning and projection: {eval_info['test_accuracy']}")
 
@@ -277,8 +276,32 @@ def run_tree(args: Namespace, skip_visualization=True):
             log_dir,
             dir_for_saving_images,
         )
-        # visualize tree
-        gen_vis(projected_pruned_tree, name, classes, log_dir, dir_for_saving_images)
+        generate_tree_visualization(
+            projected_pruned_tree,
+            name,
+            tuple(range(num_classes)),
+            log_dir,
+            dir_for_saving_images,
+        )
+
+
+def _get_pruned_tree(tree: ProtoTree, pruning_threshold_leaves: float, log: Log):
+    log.log_message("\nPruning...")
+    log.log_message(
+        f"Before pruning: {tree.num_internal_nodes} internal_nodes and {tree.num_leaves} leaves"
+    )
+    num_prototypes_before = tree.num_internal_nodes
+
+    # all work happens here, the rest is just logging
+    pruned_tree = deepcopy(tree)
+    prune(pruned_tree, pruning_threshold_leaves)
+
+    frac_nodes_pruned = 1 - pruned_tree.num_internal_nodes / num_prototypes_before
+    log.log_message(
+        f"After pruning: {tree.num_internal_nodes} internal_nodes and {tree.num_leaves} leaves"
+    )
+    log.log_message(f"Fraction of prototypes pruned: {frac_nodes_pruned}")
+    return pruned_tree
 
 
 # TODO: this mainly logs stuff and doesn't return anything...
@@ -309,18 +332,29 @@ def create_proto_tree(
     out_channels: int,
     pretrained=True,
 ):
-    # Create a convolutional network based on arguments and add 1x1 conv layer
+    """
+
+    :param H1: height of prototype
+    :param W1: width of prototype
+    :param num_classes:
+    :param depth:
+    :param net:
+    :param out_channels: number of output channels of the net+add_on layers, prior to prototype layers.
+        This coincides with the number of input channels for the prototypes
+    :param pretrained:
+    :return:
+    """
     features_net, add_on_layers = get_prototree_base_networks(
         out_channels, net=net, pretrained=pretrained
     )
     tree = ProtoTree(
         num_classes=num_classes,
-        out_channels=out_channels,
+        prototype_channels=out_channels,
         depth=depth,
         feature_net=features_net,
         add_on_layers=add_on_layers,
-        H1=H1,
-        W1=W1,
+        h_prototype=H1,
+        w_prototype=W1,
     )
     init_tree_weights(tree)
     return tree
@@ -375,13 +409,6 @@ def train_single_epoch(
     pruning_threshold_leaves,
     disable_derivative_free_leaf_optim=False,
 ):
-    log_optimization_info(
-        epoch,
-        log,
-        net,
-        optimizer,
-        disable_derivative_free_leaf_optim=disable_derivative_free_leaf_optim,
-    )
     epoch_trainer = get_single_epoch_trainer(
         kontschieder_normalization, kontschieder_train
     )
@@ -419,18 +446,6 @@ def get_single_epoch_trainer(
     return train_epoch
 
 
-def log_optimization_info(
-    epoch, log, net, optimizer, disable_derivative_free_leaf_optim=False
-):
-    log.log_message("\nEpoch %s" % str(epoch))
-    log_learning_rates(
-        optimizer,
-        net,
-        log,
-        disable_derivative_free_leaf_optim=disable_derivative_free_leaf_optim,
-    )
-
-
 def get_device(disable_cuda):
     if not disable_cuda and torch.cuda.is_available():
         device_str = f"cuda:{torch.cuda.current_device()}"
@@ -440,4 +455,15 @@ def get_device(disable_cuda):
 
 
 if __name__ == "__main__":
+    DEBUG = True
+    if DEBUG:
+        try:
+            import lovely_tensors
+
+            lovely_tensors.monkey_patch()
+        except ImportError:
+            print(
+                "lovely_tensors not installed, not monkey patching. "
+                "For more efficient debugging, we recommend installing it with `pip install lovely-tensors`."
+            )
     run_tree(get_args(), skip_visualization=True)

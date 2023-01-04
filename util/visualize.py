@@ -1,4 +1,3 @@
-import argparse
 import copy
 import math
 import os
@@ -12,13 +11,23 @@ from prototree.node import InternalNode, Leaf, Node
 from prototree.prototree import ProtoTree
 
 
-def gen_vis(
+def generate_tree_visualization(
     tree: ProtoTree,
     folder_name: str,
     classes: tuple,
     log_dir,
     dir_for_saving_images,
 ):
+    """
+    Saves visualization as a dotfile (and as pdf, if supported)
+
+    :param tree:
+    :param folder_name:
+    :param classes:
+    :param log_dir:
+    :param dir_for_saving_images:
+    :return:
+    """
     log_dir = Path(log_dir)
     destination_folder = log_dir / folder_name
     upsample_dir = log_dir / dir_for_saving_images / folder_name
@@ -52,9 +61,9 @@ def _node_vis(node: Node, upsample_dir: str):
 
 def _leaf_vis(node: Leaf):
     if node.log_probabilities:
-        ws = copy.deepcopy(torch.exp(node.distribution()).cpu().detach().numpy())
+        ws = copy.deepcopy(torch.exp(node.distribution()).detach().numpy())
     else:
-        ws = copy.deepcopy(node.distribution().cpu().detach().numpy())
+        ws = copy.deepcopy(node.distribution().detach().numpy())
 
     ws = np.ones(ws.shape) - ws
     ws *= 255
@@ -132,14 +141,17 @@ def _internal_node_vis(node: InternalNode, upsample_dir: str):
 
 
 def _gen_dot_nodes(
-    node: Node, destination_folder: str, upsample_dir: str, classes: tuple
+    node: Node,
+    destination_folder: os.PathLike,
+    upsample_dir: os.PathLike,
+    classes: tuple,
 ):
     img = _node_vis(node, upsample_dir).convert("RGB")
     if isinstance(node, Leaf):
         if node.log_probabilities:
-            ws = copy.deepcopy(torch.exp(node.distribution()).cpu().detach().numpy())
+            ws = copy.deepcopy(torch.exp(node.distribution()).detach().numpy())
         else:
-            ws = copy.deepcopy(node.distribution().cpu().detach().numpy())
+            ws = copy.deepcopy(node.distribution().detach().numpy())
         argmax = np.argmax(ws)
         targets = [argmax] if argmax.shape == () else argmax.tolist()
         class_targets = copy.deepcopy(targets)
@@ -191,9 +203,9 @@ def _gen_dot_edges(node: Node, classes: tuple):
         return s + edge_l + edge_r, sorted(list(set(targets_l + targets_r)))
     if isinstance(node, Leaf):
         if node.log_probabilities:
-            ws = copy.deepcopy(torch.exp(node.distribution()).cpu().detach().numpy())
+            ws = copy.deepcopy(torch.exp(node.distribution()).detach().numpy())
         else:
-            ws = copy.deepcopy(node.distribution().cpu().detach().numpy())
+            ws = copy.deepcopy(node.distribution().cpu().numpy())
         argmax = np.argmax(ws)
         targets = [argmax] if argmax.shape == () else argmax.tolist()
         class_targets = copy.deepcopy(targets)

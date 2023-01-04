@@ -16,7 +16,7 @@ def eval_tree(
     tree: ProtoTree,
     test_loader: DataLoader,
     log: Log = None,
-    sampling_strategy: str = "distributed",
+    sampling_strategy="distributed",
     eval_name: str = "Eval",
 ) -> dict:
 
@@ -25,7 +25,7 @@ def eval_tree(
     if sampling_strategy != "distributed":
         info["out_leaf_ix"] = []
     # Build a confusion matrix
-    cm = np.zeros((tree._num_classes, tree._num_classes), dtype=int)
+    cm = np.zeros((tree.num_classes, tree.num_classes), dtype=int)
 
     # Make sure the model is in evaluation mode
     tree.eval()
@@ -40,7 +40,7 @@ def eval_tree(
 
     # Iterate through the test set
     for i, (xs, ys) in test_iter:
-        xs, ys = xs.to(tree.device()), ys.to(tree.device())
+        xs, ys = xs.to(tree.device), ys.to(tree.device)
 
         # Use the model to classify this batch of input data
         out, test_info = tree.forward(xs, sampling_strategy=sampling_strategy)
@@ -73,11 +73,9 @@ def eval_tree(
 def eval_fidelity(
     tree: ProtoTree,
     test_loader: DataLoader,
-    device,
     log: Log = None,
     progress_prefix: str = "Fidelity",
 ) -> dict:
-    tree = tree.to(device)
 
     # Keep an info dict about the procedure
     info = dict()
@@ -93,7 +91,7 @@ def eval_fidelity(
     distr_greedy_fidelity = 0
     # Iterate through the test set
     for i, (xs, ys) in test_iter:
-        xs, ys = xs.to(device), ys.to(device)
+        xs, ys = xs.to(tree.device), ys.to(tree.device)
 
         # Use the model to classify this batch of input data, with 3 types of routing
         out_distr, _ = tree.forward(xs, sampling_strategy="distributed")
@@ -118,10 +116,8 @@ def eval_fidelity(
         del out_samplemax
         del out_greedy
 
-    distr_samplemax_fidelity = distr_samplemax_fidelity / float(
-        len(test_loader.dataset)
-    )
-    distr_greedy_fidelity = distr_greedy_fidelity / float(len(test_loader.dataset))
+    distr_samplemax_fidelity = distr_samplemax_fidelity / len(test_loader.dataset)
+    distr_greedy_fidelity = distr_greedy_fidelity / len(test_loader.dataset)
     info["distr_samplemax_fidelity"] = distr_samplemax_fidelity
     info["distr_greedy_fidelity"] = distr_greedy_fidelity
     log.log_message(
