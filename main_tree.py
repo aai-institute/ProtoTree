@@ -126,6 +126,7 @@ def run_tree(args: Namespace, skip_visualization=True):
     device = get_device(disable_cuda)
     print(f"Running on: {device}, moving tree to device")
     tree = tree.to(device)
+    print("Creating optimizer")
 
     optimizer, params_to_freeze, params_to_train = get_optimizer(
         tree,
@@ -139,7 +140,7 @@ def run_tree(args: Namespace, skip_visualization=True):
         lr_pi,
         lr_net,
     )
-    print("Optimizer was setup")
+    print("Creating scheduler")
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=milestones, gamma=gamma
     )
