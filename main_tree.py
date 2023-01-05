@@ -8,14 +8,14 @@ from torch.utils.data import DataLoader
 
 from prototree.project import project_with_class_constraints
 from prototree.prototree import ProtoTree
-from prototree.prune import prune
+from prototree.prune import prune_unconfident_leaves
 from prototree.test import eval_fidelity, eval_tree
 from prototree.train import train_epoch, train_epoch_kontschieder
 from prototree.upsample import upsample
 from util.analyse import (
-    add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis,
+    add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis,
     average_distance_nearest_image,
-    get_avg_path_length,
+    log_avg_path_length,
 )
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
@@ -119,9 +119,12 @@ def run_tree(args: Namespace, skip_visualization=True):
     tree = create_proto_tree(
         h_prototype, w_prototype, num_classes, depth, net, out_channels, pretrained
     )
+    print(
+        f"Max depth {depth}, so {tree.num_internal_nodes} internal nodes and {tree.num_leaves} leaves"
+    )
 
     device = get_device(disable_cuda)
-    print(f"Running on {device=}")
+    print(f"Running on: {device}, moving tree to device")
     tree = tree.to(device)
 
     optimizer, params_to_freeze, params_to_train = get_optimizer(
@@ -136,18 +139,12 @@ def run_tree(args: Namespace, skip_visualization=True):
         lr_pi,
         lr_net,
     )
+    print("Optimizer was setup")
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=milestones, gamma=gamma
     )
 
     # tree.save(f"{log.checkpoint_dir}/tree_init")
-    log.log_message(
-        "Max depth %s, so %s internal nodes and %s leaves"
-        % (depth, tree.num_internal_nodes, tree.num_leaves)
-    )
-
-    leaf_labels = dict()
-    test_acc = 0.0
 
     def should_evaluate(epoch: int):
         if evaluate_each_epoch > 0 and epoch == 0:
@@ -171,6 +168,9 @@ def run_tree(args: Namespace, skip_visualization=True):
     if freeze_epochs > 0:
         log.log_message(f"\nFreezing network for {freeze_epochs} epochs.")
         freeze()
+    leaf_labels = dict()
+    test_acc = 0.0
+    print("Starting training")
     for epoch in range(epochs):
         if params_frozen and epoch > freeze_epochs:
             log.log_message(f"\nUnfreezing network at {epoch=}.")
@@ -220,13 +220,13 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # EVALUATE AND ANALYSE TRAINED TREE
     print(f"Training Finished.")
-    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
+    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
         tree, epochs - 1, num_classes, leaf_labels, pruning_threshold_leaves, log
     )
     # TODO: this logs a long array, removing it for now
     # log_leaf_distributions_analysis(tree, log)
 
-    # prune
+    # TODO: see todo in the function, IMPORTANT
     pruned_tree = _get_pruned_tree(tree, pruning_threshold_leaves, log)
 
     # todo: pass actual class labels?
@@ -250,7 +250,7 @@ def run_tree(args: Namespace, skip_visualization=True):
     # save_tree(projected_pruned_tree, optimizer, scheduler, log.checkpoint_dir, name=name)
     # Analyse and evaluate pruned tree with projected prototypes
     average_distance_nearest_image(project_info, projected_pruned_tree, log)
-    add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
+    add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
         projected_pruned_tree,
         # TODO: wassup with +3?
         epoch + 3,
@@ -286,6 +286,9 @@ def run_tree(args: Namespace, skip_visualization=True):
 
 
 def _get_pruned_tree(tree: ProtoTree, pruning_threshold_leaves: float, log: Log):
+    # TODO: this doesn't actually prune anything, it just modifies the parents relations which
+    #  in no way affects inference and forward calls. What is done later on is that the pruning threshold
+    #  is passed again to an analysis function which drops a part of the predicted label distributions...
     log.log_message("\nPruning...")
     log.log_message(
         f"Before pruning: {tree.num_internal_nodes} internal_nodes and {tree.num_leaves} leaves"
@@ -294,7 +297,7 @@ def _get_pruned_tree(tree: ProtoTree, pruning_threshold_leaves: float, log: Log)
 
     # all work happens here, the rest is just logging
     pruned_tree = deepcopy(tree)
-    prune(pruned_tree, pruning_threshold_leaves)
+    prune_unconfident_leaves(pruned_tree.tree_root, pruning_threshold_leaves)
 
     frac_nodes_pruned = 1 - pruned_tree.num_internal_nodes / num_prototypes_before
     log.log_message(
@@ -319,7 +322,7 @@ def perform_final_evaluation(
             sampling_strategy=sampling_strategy,
             eval_name=eval_name,
         )
-        get_avg_path_length(projected_pruned_tree, eval_info, log)
+        log_avg_path_length(projected_pruned_tree, eval_info, log)
     eval_fidelity(projected_pruned_tree, test_loader, log)
 
 
@@ -384,7 +387,7 @@ def analyse_tree(
     :param eval_name:
     :return:
     """
-    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
+    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
         tree, epoch + 2, len(classes), leaf_labels, pruning_threshold_leaves, log
     )
     # TODO: this just logs a long array, really not necessary
@@ -424,7 +427,7 @@ def train_single_epoch(
     )
 
     # TODO: does this have to happen before scheduler step?
-    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
+    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
         tree,
         epoch,
         num_classes,

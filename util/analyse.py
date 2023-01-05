@@ -1,7 +1,7 @@
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
 
+from prototree.node import InternalNode
 from prototree.prototree import ProtoTree
 
 # from prototree.test import eval_ensemble
@@ -61,7 +61,7 @@ def average_distance_nearest_image(
 
 # TODO: this has to be called as leaf_labels = func(leaf_labels...). Fix this pattern!
 # TODO: the new name says it all, refactor this!
-def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
+def add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
     tree: ProtoTree,
     epoch: int,
     num_classes: int,
@@ -70,9 +70,9 @@ def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
     log: Log,
 ):
     with torch.no_grad():
-        if tree.depth <= 4:
+        if tree.tree_root.max_height() <= 4:
             log.log_message("class distributions of leaves:")
-            for leaf in tree.root.leaves:
+            for leaf in tree.tree_root.leaves:
                 if leaf.log_probabilities:
                     dist = torch.exp(leaf.distribution())
                 else:
@@ -124,28 +124,21 @@ def add_epoch_statistic_to_leaf_labels_dict_and_log_leaf_analysis(
 
 
 # TODO: this is broken, see IDE warning at return statement
-def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
+def log_avg_path_length(tree_root: InternalNode, info: dict, log: Log):
     # If possible, get the depth of the leaf corresponding to the decision
-    if "out_leaf_ix" not in info.keys():
-        log.log_message(
-            f"Soft tree with distributed routing. Path length is always {tree.depth} across all nodes"
-        )
+    if "out_leaf_ix" not in info:
+        predicting_leaves = tree_root.leaves
     else:  # greedy or sample_max routing
-        depths = tree.node_depths
-        # Get a dict mapping all node indices to the node objects
-        node_ixs = tree.node_by_index
-        ixs = info[
-            "out_leaf_ix"
-        ]  # Get all indices of the leaves corresponding to the decisions
-        pred_depths = [depths[node_ixs[ix]] for ix in ixs]  # Add them to the collection
-        avg_depth = sum(pred_depths) / float(len(pred_depths))
-        log.log_message(
-            f"Tree with deterministic routing. Average path length is {avg_depth} with std {np.std(pred_depths)}"
-        )
-        log.log_message(
-            f"Tree with deterministic routing. Longest path has length {np.max(pred_depths)}, shortest path has length {np.min(pred_depths)}"
-        )
-    return pred_depths
+        idx2node = tree_root.get_idx2node()
+        out_leaf_ix = info["out_leaf_ix"]
+        predicting_leaves = [idx2node[ix] for ix in out_leaf_ix]
+    leaf_depths = np.array(leaf.depth() for leaf in predicting_leaves)
+    log.log_message(
+        f"Average path length is {leaf_depths.mean()} with std {leaf_depths.std()}"
+    )
+    log.log_message(
+        f"Longest path has length {leaf_depths.max()}, shortest path has length {leaf_depths.min()}"
+    )
 
 
 #
@@ -252,7 +245,8 @@ def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
 #     for info in infos_sample_max:
 #         accuracies.append(info["test_accuracy"])
 #     log.log_message(
-#         "Mean and standard deviation of accuracies of pruned and projected individual trees with sample_max routing:\n "
+#         "Mean and standard deviation of accuracies of pruned and " \
+#         "projected individual trees with sample_max routing:\n "
 #         + "mean="
 #         + str(np.mean(accuracies))
 #         + ", std="
@@ -304,7 +298,8 @@ def get_avg_path_length(tree: ProtoTree, info: dict, log: Log):
 #         depths_sample_max += get_avg_path_length(tree, eval_info_sample_max, log)
 #         depths_greedy += get_avg_path_length(tree, eval_info_greedy, log)
 #     log.log_message(
-#         "Mean and standard deviation of path length of pruned and projected individual trees with sample_max routing:\n "
+#         "Mean and standard deviation of path length of pruned " \
+#         "and projected individual trees with sample_max routing:\n "
 #         + "mean="
 #         + str(np.mean(depths_sample_max))
 #         + ", std="

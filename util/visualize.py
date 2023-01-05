@@ -39,8 +39,8 @@ def generate_tree_visualization(
     with torch.no_grad():
         s = 'digraph T {margin=0;ranksep=".03";nodesep="0.05";splines="false";\n'
         s += 'node [shape=rect, label=""];\n'
-        s += _gen_dot_nodes(tree.root, destination_folder, upsample_dir, classes)
-        s += _gen_dot_edges(tree.root, classes)[0]
+        s += _gen_dot_nodes(tree.tree_root, destination_folder, upsample_dir, classes)
+        s += _gen_dot_edges(tree.tree_root, classes)[0]
         s += "}\n"
 
     with open(os.path.join(destination_folder, "treevis.dot"), "w") as f:

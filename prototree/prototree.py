@@ -29,7 +29,7 @@ class ProtoTree(nn.Module):
         super().__init__()
         self.num_classes = num_classes
 
-        self.root = create_tree(
+        self.tree_root = create_tree(
             depth,
             num_classes,
             log_probabilities=log_probabilities,
@@ -47,13 +47,6 @@ class ProtoTree(nn.Module):
         )
         # TODO: why is this not part of the prototype layer?
         self.init_prototype_layer()
-
-        # Keep a dict that stores a reference to each node's parent
-        # Key: node -> Value: the node's parent
-        # The root of the tree is mapped to None
-        # TODO: move this to the tree
-        self.node2parent: dict[Node, Optional[InternalNode]] = {}
-        self._set_parents()
 
         self.net = feature_net
         self.add_on = add_on_layers if add_on_layers is not None else nn.Identity()
@@ -130,7 +123,7 @@ class ProtoTree(nn.Module):
         # Add the mapping of decision nodes to conv net outputs to the kwargs dict to be passed to the decision nodes in
         # the tree. Use a copy, as the original should not be modified
 
-        y_pred_proba, node_attr_dict = self.root.forward(
+        y_pred_proba, node_attr_dict = self.tree_root.forward(
             x, similarities=similarities, out_map=self.out_map
         )
 
@@ -189,7 +182,7 @@ class ProtoTree(nn.Module):
             # Traverse the tree for all items
             # Keep track of all nodes encountered
             for i in range(batch_size):
-                node = self.root
+                node = self.tree_root
                 while node in self.internal_nodes:
                     routing[i] += [node]
                     if node_attr_dict[node, "p_right"][i].item() > threshold:
@@ -226,49 +219,24 @@ class ProtoTree(nn.Module):
         return distances
 
     @property
-    def depth(self) -> int:
-        return self.root.depth
-
-    @property
-    def size(self) -> int:
-        return self.root.size
-
-    @property
     def all_nodes(self) -> set:
-        return self.root.descendants
-
-    @property
-    def node_by_index(self) -> dict:
-        return self.root.node_by_index
-
-    # TODO: this shouldn't be a property (among many other properties)
-    @property
-    def node_depths(self) -> dict[Node, int]:
-        node2depth = {}
-
-        def assign_depths(node, cur_depth):
-            node2depth[node] = cur_depth
-            for child in node.child_nodes:
-                assign_depths(child, cur_depth + 1)
-
-        assign_depths(self.root, 0)
-        return node2depth
+        return self.tree_root.descendants
 
     @property
     def internal_nodes(self) -> set:
-        return self.root.descendant_internal_nodes
+        return self.tree_root.descendant_internal_nodes
 
     @property
     def leaves(self) -> set:
-        return self.root.leaves
+        return self.tree_root.leaves
 
     @property
     def num_internal_nodes(self) -> int:
-        return self.root.num_internal_nodes
+        return self.tree_root.num_internal_nodes
 
     @property
     def num_leaves(self) -> int:
-        return self.root.num_leaves
+        return self.tree_root.num_leaves
 
     def save(self, basedir: Union[str, Path], file_name: str = "model.pth"):
         self.eval()
@@ -293,28 +261,10 @@ class ProtoTree(nn.Module):
     def load(directory_path: str):
         return torch.load(directory_path + "/model.pth")
 
-    # TODO: move whole parent logic to tree (i.e. to node and root node in particular) instead of this class
-    def _set_parents(self) -> None:
-        self.node2parent.clear()
-        self.node2parent[self.root] = None
-
-        def _set_parents_recursively(node: Node):
-            if isinstance(node, InternalNode):
-                self.node2parent[node.right] = node
-                self.node2parent[node.left] = node
-                _set_parents_recursively(node.right)
-                _set_parents_recursively(node.left)
-                return
-            if isinstance(node, Leaf):
-                return  # Nothing to do here!
-
-        _set_parents_recursively(self.root)
-
     # TODO: make a tree abstraction, move it there
     def path_to(self, node: Node):
-        assert node in self.leaves or node in self.internal_nodes
         path = [node]
-        while isinstance(self.node2parent[node], Node):
-            node = self.node2parent[node]
-            path = [node] + path
+        while not node.parent.is_root:
+            path = [node.parent] + path
+            node = node.parent
         return path
