@@ -13,7 +13,7 @@ T = TypeVar("T")
 
 
 # TODO: replace properties by methods, they are actually rather expensive to compute!
-class Node(nn.Module, ABC):
+class Node(ABC):
     def __init__(self, index: int, parent: "InternalNode" = None):
         super().__init__()
         self.parent = parent
@@ -328,9 +328,14 @@ class Leaf(Node):
         else:
             weights, requires_grad = torch.zeros(num_classes), False
 
+        # self.dist_params = weights
         self.dist_params = nn.Parameter(weights, requires_grad=requires_grad)
         self.log_probabilities = log_probabilities
         self.kontschieder_normalization = kontschieder_normalization
+
+    def to(self, *args, **kwargs):
+        self.dist_params = self.dist_params.to(*args, **kwargs)
+        return self
 
     def predicted_label(self):
         return torch.argmax(self.distribution()).item()
@@ -696,8 +701,8 @@ def health_check(root: InternalNode, height: int = None):
     """
     if height is not None:
         assert (
-            root.max_height == height
-        ), f"Root height should be {height} but got: {root.max_height}"
+            root.max_height() == height
+        ), f"Root max_height should be {height} but got: {root.max_height}"
 
     _health_check_root(root)
     _health_check_height_depth(root)

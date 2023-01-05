@@ -82,7 +82,7 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # Training loop args
     # epochs = args.epochs
-    disable_cuda = args.disable_cuda
+    disable_cuda = False
     epochs = 2
     evaluate_each_epoch = 20
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
@@ -294,17 +294,17 @@ def _get_pruned_tree(tree: ProtoTree, pruning_threshold_leaves: float, log: Log)
     log.log_message(
         f"Before pruning: {tree.num_internal_nodes} internal_nodes and {tree.num_leaves} leaves"
     )
-    num_prototypes_before = tree.num_internal_nodes
+    num_nodes_before = len(tree.all_nodes)
 
     # all work happens here, the rest is just logging
     pruned_tree = deepcopy(tree)
     prune_unconfident_leaves(pruned_tree.tree_root, pruning_threshold_leaves)
 
-    frac_nodes_pruned = 1 - pruned_tree.num_internal_nodes / num_prototypes_before
+    frac_nodes_pruned = 1 - len(pruned_tree.all_nodes) / num_nodes_before
     log.log_message(
-        f"After pruning: {tree.num_internal_nodes} internal_nodes and {tree.num_leaves} leaves"
+        f"After pruning: {pruned_tree.num_internal_nodes} internal_nodes and {pruned_tree.num_leaves} leaves"
     )
-    log.log_message(f"Fraction of prototypes pruned: {frac_nodes_pruned}")
+    log.log_message(f"Fraction of nodes pruned: {frac_nodes_pruned}")
     return pruned_tree
 
 
@@ -388,11 +388,10 @@ def analyse_tree(
     :param eval_name:
     :return:
     """
+    # TODO: why +2?
     leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
         tree, epoch + 2, len(classes), leaf_labels, pruning_threshold_leaves, log
     )
-    # TODO: this just logs a long array, really not necessary
-    # log_leaf_distributions_analysis(tree, log)
     eval_info = eval_tree(tree, testloader, log, eval_name=eval_name)
     pruned_test_acc = eval_info["test_accuracy"]
     return leaf_labels, pruned_test_acc

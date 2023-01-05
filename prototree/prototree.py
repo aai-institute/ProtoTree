@@ -1,12 +1,13 @@
 import pickle
+from copy import copy
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from prototree.node import InternalNode, Leaf, Node, create_tree
+from prototree.node import Node, create_tree
 from util.func import min_pool2d
 from util.l2conv import L2Conv2D
 
@@ -38,7 +39,7 @@ class ProtoTree(nn.Module):
         )
 
         # this thing contains one prototype per node. The nodes themselves actually don't contain any model parameters
-        # During the forward of the nodes, the outputs of this layer are passed as a somehow obscure datastracture
+        # During the forward of the nodes, the outputs of this layer are passed as a somehow obscure datastructure
         # from which each node reads off information...
         # TODO: fix this messy pattern or at least make the data flow very explicit. Do nodes need to be modules?
         #  They have no parameters to fit!
@@ -60,6 +61,20 @@ class ProtoTree(nn.Module):
         self.out_map: dict[Node, int] = {
             n: i for i, n in zip(range(2**depth - 1), self.internal_nodes)
         }
+
+    def to(self, *args, **kwargs):
+        # accounting for the fact that the tree_root is not a module
+        # TODO: this is ugly and previously nodes were modules. However, they cannot be modules
+        #   anymore b/c of their recursive structure and pytorch automatic registration of modules...
+        #   Maybe there is some way around this, should ask a pytorch wiz.
+        self_copy = copy(self)
+        self_copy.net = self.net.to(*args, **kwargs)
+        self_copy.add_on = self.add_on.to(*args, **kwargs)
+        self_copy.prototype_layer = self.prototype_layer.to(*args, **kwargs)
+        # TODO: deepcopy instead?
+        for leaf in self_copy.leaves:
+            leaf.dist_params = leaf.dist_params.to(*args, **kwargs)
+        return self_copy
 
     @property
     def num_prototypes(self):
@@ -260,11 +275,3 @@ class ProtoTree(nn.Module):
     @staticmethod
     def load(directory_path: str):
         return torch.load(directory_path + "/model.pth")
-
-    # TODO: make a tree abstraction, move it there
-    def path_to(self, node: Node):
-        path = [node]
-        while not node.parent.is_root:
-            path = [node.parent] + path
-            node = node.parent
-        return path

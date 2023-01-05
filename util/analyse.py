@@ -85,23 +85,20 @@ def add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
         classes_covered = []
 
         for leaf in tree.leaves:
-            label = torch.argmax(leaf.dist_params).item()
+            y_proba = leaf.y_proba()
+            y_pred = torch.argmax(y_proba).item()
+            classes_covered.append(y_pred)
 
-            if leaf.log_probabilities:
-                value = torch.max(torch.exp(leaf.distribution())).item()
-            else:
-                value = torch.max(leaf.distribution()).item()
-            if value > threshold:
+            y_pred_confidence = y_proba.max().item()
+            if y_pred_confidence > threshold:
                 leafs_higher_than.append(leaf.index)
-            leaf_labels[epoch].append((leaf.index, label))
-            classes_covered.append(label)
+            leaf_labels[epoch].append((leaf.index, y_pred))
         log.log_message(f"\nLeafs with max > {threshold}: {len(leafs_higher_than)}")
 
-        class_without_leaf = 0
-        for class_label in range(num_classes):
-            if class_label not in classes_covered:
-                class_without_leaf += 1
-        log.log_message(f"Classes without leaf: {class_without_leaf}")
+        _class_labels_without_leaf = [
+            label for label in range(num_classes) if label not in classes_covered
+        ]
+        log.log_message(f"Classes without leaf: {_class_labels_without_leaf}")
 
         if len(leaf_labels.keys()) >= 2:
             changed_prev = 0
