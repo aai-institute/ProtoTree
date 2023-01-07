@@ -62,14 +62,14 @@ def load_things_into_tree(
 
 def init_tree_weights(tree: ProtoTree):
     with torch.no_grad():
-        tree.init_prototype_layer()
+        tree._init_prototype_layer()
         tree.add_on.apply(_xavier_on_conv)
 
 
 def _load_weights_to_tree(tree: ProtoTree, state_dict_dir_net: Union[str, Path]):
     state_dict_dir_net = Path(state_dict_dir_net)
     # TODO: why here without no_grad?
-    tree.init_prototype_layer()
+    tree._init_prototype_layer()
     # strict is False so when loading pretrained model, ignore the linear classification layer
     tree.net.load_state_dict(
         torch.load(state_dict_dir_net / "model_state.pth"), strict=False
@@ -106,7 +106,6 @@ def _load_tree_and_reset_scheduler(
             parameter.requires_grad = True
     if not disable_derivative_free_leaf_optim:
         for leaf in tree.leaves:
-            # TODO: mutating private fields
             leaf.dist_params.requires_grad = False
 
     if (state_dict_dir_tree / "scheduler_state.pth").exists():

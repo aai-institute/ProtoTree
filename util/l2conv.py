@@ -32,20 +32,24 @@ class L2Conv2D(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Efficiently compute the squared L2 distance for all prototypes by performing a special type of convolution
-        over the input features.
+        Efficiently compute the squared L2 distance for all prototypes and patches simultaneously by using
+        convolutions.
+
+        Returns a tensor of shape `(batch_size, num_prototypes, n_patches_w, n_patches_h)`
+        obtained from computing the squared L2 distances for patches of the prototype shape from the input
+        using all prototypes.
+
+        Here `n_patches_w = W - w + 1` and `n_patches_h = H - h + 1` where `w` and `h` are the width and height of the
+        prototypes. There are in total `n_patches_w * n_patches_h` patches of the prototype shape in the input.
 
         :param x: A batch of input images obtained as output from some convolutional neural network F. Following the
-                   notation from the paper, let the shape of xs be (batch_size, D, W, H).
-        :return: a tensor of shape (batch_size, num_prototypes, n_patches_w, n_patches_h) obtained from computing
-            the squared L2 distances for patches of the prototype shape from the input using all prototypes.
-            Here n_patches_w = W - w + 1 and n_patches_h = H - h + 1 where w and h are the width and height of the
-            prototypes. There are in total n_patches_w * n_patches_h patches of the prototype shape in the input.
+                   notation from the paper, the shape of x is `(batch_size, D, W, H)`.
+        :return: a tensor of shape `(batch_size, num_prototypes, n_patches_w, n_patches_h)`.
         """
         # Adapted from ProtoPNet
-        # Computing ||xs - ps ||^2 is equivalent to ||xs||^2 + ||ps||^2 - 2 * xs * ps
+        # ||xs - ps ||^2 = ||xs||^2 + ||ps||^2 - 2 * xs * ps
 
-        # Compute ||xs||^2 for all patches simultaneously by convolving with ones
+        # ||xs||^2 for all patches simultaneously by convolving with ones
         _ones = torch.ones_like(self.prototype_tensors, device=x.device)
         # Shape: (bs, num_prototypes, w_in - w + 1, h_in - h + 1)
         xs_squared_l2 = F.conv2d(x**2, weight=_ones)
@@ -58,6 +62,4 @@ class L2Conv2D(nn.Module):
         xs_conv = F.conv2d(x, weight=self.prototype_tensors)
 
         distances_sq = xs_squared_l2 - 2 * xs_conv + ps_squared_l2.view(-1, 1, 1)
-        # L2 distance (not squared). Small epsilon added for numerical stability
-        # Shape: (bs, num_prototypes, w_in, h_in)
         return torch.sqrt(distances_sq + 1e-14)

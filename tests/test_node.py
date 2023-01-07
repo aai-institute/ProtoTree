@@ -48,11 +48,11 @@ class TestTree:
 
     def test_paths(self, root):
         sample_leaf = next(iter(root.leaves))
-        leaf_path_from_root = sample_leaf.get_path_from_start_node()
+        leaf_path_from_root = sample_leaf.get_path_from_ancestor()
         assert len(leaf_path_from_root) == root.max_height() + 1
         assert leaf_path_from_root[-1] == sample_leaf
         assert leaf_path_from_root[0] == root
-        assert root.left.get_path_from_start_node() == [root, root.left]
+        assert root.left.get_path_from_ancestor() == [root, root.left]
 
     def test_node_properties(self):
         mini_tree = create_tree(height=1, num_classes=2)

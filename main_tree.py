@@ -1,28 +1,21 @@
 from argparse import Namespace
-from copy import deepcopy
-from functools import partial
 from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader
 
-from prototree.project import project_with_class_constraints
+from prototree.eval import eval_fidelity, eval_tree
+from prototree.node import InternalNode
+from prototree.project import replace_prototypes_by_projections
 from prototree.prototree import ProtoTree
 from prototree.prune import prune_unconfident_leaves
-from prototree.test import eval_fidelity, eval_tree
-from prototree.train import train_epoch, train_epoch_kontschieder
-from prototree.upsample import upsample
-from util.analyse import (
-    add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis,
-    average_distance_nearest_image,
-    log_avg_path_length,
-)
+from prototree.train import train_epoch
+from util.analyse import log_pruned_leaf_analysis
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.init import init_tree_weights
 from util.log import Log
 from util.net import get_prototree_base_networks
-from util.visualize import generate_tree_visualization
 
 
 def save_tree(
@@ -42,10 +35,8 @@ def save_tree(
 
 # TODO: use ptl, make this obsolete
 def get_log(log_dir: str):
-    # Create a logger
     log = Log(log_dir)
     print("Log dir: ", log_dir, flush=True)
-    # Create a csv log for storing the test accuracy, mean train accuracy and mean loss for each epoch
     log.create_log(
         "log_epoch_overview",
         "epoch",
@@ -53,9 +44,13 @@ def get_log(log_dir: str):
         "mean_train_acc",
         "mean_train_crossentropy_loss_during_epoch",
     )
-
-    log_loss = "log_train_epochs_losses"
-    log.create_log(log_loss, "epoch", "batch", "loss", "batch_train_acc")
+    log.create_log(
+        "log_train_epochs_losses",
+        "epoch",
+        "batch",
+        "loss",
+        "batch_train_acc",
+    )
     return log
 
 
@@ -63,7 +58,6 @@ def run_tree(args: Namespace, skip_visualization=True):
     # data and paths
     dataset = args.dataset
     log_dir = args.log_dir
-    dir_for_saving_images = args.dir_for_saving_images
 
     # training hardware
     milestones = args.milestones
@@ -81,23 +75,16 @@ def run_tree(args: Namespace, skip_visualization=True):
     weight_decay = args.weight_decay
 
     # Training loop args
-    # epochs = args.epochs
     disable_cuda = False
-    epochs = 2
+    epochs = 10
     evaluate_each_epoch = 20
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
-    # freeze_epochs = args.freeze_epochs
     freeze_epochs = 0
 
     # prototree specifics
     upsample_threshold = args.upsample_threshold
-    kontschieder_train = args.kontschieder_train
-    kontschieder_normalization = args.kontschieder_normalization
     # This option should always be true, at least for now
-    # disable_derivative_free_leaf_optim = args.disable_derivative_free_leaf_optim
-    # TODO: this cannot come from args, needs to be adjusted to num of classes!!
-    # pruning_threshold_leaves = args.pruning_threshold_leaves
     pruning_threshold_percentage = 0.1
     pruning_threshold_leaves = 1 / 3 * (1 + pruning_threshold_percentage)
 
@@ -124,9 +111,8 @@ def run_tree(args: Namespace, skip_visualization=True):
     )
 
     device = get_device(disable_cuda)
-    print(f"Running on: {device}, moving tree to device")
+    print(f"Running on: {device}")
     tree = tree.to(device)
-    print("Creating optimizer")
 
     optimizer, params_to_freeze, params_to_train = get_optimizer(
         tree,
@@ -140,7 +126,6 @@ def run_tree(args: Namespace, skip_visualization=True):
         lr_pi,
         lr_net,
     )
-    print("Creating scheduler")
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=milestones, gamma=gamma
     )
@@ -169,44 +154,29 @@ def run_tree(args: Namespace, skip_visualization=True):
     if freeze_epochs > 0:
         log.log_message(f"\nFreezing network for {freeze_epochs} epochs.")
         freeze()
-    leaf_labels = dict()
-    test_acc = 0.0
+
     print("Starting training")
     for epoch in range(epochs):
         if params_frozen and epoch > freeze_epochs:
             log.log_message(f"\nUnfreezing network at {epoch=}.")
             unfreeze()
 
-        leaf_labels, train_info = train_single_epoch(
-            num_classes,
-            epoch,
-            kontschieder_normalization,
-            kontschieder_train,
-            leaf_labels,
-            log,
-            net,
-            optimizer,
-            train_loader,
-            tree,
-            pruning_threshold_leaves,
-        )
+        train_single_epoch(tree, epoch, log, optimizer, train_loader)
         scheduler.step()
 
+        log_pruned_leaf_analysis(
+            tree.leaves,
+            pruning_threshold_leaves,
+            log,
+        )
+
         if should_evaluate(epoch):
-            eval_info = eval_tree(
-                tree, test_loader, log, eval_name=f"Testing after epoch: {epoch}"
+            test_acc = eval_tree(
+                tree, test_loader, eval_name=f"Testing after epoch: {epoch}"
             )
-            test_acc = eval_info["test_accuracy"]
             # if test_acc > best_test_acc:
             #     best_test_acc = test_acc
             #     tree.save(f"{log.checkpoint_dir}/best_test_model")
-        log.log_values(
-            "log_epoch_overview",
-            epoch,
-            test_acc,
-            train_info["train_accuracy"],
-            train_info["loss"],
-        )
     # only evaluate and for some reason also save, I disabled it for now
     # else:  # tree was loaded and not trained, so evaluate only
     #     raise NotImplementedError("This is not implemented yet")
@@ -215,100 +185,68 @@ def run_tree(args: Namespace, skip_visualization=True):
     # save_tree(
     #     tree, optimizer, scheduler, log.checkpoint_dir, "best_test_model"
     # )
-    # log.log_values(
-    #     "log_epoch_overview", epoch, eval_info["test_accuracy"], "n.a.", "n.a."
-    # )
 
     # EVALUATE AND ANALYSE TRAINED TREE
     print(f"Training Finished.")
-    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
-        tree, epochs - 1, num_classes, leaf_labels, pruning_threshold_leaves, log
-    )
-    # TODO: this logs a long array, removing it for now
-    # log_leaf_distributions_analysis(tree, log)
+
+    log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
 
     # TODO: see todo in the function, IMPORTANT
-    pruned_tree = _get_pruned_tree(tree, pruning_threshold_leaves, log)
+    tree = _prune_tree(tree, pruning_threshold_leaves, log)
 
-    # todo: pass actual class labels?
-    leaf_labels, pruned_test_acc = analyse_tree(
-        tree,
-        range(num_classes),
-        epochs - 1,
-        leaf_labels,
-        log,
-        pruning_threshold_leaves,
-        test_loader,
-        eval_name="pruned",
-    )
-    # save_tree(pruned_tree, optimizer, scheduler, log.checkpoint_dir, name="pruned")
-    #
-    # # find "real image" prototypes through projection
-    projected_pruned_tree, project_info = project_with_class_constraints(
-        deepcopy(pruned_tree), project_loader, log
-    )
-    name = "pruned_and_projected"
-    # save_tree(projected_pruned_tree, optimizer, scheduler, log.checkpoint_dir, name=name)
-    # Analyse and evaluate pruned tree with projected prototypes
-    average_distance_nearest_image(project_info, projected_pruned_tree, log)
-    add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
-        projected_pruned_tree,
-        # TODO: wassup with +3?
-        epoch + 3,
-        num_classes,
-        leaf_labels,
-        pruning_threshold_leaves,
-        log,
-    )
-    eval_info = eval_tree(projected_pruned_tree, test_loader, log, eval_name=name)
-    log.log_message(f"Test after pruning and projection: {eval_info['test_accuracy']}")
+    log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
+    pruned_acc = eval_tree(tree, test_loader, eval_name="pruned")
+    log.log_message(f"\nAccuracy with distributed routing: {pruned_acc:.3f}")
 
-    perform_final_evaluation(projected_pruned_tree, test_loader, log, eval_name=name)
+    # PROJECT
+    print("Projecting prototypes to nearest training patch (with class restrictions)")
+    replace_prototypes_by_projections(tree, project_loader)
+    log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
+    test_acc = eval_tree(tree, test_loader, eval_name="pruned_and_projected")
+    log.log_message(f"Test after pruning and projection: {test_acc:.3f}")
 
-    if not skip_visualization:
-        # Upsample prototype for visualization
-        upsample(
-            projected_pruned_tree,
-            upsample_threshold,
-            project_info,
-            project_loader,
-            name,
-            log,
-            log_dir,
-            dir_for_saving_images,
-        )
-        generate_tree_visualization(
-            projected_pruned_tree,
-            name,
-            tuple(range(num_classes)),
-            log_dir,
-            dir_for_saving_images,
-        )
+    perform_final_evaluation(tree, test_loader, log, eval_name="pruned_and_projected")
+    tree.tree_root.print_tree()
 
 
-def _get_pruned_tree(tree: ProtoTree, pruning_threshold_leaves: float, log: Log):
-    # TODO: this doesn't actually prune anything, it just modifies the parents relations which
-    #  in no way affects inference and forward calls. What is done later on is that the pruning threshold
-    #  is passed again to an analysis function which drops a part of the predicted label distributions...
+#     # Upsample prototype for visualization
+#     upsample(
+#         tree,
+#         upsample_threshold,
+#         project_info,
+#         project_loader,
+#         name,
+#         log,
+#         log_dir,
+#         dir_for_saving_images,
+#     )
+#     generate_tree_visualization(
+#         tree,
+#         name,
+#         tuple(range(num_classes)),
+#         log_dir,
+#         dir_for_saving_images,
+#     )
+
+
+def _prune_tree(root: InternalNode, pruning_threshold_leaves: float, log: Log):
     log.log_message("\nPruning...")
     log.log_message(
-        f"Before pruning: {tree.num_internal_nodes} internal_nodes and {tree.num_leaves} leaves"
+        f"Before pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
-    num_nodes_before = len(tree.all_nodes)
-
+    num_nodes_before = len(root.descendant_internal_nodes)
     # all work happens here, the rest is just logging
-    pruned_tree = deepcopy(tree)
-    prune_unconfident_leaves(pruned_tree.tree_root, pruning_threshold_leaves)
+    prune_unconfident_leaves(root, pruning_threshold_leaves)
 
-    frac_nodes_pruned = 1 - len(pruned_tree.all_nodes) / num_nodes_before
+    frac_nodes_pruned = 1 - len(root.descendant_internal_nodes) / num_nodes_before
     log.log_message(
-        f"After pruning: {pruned_tree.num_internal_nodes} internal_nodes and {pruned_tree.num_leaves} leaves"
+        f"After pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
     log.log_message(f"Fraction of nodes pruned: {frac_nodes_pruned}")
-    return pruned_tree
+    return root
 
 
-# TODO: this mainly logs stuff and doesn't return anything...
+# TODO: this only logs stuff and doesn't return anything...
 def perform_final_evaluation(
     projected_pruned_tree: ProtoTree,
     test_loader: DataLoader,
@@ -316,15 +254,15 @@ def perform_final_evaluation(
     eval_name="Final evaluation",
 ):
     for sampling_strategy in ["sample_max", "greedy"]:
-        eval_info = eval_tree(
+        eval_tree(
             projected_pruned_tree,
             test_loader,
-            log,
             sampling_strategy=sampling_strategy,
             eval_name=eval_name,
         )
-        log_avg_path_length(projected_pruned_tree, eval_info, log)
-    eval_fidelity(projected_pruned_tree, test_loader, log)
+    fidelities = eval_fidelity(projected_pruned_tree, test_loader)
+    for strategy, fidelity in fidelities.items():
+        log.log_message(f"Fidelity of {strategy} routing: {fidelity:.2f}")
 
 
 def create_proto_tree(
@@ -364,92 +302,25 @@ def create_proto_tree(
     return tree
 
 
-# TODO: rename, split up
-def analyse_tree(
-    tree,
-    classes,
-    epoch,
-    leaf_labels,
-    log,
-    pruning_threshold_leaves,
-    testloader,
-    eval_name="Eval",
-):
-    """
-    Does a whole bunch of logging to some secret log file
-
-    :param tree:
-    :param classes:
-    :param epoch:
-    :param leaf_labels:
-    :param log:
-    :param pruning_threshold_leaves:
-    :param testloader:
-    :param eval_name:
-    :return:
-    """
-    # TODO: why +2?
-    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
-        tree, epoch + 2, len(classes), leaf_labels, pruning_threshold_leaves, log
-    )
-    eval_info = eval_tree(tree, testloader, log, eval_name=eval_name)
-    pruned_test_acc = eval_info["test_accuracy"]
-    return leaf_labels, pruned_test_acc
-
-
-# TODO: just kill me now...
 def train_single_epoch(
-    num_classes,
-    epoch,
-    kontschieder_normalization,
-    kontschieder_train,
-    leaf_labels,
-    log,
-    net,
+    tree: ProtoTree,
+    epoch: int,
+    log: Log,
     optimizer,
-    trainloader,
-    tree,
-    pruning_threshold_leaves,
-    disable_derivative_free_leaf_optim=False,
+    trainloader: DataLoader,
 ):
-    epoch_trainer = get_single_epoch_trainer(
-        kontschieder_normalization, kontschieder_train
-    )
-
-    train_info = epoch_trainer(
+    train_acc = train_epoch(
         tree,
         trainloader,
         optimizer,
         epoch,
-        disable_derivative_free_leaf_optim,
         log,
         "log_train_epochs",
     )
-
-    # TODO: does this have to happen before scheduler step?
-    leaf_labels = add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
-        tree,
-        epoch,
-        num_classes,
-        leaf_labels,
-        pruning_threshold_leaves,
-        log,
-    )
-    return leaf_labels, train_info
+    return train_acc
 
 
-def get_single_epoch_trainer(
-    kontschieder_normalization: bool, kontschieder_train: bool
-):
-    if kontschieder_train:
-        return partial(
-            train_epoch_kontschieder,
-            kontschieder_normalization=kontschieder_normalization,
-        )
-    return train_epoch
-
-
-def get_device(disable_cuda):
+def get_device(disable_cuda=False):
     if not disable_cuda and torch.cuda.is_available():
         device_str = f"cuda:{torch.cuda.current_device()}"
     else:

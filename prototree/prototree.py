@@ -1,18 +1,19 @@
 import pickle
 from copy import copy
+from os import PathLike
 from pathlib import Path
-from typing import Literal, Union
+from typing import List, Literal, Optional, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from prototree.node import Node, create_tree
+from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
+from prototree.types import SamplingStrategy
 from util.func import min_pool2d
 from util.l2conv import L2Conv2D
 
 
-# TODO: inherit from Node?
 class ProtoTree(nn.Module):
     def __init__(
         self,
@@ -22,44 +23,24 @@ class ProtoTree(nn.Module):
         w_prototype: int,
         h_prototype: int,
         feature_net: torch.nn.Module,
-        log_probabilities: bool = True,
-        kontschieder_normalization: bool = False,
+        # TODO: add_on_layers that connect the feature net with the selected prototypes should be
+        #  created by default. Currently, the user has to figure out the shapes of the conv-layers by herself
         add_on_layers: nn.Module = None,
-        disable_derivative_free_leaf_optim=False,
     ):
         super().__init__()
         self.num_classes = num_classes
 
-        self.tree_root = create_tree(
-            depth,
-            num_classes,
-            log_probabilities=log_probabilities,
-            kontschieder_normalization=kontschieder_normalization,
-            disable_derivative_free_leaf_optim=disable_derivative_free_leaf_optim,
-        )
-
-        # this thing contains one prototype per node. The nodes themselves actually don't contain any model parameters
-        # During the forward of the nodes, the outputs of this layer are passed as a somehow obscure datastructure
-        # from which each node reads off information...
-        # TODO: fix this messy pattern or at least make the data flow very explicit. Do nodes need to be modules?
-        #  They have no parameters to fit!
+        self.tree_root = create_tree(depth, num_classes)
         self.prototype_layer = L2Conv2D(
             self.num_internal_nodes, prototype_channels, w_prototype, h_prototype
         )
-        # TODO: why is this not part of the prototype layer?
-        self.init_prototype_layer()
+        self._init_prototype_layer()
 
         self.net = feature_net
         self.add_on = add_on_layers if add_on_layers is not None else nn.Identity()
-
-        # Flag that indicates whether probabilities or log probabilities are computed
-        self.log_probabilities = log_probabilities
-
-        # Map each decision node to an output of the feature net
-        # TODO: that's not really true, and why do we need this at all? Can't we use node id?
-        #   This is used for retrieving outputs from some indexed list...
-        self.out_map: dict[Node, int] = {
-            n: i for i, n in zip(range(2**depth - 1), self.internal_nodes)
+        self.node_to_proto_idx = {
+            node: idx
+            for idx, node in enumerate(self.tree_root.descendant_internal_nodes)
         }
 
     def to(self, *args, **kwargs):
@@ -84,7 +65,7 @@ class ProtoTree(nn.Module):
     def prototype_channels(self):
         return self.prototype_layer.input_channels
 
-    def init_prototype_layer(self):
+    def _init_prototype_layer(self):
         # TODO: wassup with the constants?
         torch.nn.init.normal_(self.prototype_layer.prototype_tensors, mean=0.5, std=0.1)
 
@@ -104,156 +85,170 @@ class ProtoTree(nn.Module):
         x = self.add_on(x)
         return x
 
-    # TODO: convoluted, multiple returns in the middle of code, lots of duplication. Simplify this!
+    def _get_node_to_log_p_right(self, similarities: torch.Tensor):
+        return {node: -similarities[:, i] for node, i in self.node_to_proto_idx.items()}
+
+    def get_node_to_log_p_right(self, x: torch.Tensor) -> dict[Node, torch.Tensor]:
+        """
+        Extracts the mapping `node->log_p_right` from the prototype similarities.
+        """
+        similarities = self.prototype_similarities(x)
+        return self._get_node_to_log_p_right(similarities)
+
+    @staticmethod
+    def _node_to_probs_from_p_right(
+        node_to_log_p_right: dict[Node, torch.Tensor], root: InternalNode
+    ):
+        """
+        This method was separated out from get_node_to_probs to
+        highlight that it doesn't directly depend on the input x and could
+        in principle be moved to the forward of the tree or somewhere else.
+
+        :param node_to_log_p_right: computed from the similarities, see get_node_to_log_p_right
+        :param root: a root of a tree from which node_to_log_p_right was computed
+        :return:
+        """
+        root_log_p_right = node_to_log_p_right[root]
+
+        root_probs = NodeProbabilities(
+            log_p_arrival=torch.zeros_like(
+                root_log_p_right, device=root_log_p_right.device
+            ),
+            log_p_right=root_log_p_right,
+        )
+        result = {root: root_probs}
+
+        def add_strict_descendants(node: Union[InternalNode, Leaf]):
+            """
+            Adds the log probability of arriving at all strict descendants of node to the result dict.
+            """
+            if node.is_leaf:
+                return
+            n_probs = result[node]
+            log_p_right_right = node_to_log_p_right.get(node.right)
+            log_p_right_left = node_to_log_p_right.get(node.left)
+
+            log_p_arrival_left = n_probs.log_p_arrival_left
+            log_p_arrival_right = n_probs.log_p_arrival_right
+            result[node.left] = NodeProbabilities(
+                log_p_arrival=log_p_arrival_left,
+                log_p_right=log_p_right_left,
+            )
+            result[node.right] = NodeProbabilities(
+                log_p_arrival=log_p_arrival_right,
+                log_p_right=log_p_right_right,
+            )
+
+            add_strict_descendants(node.left)
+            add_strict_descendants(node.right)
+
+        add_strict_descendants(root)
+        return result
+
+    def get_node_to_probs(self, x: torch.Tensor) -> dict[Node, NodeProbabilities]:
+        """
+        Computes the log probabilities (left, right, arrival) for all nodes for the input x.
+
+        :param x: input images of shape (batch_size, channels, height, width)
+        :return: dictionary mapping each node to a dataclass containing tensors of shape (batch_size,)
+        """
+        node_to_log_p_right = self.get_node_to_log_p_right(x)
+        return self._node_to_probs_from_p_right(node_to_log_p_right, self.tree_root)
+
     def forward(
         self,
         x: torch.Tensor,
         sampling_strategy: Literal[
             "distributed", "sample_max", "greedy"
         ] = "distributed",
-    ) -> tuple[torch.Tensor, dict]:
+    ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
+        If sampling_strategy is `distributed`, all leaves contribute to each prediction,
+        and predicting_leaves is None.
+        For other sampling strategies, only one leaf is used per sample, which results in
+        an interpretable prediction. Then predicting_leaves is a list of leaves of length
+        `batch_size`.
 
-        :param x:
+        :param x: tensor of shape (batch_size, n_channels, w, h)
         :param sampling_strategy:
-        :return: tensor of predicted prob. distributions/logits of shape (bs, k), info_dict
+
+        :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves.
         """
-        distances = self.extract_prototype_distances(x)
-        # Compute minimal distance for each prototype to any patch by min pooling over the patches
-        # Shape: (batch_size, num_prototypes)
-        min_distances = min_pool2d(
-            distances, kernel_size=distances.shape[-2:]
-        ).squeeze()
 
-        similarities = -min_distances
-        if not self.log_probabilities:
-            similarities = torch.exp(similarities)
+        node_to_probs = self.get_node_to_probs(x)
 
-        # Split (or chunk) the conv net output tensor of shape (batch_size, num_decision_nodes) into individual tensors
-        # of shape (batch_size, 1) containing the logits that are relevant to single decision nodes
-        # TODO: here is something important, tightly coupled with out_map construction
-        #   This turns it into a list. Do we need chunk? Can't we just use it directly?
-        #   The variable should be renamed to something more meaningful.
-        similarities = similarities.chunk(similarities.size(1), dim=1)
-        # Add the mapping of decision nodes to conv net outputs to the kwargs dict to be passed to the decision nodes in
-        # the tree. Use a copy, as the original should not be modified
-
-        y_pred_proba, node_attr_dict = self.tree_root.forward(
-            x, similarities=similarities, out_map=self.out_map
-        )
-
-        # Store the output probabilities of all decision nodes in the tree
-        info = dict()
-        info["p_arrival"] = {
-            n.index: node_attr_dict[n, "p_arrival"] for n in self.all_nodes
-        }
-        info["p_right"] = {
-            n.index: node_attr_dict[n, "p_right"] for n in self.internal_nodes
-        }
-
-        # TODO: split this off into separate method. Note: for training only distributed should be used
-        #  So this probably generally should be moved.
-        # Generate the output based on the chosen sampling strategy
         if sampling_strategy == "distributed":
-            return y_pred_proba, info
-        if sampling_strategy == "sample_max":  # Sample max
-            batch_size = x.size(0)
-
-            # Prepare data for selection of most probable distributions
-            leaves = list(self.leaves)
-            # All shaped (bs, 1)
-            p_arrivals = [
-                node_attr_dict[l, "p_arrival"].view(batch_size, 1) for l in leaves
-            ]
-            p_arrivals = torch.cat(tuple(p_arrivals), dim=1)  # shape: (bs, L)
-            # All shaped (bs, 1, k)
-            distributions = [
-                node_attr_dict[l, "distribution"].view(batch_size, 1, self.num_classes)
-                for l in leaves
-            ]
-            distributions = torch.cat(tuple(distributions), dim=1)  # shape: (bs, L, k)
-
-            # Let L denote the number of leaves in this tree
-            # Select indices (in the 'leaves' variable) of leaves with the highest path probability
-            ix = torch.argmax(p_arrivals, dim=1).long()  # shape: (bs,)
-            # Select distributions of leafs with the highest path probability
-            dists = []
-            for j, i in zip(range(distributions.shape[0]), ix):
-                dists += [distributions[j][i].view(1, -1)]  # All shaped (1, k)
-            dists = torch.cat(tuple(dists), dim=0)  # shape: (bs, k)
-
-            # Store the indices of the leaves with the highest path probability
-            info["out_leaf_ix"] = [leaves[i.item()].index for i in ix]
-
-            return dists, info
-
-        if sampling_strategy == "greedy":  # Greedy
-            # At every decision node, the child with the highest probability will be chosen
-            batch_size = x.size(0)
-            # Set the threshold for when either child is more likely
-            threshold = 0.5 if not self.log_probabilities else np.log(0.5)
-            # Keep track of the routes taken for each of the items in the batch
-            routing = [[] for _ in range(batch_size)]
-            # Traverse the tree for all items
-            # Keep track of all nodes encountered
-            for i in range(batch_size):
-                node = self.tree_root
-                while node in self.internal_nodes:
-                    routing[i] += [node]
-                    if node_attr_dict[node, "p_right"][i].item() > threshold:
-                        node = node.right
-                    else:
-                        node = node.left
-                routing[i] += [node]
-
-            # Obtain output distributions of each leaf
-            # Each selected leaf is at the end of a path stored in the `routing` variable
-            dists = [node_attr_dict[path[-1], "distribution"][0] for path in routing]
-            # Concatenate the dists in a new batch dimension
-            dists = torch.cat([dist.unsqueeze(0) for dist in dists], dim=0).to(
-                device=x.device
+            predicting_leaves = None
+            logits = self.tree_root.forward(node_to_probs)
+        else:
+            if self.training:
+                raise ValueError(
+                    f"Only distributed sampling_strategy is supported during training but got: {sampling_strategy=}"
+                )
+            predicting_leaves = get_predicting_leaves(
+                self.tree_root, node_to_probs, sampling_strategy
             )
+            logits = [leaf.logits().unsqueeze(0) for leaf in predicting_leaves]
+            logits = torch.cat(logits, dim=0)
+        return logits, node_to_probs, predicting_leaves
 
-            # Store info
-            info["out_leaf_ix"] = [path[-1].index for path in routing]
+    def predict(
+        self,
+        x: torch.Tensor,
+        sampling_strategy: SamplingStrategy = "sample_max",
+    ) -> torch.Tensor:
+        logits = self.forward(x, sampling_strategy)[0]
+        return logits.argmax(dim=1)
 
-            return dists, info
-        raise ValueError("Sampling strategy not recognized!")
+    def predict_proba(
+        self,
+        x: torch.Tensor,
+        strategy: SamplingStrategy = "sample_max",
+    ) -> torch.Tensor:
+        logits = self.forward(x, strategy)[0]
+        return logits.softmax(dim=1)
 
-    def extract_prototype_distances(self, x: torch.Tensor) -> torch.Tensor:
+    def prototype_similarities(self, x: torch.Tensor) -> torch.Tensor:
         """
-        This method returns a tensor of shape (batch_size, num_prototypes, n_patches_w, n_patches_h) obtained
-        from computing  the squared L2 distances for patches of the prototype shape from the input using all prototypes.
-        Here n_patches_w = W - w + 1 and n_patches_h = H - h + 1 where (w, h) are the width and height of the
-        prototypes and (W, H) are the width and height of the output of `extract_features` applied to x.
-        There are in total n_patches_w * n_patches_h patches of the prototype shape in the input.
-        """
+        Computes the similarity between the prototypes and the input. The similarity is computed as the
+        minimum distance between the prototype and all suitable patches of the input.
 
-        features = self.extract_features(x)
-        distances = self.prototype_layer(features)
-        return distances
+        :param x: input images of shape (batch_size, channels, height, width)
+        :return: tensor of shape (batch_size, num_prototypes)
+        """
+        # (batch_size, num_prototypes, n_patches_w, n_patches_h)
+        x = self.prototype_distances_to_patches(x)
+        return min_pool2d(x, kernel_size=x.shape[-2:]).squeeze()
+
+    def prototype_distances_to_patches(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Returns a tensor of shape `(batch_size, num_prototypes, n_patches_w, n_patches_h)`.
+        See documentation of `L2Conv2D` for more details.
+        """
+        x = self.extract_features(x)
+        return self.prototype_layer(x)
 
     @property
     def all_nodes(self) -> set:
         return self.tree_root.descendants
 
     @property
-    def internal_nodes(self) -> set:
+    def internal_nodes(self):
         return self.tree_root.descendant_internal_nodes
 
     @property
-    def leaves(self) -> set:
+    def leaves(self):
         return self.tree_root.leaves
 
     @property
-    def num_internal_nodes(self) -> int:
+    def num_internal_nodes(self):
         return self.tree_root.num_internal_nodes
 
     @property
-    def num_leaves(self) -> int:
+    def num_leaves(self):
         return self.tree_root.num_leaves
 
-    def save(self, basedir: Union[str, Path], file_name: str = "model.pth"):
+    def save(self, basedir: PathLike, file_name: str = "model.pth"):
         self.eval()
         basedir = Path(basedir)
         basedir.mkdir(parents=True, exist_ok=True)
@@ -261,7 +256,7 @@ class ProtoTree(nn.Module):
 
     def save_state(
         self,
-        basedir: str,
+        basedir: PathLike,
         state_file_name="model_state.pth",
         pickle_file_name="tree.pkl",
     ):
@@ -275,3 +270,53 @@ class ProtoTree(nn.Module):
     @staticmethod
     def load(directory_path: str):
         return torch.load(directory_path + "/model.pth")
+
+
+def get_predicting_leaves(
+    root: InternalNode,
+    node_to_probs: dict[Node, NodeProbabilities],
+    sampling_strategy: Literal["sample_max", "greedy"],
+):
+    if sampling_strategy == "sample_max":
+        return get_max_p_arrival_leaves(root.leaves, node_to_probs)
+    if sampling_strategy == "greedy":
+        return get_predicting_leaves_greedily(root, node_to_probs)
+    raise ValueError(f"Unknown {sampling_strategy=}")
+
+
+def get_predicting_leaves_greedily(
+    root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
+) -> List[Leaf]:
+
+    neg_log_2 = -np.log(2)
+
+    def get_leaf_for_sample(sample_idx: int):
+        # walk through greedily from root to leaf using probabilities for the selected sample
+        cur_node = root
+        while cur_node.is_internal:
+            cur_probs = node_to_probs[cur_node]
+            log_p_left = cur_probs.log_p_left[sample_idx].item()
+            if log_p_left > neg_log_2:
+                cur_node = cur_node.left
+            else:
+                cur_node = cur_node.right
+        return cur_node
+
+    batch_size = node_to_probs[root].batch_size
+    return [get_leaf_for_sample(i) for i in range(batch_size)]
+
+
+def get_max_p_arrival_leaves(
+    leaves: List[Leaf], node_to_probs: dict[Node, NodeProbabilities]
+) -> List[Leaf]:
+    """
+    Selects one leaf for each entry of the batch covered in node_to_probs.
+
+    :param leaves:
+    :param node_to_probs: see `ProtoTree.get_node_to_probs`
+    :return: list of leaves of length `node_to_probs.batch_size`
+    """
+    log_p_arrivals = [node_to_probs[leaf].log_p_arrival.unsqueeze(1) for leaf in leaves]
+    log_p_arrivals = torch.cat(log_p_arrivals, dim=1)  # shape: (bs, n_leaves)
+    predicting_leaf_idx = torch.argmax(log_p_arrivals, dim=1).long()  # shape: (bs,)
+    return [leaves[i.item()] for i in predicting_leaf_idx]

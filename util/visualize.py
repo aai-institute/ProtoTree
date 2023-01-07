@@ -60,11 +60,7 @@ def _node_vis(node: Node, upsample_dir: str):
 
 
 def _leaf_vis(node: Leaf):
-    if node.log_probabilities:
-        ws = copy.deepcopy(torch.exp(node.distribution()).detach().numpy())
-    else:
-        ws = copy.deepcopy(node.distribution().detach().numpy())
-
+    ws = copy.deepcopy(torch.exp(node.logits()).detach().numpy())
     ws = np.ones(ws.shape) - ws
     ws *= 255
 
@@ -148,10 +144,7 @@ def _gen_dot_nodes(
 ):
     img = _node_vis(node, upsample_dir).convert("RGB")
     if isinstance(node, Leaf):
-        if node.log_probabilities:
-            ws = copy.deepcopy(torch.exp(node.distribution()).detach().numpy())
-        else:
-            ws = copy.deepcopy(node.distribution().detach().numpy())
+        ws = copy.deepcopy(torch.exp(node.logits()).detach().numpy())
         argmax = np.argmax(ws)
         targets = [argmax] if argmax.shape == () else argmax.tolist()
         class_targets = copy.deepcopy(targets)
@@ -202,10 +195,7 @@ def _gen_dot_edges(node: Node, classes: tuple):
         )
         return s + edge_l + edge_r, sorted(list(set(targets_l + targets_r)))
     if isinstance(node, Leaf):
-        if node.log_probabilities:
-            ws = copy.deepcopy(torch.exp(node.distribution()).detach().numpy())
-        else:
-            ws = copy.deepcopy(node.distribution().cpu().numpy())
+        ws = copy.deepcopy(torch.exp(node.logits()).detach().numpy())
         argmax = np.argmax(ws)
         targets = [argmax] if argmax.shape == () else argmax.tolist()
         class_targets = copy.deepcopy(targets)

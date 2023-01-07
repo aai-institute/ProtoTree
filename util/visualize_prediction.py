@@ -1,6 +1,4 @@
 import argparse
-import copy
-import math
 import os
 from subprocess import check_call
 
@@ -8,11 +6,8 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torchvision
 from PIL import Image
-from torchvision.utils import save_image
 
-from prototree.node import InternalNode, Leaf, Node
 from prototree.prototree import ProtoTree
 from prototree.upsample import find_high_activation_crop, imsave_with_bbox
 
@@ -34,7 +29,7 @@ def upsample_local(
     if not os.path.exists(dir):
         os.makedirs(dir)
     with torch.no_grad():
-        distances_batch = tree.extract_prototype_distances(sample)
+        distances_batch = tree.prototype_distances_to_patches(sample)
         sim_map = torch.exp(-distances_batch[0, :, :, :]).cpu().numpy()
     for i, node in enumerate(decision_path[:-1]):
         decision_node_idx = node.index
@@ -138,6 +133,7 @@ def upsample_local(
         )
 
 
+# TODO: fix this, all path things are wrong
 def gen_pred_vis(
     tree: ProtoTree,
     sample: torch.Tensor,
@@ -171,7 +167,6 @@ def gen_pred_vis(
         pred, pred_info = tree.forward(sample, sampling_strategy="greedy")
         probs = pred_info["ps"]
         label_ix = torch.argmax(pred, dim=1)[0].item()
-        assert "out_leaf_ix" in pred_info.keys()
 
     # Save input image
     sample_path = destination_folder + "/node_vis/sample.jpg"
@@ -183,7 +178,7 @@ def gen_pred_vis(
     leaf_ix = pred_info["out_leaf_ix"][0]
     idx2node = tree.idx2node
     leaf = idx2node[leaf_ix]
-    decision_path = leaf.get_path_from_start_node()
+    decision_path = leaf.get_path_from_ancestor()
 
     upsample_local(tree, sample, sample_dir, folder_name, img_name, decision_path, args)
 

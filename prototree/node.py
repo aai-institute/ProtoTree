@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Callable, TypeVar
+from copy import copy
+from dataclasses import dataclass
+from typing import Callable, Optional, TypeVar, Union
 
 import numpy as np
 import torch
@@ -12,6 +14,24 @@ from torch.nn import functional as F
 T = TypeVar("T")
 
 
+def log1mexp(log_p: torch.Tensor) -> torch.Tensor:
+    """
+    Compute `log(1-p) = log(1 - exp(log_p))` in a numerically stable way.
+    Implementation taken from
+    `tensorflow log1mexp <https://github.com/tensorflow/probability/blob/v0.9.0/tensorflow_probability/python/math/generic.py#L447-L471>`_
+
+    :param log_p:
+    :return:
+    """
+    log_p = log_p - 1e-7
+    # noinspection PyTypeChecker
+    return torch.where(
+        log_p < -np.log(2),
+        torch.log(-torch.expm1(log_p)),
+        torch.log1p(-torch.exp(log_p)),
+    )
+
+
 # TODO: replace properties by methods, they are actually rather expensive to compute!
 class Node(ABC):
     def __init__(self, index: int, parent: "InternalNode" = None):
@@ -19,28 +39,30 @@ class Node(ABC):
         self.parent = parent
         self.index = index
 
-    def get_path_from_start_node(self, start_node: "Node" = None):
+    def get_path_from_ancestor(self, start_node: "Node" = None) -> list["Node"]:
         """
-        :param start_node: if None, will start the path from the root node
+        Returns a path from the selected start_node to self.
+
+        :param start_node: if None, the resulting path will start from the root node
         :return:
         """
         path = []
         max_path_len = self.depth() + 1
 
-        def is_target(node):
+        def is_start_node(node):
             if start_node is None:
                 return node.is_root
             return node == start_node
 
-        found_target = False
+        found_start_node = False
         cur_node = self
-        for i in range(max_path_len):
+        for _ in range(max_path_len):
             path.append(cur_node)
-            if is_target(cur_node):
-                found_target = True
+            if is_start_node(cur_node):
+                found_start_node = True
                 break
             cur_node = cur_node.parent
-        if not found_target:
+        if not found_start_node:
             raise ValueError(
                 f"No path found from {start_node} to {self}! Check that the start node is in the tree"
             )
@@ -85,7 +107,13 @@ class Node(ABC):
     def name(self):
         return str(self.index)
 
-    def forward(self, xs: torch.Tensor, **kwargs) -> tuple[torch.Tensor, dict]:
+    def forward(self, node_to_probs: dict["Node", "NodeProbabilities"]) -> torch.Tensor:
+        """
+        Computes the predicted logits for the batch
+
+        :param node_to_probs:
+        :return: tensor of shape (batch_size, k)
+        """
         pass
 
     def __repr__(self):
@@ -97,22 +125,21 @@ class Node(ABC):
         )
 
     @property
-    @abstractmethod
     def size(self) -> int:
-        pass
+        return len(self.descendants)
 
     @property
-    def descendants(self) -> set["Node"]:
-        return self.descendant_internal_nodes.union(self.leaves)
-
-    @property
-    @abstractmethod
-    def leaves(self) -> set["Leaf"]:
-        pass
+    def descendants(self) -> list["Node"]:
+        return self.descendant_internal_nodes + self.leaves
 
     @property
     @abstractmethod
-    def descendant_internal_nodes(self) -> set["InternalNode"]:
+    def leaves(self) -> list["Leaf"]:
+        pass
+
+    @property
+    @abstractmethod
+    def descendant_internal_nodes(self) -> list["InternalNode"]:
         """
         Including self, if appropriate.
         """
@@ -131,7 +158,7 @@ class Node(ABC):
 
     def _lens_paths_to_leaves(self) -> list[int]:
         return [
-            len(leaf.get_path_from_start_node(start_node=self)) for leaf in self.leaves
+            len(leaf.get_path_from_ancestor(start_node=self)) for leaf in self.leaves
         ]
 
     def max_height(self) -> int:
@@ -161,144 +188,53 @@ class InternalNode(Node):
         left: Node = None,
         right: Node = None,
         parent: "InternalNode" = None,
-        log_probabilities=False,
     ):
         super().__init__(index, parent=parent)
-        self.left = left
-        self.right = right
+        # not optional b/c in a healthy tree, every node has a left and right child
+        # they can be passed as None in init b/c it is more convenient to create a tree this way,
+        # see create_tree implementation
+        self.left: Union[InternalNode, Leaf] = left
+        self.right: Union[InternalNode, Leaf] = right
 
-        # Flag that indicates whether probabilities or log probabilities are computed
-        self.log_probabilities = log_probabilities
-
-    # TODO: remove kwargs everywhere
+    # TODO: remove kwargs everywhere, make leaf and internal node forwards consistent
     def forward(
         self,
-        x: torch.Tensor,
-        similarities: list[torch.Tensor] = None,
-        out_map: dict[Node, int] = None,
-        node_attr: dict[tuple[Node, str], torch.Tensor] = None,
+        node_to_probs: dict[Node, "NodeProbabilities"],
     ):
-        """
+        probs = node_to_probs[self]
 
-        :param x:
-        :param similarities:
-        :param out_map:
-        :param node_attr: meant to assign attributes to nodes, like p_arrival and p_right. Passed down to
-            children and modified by them...
-        :return: stacked prob distributions of children, modified node_attr
-        """
-        batch_size = x.size(0)
+        # shape: (bs, k)
+        l_logits = self.left.forward(node_to_probs)
+        r_logits = self.right.forward(node_to_probs)
 
-        # It is assumed that when a parent node calls forward on this node it passes its node_attr object with the call
-        # and that it sets the path probability of arriving at its child
-        # Therefore, if this attribute is not present this node is assumed to not have a parent.
-        # The probability of arriving at this node should thus be set to 1 (as this would be the root in this case)
-        # The path probability is tracked for all x in the batch
-        node_attr = {} if node_attr is None else node_attr
-        # TODO: there was an if-else here but it did the same in both cases...
-        # TODO: jesus, a dict with tuples of specific structure as keys!!! Rewrite
-        p_arrival = node_attr.setdefault(
-            (self, "p_arrival"), torch.ones(batch_size, device=x.device)
+        # Weight the probability distributions by this node's output
+        log_p_right = probs.log_p_right.unsqueeze(-1)
+        log_p_left = probs.log_p_left.unsqueeze(-1)
+
+        pred_left_right_logits = torch.stack(
+            [log_p_left + l_logits, log_p_right + r_logits]
         )
-
-        # Obtain the probabilities of taking the right subtree
-        p_right = similarities[out_map[self]].squeeze(1)  # shape: (bs,)
-
-        # TODO: this whole log-exp stuff has to be removed
-        if self.log_probabilities:
-            node_attr[self, "p_right"] = p_right
-
-            # Store path probabilities of arriving at child nodes as node attributes
-            # source: rewritten to pytorch from
-            # https://github.com/tensorflow/probability/blob/v0.9.0/tensorflow_probability/python/math/generic.py#L447-L471
-            # add small epsilon for numerical stability
-            _p_right = torch.abs(p_right) + 1e-7
-            # TODO: what's up with log(2) here? Does this have to be so complicated?
-            p_left = torch.where(
-                _p_right < np.log(2),
-                torch.log(-torch.expm1(-_p_right)),
-                torch.log1p(-torch.exp(-_p_right)),
-            )
-
-            node_attr[self.left, "p_arrival"] = p_left + p_arrival
-            node_attr[self.right, "p_arrival"] = p_right + p_arrival
-
-            # TODO: node_attr is getting modified all the time, this is really bad practice and probably unnecessary
-            # Obtain the probability distributions from the child nodes
-            # shape: (bs, k)
-            # TODO: maybe rewrite everything as for-loop over children,
-            #  although generalization semantics is not entirely clear
-            l_dists, _ = self.left.forward(
-                x,
-                similarities=similarities,
-                out_map=out_map,
-                node_attr=node_attr,
-            )
-            r_dists, _ = self.right.forward(
-                x,
-                similarities=similarities,
-                out_map=out_map,
-                node_attr=node_attr,
-            )
-
-            # Weight the probability distributions by this node's output
-            p_right = p_right.view(batch_size, 1)
-            p_left = p_left.view(batch_size, 1)
-            pred_left_right_logits = torch.stack([p_left + l_dists, p_right + r_dists])
-            # this is the log of a weighted sum of the distributions of the children
-            # need logsumexp because everything is permanently switching between log and prop spaces...
-            # TODO: simplify this once we only deal with logits or probs
-            # shape: (bs, k)
-            pred_logits = torch.logsumexp(pred_left_right_logits, dim=0)
-            return pred_logits, node_attr
-        else:
-            raise NotImplementedError()
-            # # Store decision node probabilities as node attribute
-            # node_attr[self, "p_right"] = p_right
-            # # Store path probabilities of arriving at child nodes as node attributes
-            # node_attr[self.left, "p_arrival"] = (1 - p_right) * p_arrival
-            # node_attr[self.right, "p_arrival"] = p_right * p_arrival
-            # # # Store alpha value for this batch for this decision node
-            # # node_attr[self, 'alpha'] = torch.sum(p_arrival * ps) / torch.sum(p_arrival)
-            #
-            # # Obtain the unweighted probability distributions from the child nodes
-            # l_dists, _ = self.left.forward(
-            #     xs,
-            #     similarities=similarities,
-            #     out_map=out_map,
-            #     node_attr=node_attr,
-            # )  # shape: (bs, k)
-            # r_dists, _ = self.right.forward(
-            #     xs,
-            #     similarities=similarities,
-            #     out_map=out_map,
-            #     node_attr=node_attr,
-            # )  # shape: (bs, k)
-            # # Weight the probability distributions by the decision node's output
-            # p_right = p_right.view(batch_size, 1)
-            # # shape: (bs, k)
-            # return (1 - p_right) * l_dists + p_right * r_dists, node_attr
-
-    @property
-    def size(self) -> int:
-        return 1 + self.left.size + self.right.size
+        # this is the log of a weighted sum of the predicted prob. distributions of the children
+        # i.e. log(p_left * exp(l_logits) + p_right * exp(r_logits))
+        # shape: (bs, k)
+        mean_logits = torch.logsumexp(pred_left_right_logits, dim=0)
+        return mean_logits
 
     # return all leaves of direct children
     @property
-    def leaves(self) -> set["Leaf"]:
-        return {leaf for child in self.child_nodes for leaf in child.leaves}
+    def leaves(self) -> list["Leaf"]:
+        return [leaf for child in self.child_nodes for leaf in child.leaves]
 
     @property
     def child_nodes(self) -> list["Node"]:
         return [self.left, self.right]
 
     @property
-    def descendant_internal_nodes(self) -> set["InternalNode"]:
-        return {
-            self,
-            *self.left.descendant_internal_nodes,
-            *self.right.descendant_internal_nodes,
-        }
+    def descendant_internal_nodes(self) -> list["InternalNode"]:
+        result = [self]
+        for child in self.child_nodes:
+            result.extend(child.descendant_internal_nodes)
+        return result
 
     @property
     def num_internal_nodes(self) -> int:
@@ -315,101 +251,44 @@ class Leaf(Node):
         index: int,
         num_classes: int,
         parent: InternalNode = None,
-        kontschieder_normalization=False,
-        log_probabilities=False,
-        disable_derivative_free_leaf_optim=False,
     ):
         super().__init__(index, parent=parent)
+        # TODO: disallow gradient based optim altogether? Apparently it doesn't converge at all
+        derivative_free_optim = True
 
-        if disable_derivative_free_leaf_optim:
-            weights, requires_grad = torch.randn(num_classes), True
-        elif kontschieder_normalization:
-            weights, requires_grad = torch.ones(num_classes), False
+        if derivative_free_optim:
+            initial_dist, requires_grad = torch.zeros(num_classes), False
         else:
-            weights, requires_grad = torch.zeros(num_classes), False
+            initial_dist, requires_grad = torch.randn(num_classes), True
 
-        # self.dist_params = weights
-        self.dist_params = nn.Parameter(weights, requires_grad=requires_grad)
-        self.log_probabilities = log_probabilities
-        self.kontschieder_normalization = kontschieder_normalization
+        self.num_classes = num_classes
+        self.dist_params = nn.Parameter(initial_dist, requires_grad=requires_grad)
 
     def to(self, *args, **kwargs):
-        self.dist_params = self.dist_params.to(*args, **kwargs)
-        return self
-
-    def predicted_label(self):
-        return torch.argmax(self.distribution()).item()
-
-    # TODO: remove kwargs? They are passed from parents, currently internal nodes and leaves have different signatures
-    # TODO: IMPORTANT this doesn't compute anything, it just returns the stored distribution copied batch_size times.
-    #  and performs a side-effect on the passed node_attr dict. This shouldn't be really called a forward, I think.
-    #  On top of that, gradient based optimization of the leaf distribution doesn't seem to work anyway, so this
-    #  thing doesn't even need to be a nn.Module. The whole node-index-dict-prototype-per-index-retrieval should
-    #  probably be entirely rewritten.
-    def forward(
-        self, x: torch.Tensor, node_attr: dict = None, **kwargs
-    ) -> tuple[torch.Tensor, dict]:
-
-        batch_size = x.size(0)
-
-        # In this dict, store the probability of arriving at this node.
-        # It is assumed that when a parent node calls forward on this node it passes its node_attr object with the call
-        # and that it sets the path probability of arriving at its child
-        # Therefore, if this attribute is not present this node is assumed to not have a parent.
-        # The probability of arriving at this node should thus be set to 1 (as this would be the root in this case)
-        # The path probability is tracked for all x in the batch
-        node_attr.setdefault(
-            (self, "p_arrival"), torch.ones(batch_size, device=x.device)
-        )
-
-        dist = self.distribution().view(1, -1)  # shape: (1, k)
-        # Same distribution for each x in the batch
-        dists = torch.cat([dist] * batch_size, dim=0)  # shape: (bs, k)
-        node_attr[self, "distribution"] = dists
-
-        return dists, node_attr
-
-    # TODO: simplify
-    def distribution(self) -> torch.Tensor:
-        if not self.kontschieder_normalization:
-            if self.log_probabilities:
-                result = F.log_softmax(self.dist_params, dim=0)
-            else:
-                # Return numerically stable softmax (see http://www.deeplearningbook.org/contents/numerical.html)
-                result = F.softmax(
-                    self.dist_params - torch.max(self.dist_params), dim=0
-                )
-
-        else:
-            # kontschieder_normalization's version that uses a normalization factor instead of softmax:
-            # TODO: overall kontschieder normalization is related to a paper implemented in
-            #  https://github.com/mapillary/inplace_abn. Can it be just imported from there?
-            #  Or maybe dropped altogether?
-            if self.log_probabilities:
-                result = torch.log(
-                    (self.dist_params / torch.sum(self.dist_params)) + 1e-10
-                )  # add small epsilon for numerical stability
-            else:
-                result = self.dist_params / torch.sum(self.dist_params)
+        result = copy(self)
+        result.dist_params = self.dist_params.to(*args, **kwargs)
         return result
 
+    def predicted_label(self) -> int:
+        return self.logits().argmax().item()
+
+    def conf_predicted_label(self) -> float:
+        return self.logits().max().exp().item()
+
+    # Note: this doesn't compute anything, it just returns the stored distribution copied batch_size times.
+    def forward(self, node_to_probs: dict[Node, "NodeProbabilities"]) -> torch.Tensor:
+        return self.logits_batch(node_to_probs[self].batch_size)
+
+    def logits_batch(self, batch_size: int) -> torch.Tensor:
+        logits = self.logits()
+        logits_batch_list = [logits.unsqueeze(0)] * batch_size
+        return torch.cat(logits_batch_list, dim=0)
+
+    def logits(self) -> torch.Tensor:
+        return F.log_softmax(self.dist_params, dim=0)
+
     def y_proba(self):
-        y_proba = self.distribution()
-        if self.log_probabilities:
-            y_proba = torch.exp(y_proba)
-        return y_proba
-
-    @property
-    def requires_grad(self) -> bool:
-        return self.dist_params.requires_grad
-
-    @requires_grad.setter
-    def requires_grad(self, val: bool):
-        self.dist_params.requires_grad = val
-
-    @property
-    def size(self) -> int:
-        return 1
+        return torch.exp(self.logits())
 
     @property
     def leaves(self) -> set:
@@ -438,9 +317,6 @@ class Leaf(Node):
 def create_tree(
     height: int,
     num_classes: int,
-    log_probabilities=True,
-    kontschieder_normalization=False,
-    disable_derivative_free_leaf_optim=False,
 ):
     """
     Create a full binary tree with the given height.
@@ -448,9 +324,6 @@ def create_tree(
 
     :param height:
     :param num_classes:
-    :param log_probabilities:
-    :param kontschieder_normalization:
-    :param disable_derivative_free_leaf_optim:
     :return: the root node of the created tree
     """
     if height < 1:
@@ -463,12 +336,9 @@ def create_tree(
             index,
             num_classes,
             parent=parent,
-            log_probabilities=log_probabilities,
-            kontschieder_normalization=kontschieder_normalization,
-            disable_derivative_free_leaf_optim=disable_derivative_free_leaf_optim,
         )
 
-    root = InternalNode(0, log_probabilities=log_probabilities)
+    root = InternalNode(0)
 
     # create tree of internal nodes
     cur_nodes = [root]
@@ -485,12 +355,8 @@ def create_tree(
             # TODO: reproducing index logic from before, see todo above
             right_index = left_index + cur_nodes_size
 
-            node.left = InternalNode(
-                left_index, parent=node, log_probabilities=log_probabilities
-            )
-            node.right = InternalNode(
-                right_index, parent=node, log_probabilities=log_probabilities
-            )
+            node.left = InternalNode(left_index, parent=node)
+            node.right = InternalNode(right_index, parent=node)
 
             next_nodes.extend([node.left, node.right])
         cur_nodes = next_nodes
@@ -651,7 +517,7 @@ def _health_check_children(node: Node):
 
 
 def _health_check_connectivity(node: Node, root: InternalNode):
-    path_from_root = node.get_path_from_start_node()
+    path_from_root = node.get_path_from_ancestor()
     assert (
         path_from_root[0] == root
     ), f"Path from root should start with root but got: {path_from_root[0]}"
@@ -672,13 +538,13 @@ def _health_check_connectivity(node: Node, root: InternalNode):
         len(path_from_root) <= max_path_len
     ), f"Path from root should be of length {max_path_len} but got: {len(path_from_root)}. Node: {node}"
     leaves = node.leaves
-    assert leaves.issubset(
+    assert set(leaves).issubset(
         root.leaves
     ), f"Leaves of node {node} should be a subset of root leaves."
     for leaf in leaves:
         assert isinstance(leaf, Leaf), f"Leaf {leaf} is not of type Leaf: {type(leaf)}"
         assert (
-            node in leaf.get_path_from_start_node()
+            node in leaf.get_path_from_ancestor()
         ), f"Node {node} should be in path from root to its leaf {leaf}"
 
 
@@ -710,3 +576,37 @@ def health_check(root: InternalNode, height: int = None):
         _health_check_parent(node)
         _health_check_children(node)
         _health_check_connectivity(node, root)
+
+
+@dataclass
+class NodeProbabilities:
+    """
+    Will hold the probabilities for each node for a batch of inputs. The probabilities are computed
+    from prototypes similarities and the tree structure.
+    All fields are tensors of shape (batch_size, ) or None (e.g. log_p_left/right for leaves).
+    """
+
+    log_p_arrival: torch.Tensor
+    log_p_right: Optional[torch.Tensor] = None
+
+    @property
+    def log_p_left(self) -> Optional[torch.Tensor]:
+        if self.log_p_right is None:
+            return None
+        return log1mexp(self.log_p_right)
+
+    @property
+    def log_p_arrival_left(self) -> Optional[torch.Tensor]:
+        if self.log_p_right is None:
+            return None
+        return self.log_p_arrival + self.log_p_left
+
+    @property
+    def log_p_arrival_right(self) -> Optional[torch.Tensor]:
+        if self.log_p_right is None:
+            return None
+        return self.log_p_arrival + self.log_p_right
+
+    @property
+    def batch_size(self) -> int:
+        return self.log_p_arrival.shape[0]

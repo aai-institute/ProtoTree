@@ -1,8 +1,6 @@
 import numpy as np
-import torch
 
-from prototree.node import InternalNode
-from prototree.prototree import ProtoTree
+from prototree.node import Leaf
 
 # from prototree.test import eval_ensemble
 from util.log import Log
@@ -34,108 +32,29 @@ def log_learning_rates(
         )
 
 
-def average_distance_nearest_image(
-    project_info: dict, tree: ProtoTree, log: Log, disable_log=False
-):
-    distances = []
-    for node, j in tree.out_map.items():
-        if node in tree.internal_nodes:
-            distances.append(project_info[j]["distance"])
-            # TODO: this is too verbose
-            # if not disable_log:
-            #     log.log_message(
-            #         "Node %s has nearest distance %s"
-            #         % (node.index, project_info[j]["distance"])
-            #     )
-    if not disable_log:
-        log.log_message(
-            "Euclidean distances from latent prototypes in tree to nearest image patch: %s"
-            % (str(distances))
-        )
-        log.log_message(
-            "Average Euclidean distance and standard deviation from latent prototype to nearest image patch: %s, %s"
-            % (str(np.mean(distances)), str(np.std(distances)))
-        )
-    return distances
-
-
 # TODO: this has to be called as leaf_labels = func(leaf_labels...). Fix this pattern!
 # TODO: the new name says it all, refactor this!
-def add_epoch_statistic_to_leaf_labels_dict_and_log_pruned_leaf_analysis(
-    tree: ProtoTree,
-    epoch: int,
-    num_classes: int,
-    leaf_labels: dict,
-    threshold: float,
+def log_pruned_leaf_analysis(
+    leaves: list[Leaf],
+    pruning_threshold: float,
     log: Log,
 ):
-    with torch.no_grad():
-        if tree.tree_root.max_height() <= 4:
-            log.log_message("class distributions of leaves:")
-            for leaf in tree.tree_root.leaves:
-                if leaf.log_probabilities:
-                    dist = torch.exp(leaf.distribution())
-                else:
-                    dist = leaf.distribution()
-                # logged to a CSV?
-                log.log_message(f"{leaf.index},{leaf.dist_params},{dist}")
 
-        leaf_labels[epoch] = []
-        leafs_higher_than = []
-        classes_covered = []
+    unpruned_leaves = []
+    classes_covered = set()
+    for leaf in leaves:
+        classes_covered.add(leaf.predicted_label())
+        if leaf.conf_predicted_label() > pruning_threshold:
+            unpruned_leaves.append(leaf.index)
 
-        for leaf in tree.leaves:
-            y_proba = leaf.y_proba()
-            y_pred = torch.argmax(y_proba).item()
-            classes_covered.append(y_pred)
-
-            y_pred_confidence = y_proba.max().item()
-            if y_pred_confidence > threshold:
-                leafs_higher_than.append(leaf.index)
-            leaf_labels[epoch].append((leaf.index, y_pred))
-        log.log_message(f"\nLeafs with max > {threshold}: {len(leafs_higher_than)}")
-
-        _class_labels_without_leaf = [
-            label for label in range(num_classes) if label not in classes_covered
-        ]
-        log.log_message(f"Classes without leaf: {_class_labels_without_leaf}")
-
-        if len(leaf_labels.keys()) >= 2:
-            changed_prev = 0
-            changed_prev_higher = 0
-            for pair in leaf_labels[epoch]:
-                if pair not in leaf_labels[epoch - 1]:  # previous epoch
-                    changed_prev += 1
-                    if pair[0] in leafs_higher_than:
-                        changed_prev_higher += 1
-            log.log_message(
-                f"Fraction changed pairs w.r.t previous epoch: "
-                f"{changed_prev / float(tree.num_leaves)}"
-            )
-            if len(leafs_higher_than) > 0:
-                log.log_message(
-                    f"Fraction changed leafs with max > threshold w.r.t previous epoch: "
-                    f"{changed_prev_higher / len(leafs_higher_than)}"
-                )
-    return leaf_labels
-
-
-# TODO: this is broken, see IDE warning at return statement
-def log_avg_path_length(tree_root: InternalNode, info: dict, log: Log):
-    # If possible, get the depth of the leaf corresponding to the decision
-    if "out_leaf_ix" not in info:
-        predicting_leaves = tree_root.leaves
-    else:  # greedy or sample_max routing
-        idx2node = tree_root.get_idx2node()
-        out_leaf_ix = info["out_leaf_ix"]
-        predicting_leaves = [idx2node[ix] for ix in out_leaf_ix]
-    leaf_depths = np.array(leaf.depth() for leaf in predicting_leaves)
     log.log_message(
-        f"Average path length is {leaf_depths.mean()} with std {leaf_depths.std()}"
+        f"\nLeafs with max > {pruning_threshold:.2f}: {len(unpruned_leaves)}"
     )
-    log.log_message(
-        f"Longest path has length {leaf_depths.max()}, shortest path has length {leaf_depths.min()}"
-    )
+
+    num_classes = leaves[0].num_classes
+    class_labels_without_leaf = set(range(num_classes)) - classes_covered
+    if class_labels_without_leaf:
+        log.log_message(f"Classes without leaf: {class_labels_without_leaf}")
 
 
 #

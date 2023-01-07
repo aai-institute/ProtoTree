@@ -156,7 +156,7 @@ def get_similarity_maps(tree: ProtoTree, project_info: dict, log: Log = None):
     for j in project_info.keys():
         nearest_x = project_info[j]["nearest_input"]
         with torch.no_grad():
-            distances = tree.extract_prototype_distances(nearest_x)
+            distances = tree.prototype_distances_to_patches(nearest_x)
             sim_maps[j] = torch.exp(-distances[0, j, :, :]).cpu().numpy()
         del nearest_x
         del project_info[j]["nearest_input"]
