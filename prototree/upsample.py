@@ -9,7 +9,7 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader
 
-from prototree.prototree import ProtoTree
+from prototree.models import ProtoTree
 from util.log import Log
 
 

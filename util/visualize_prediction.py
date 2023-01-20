@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from prototree.prototree import ProtoTree
+from prototree.models import ProtoTree
 from prototree.upsample import find_high_activation_crop, imsave_with_bbox
 
 

@@ -7,7 +7,7 @@
 # import torch
 #
 # from main_tree import run_tree
-# from prototree.prototree import ProtoTree
+# from prototree.models import ProtoTree
 # from util.analyse import analyse_ensemble
 # from util.args import get_args, get_optimizer, save_args
 # from util.data import get_dataloaders

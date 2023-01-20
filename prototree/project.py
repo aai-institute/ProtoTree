@@ -7,8 +7,8 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from prototree.models import ProtoTree
 from prototree.node import Node
-from prototree.prototree import ProtoTree
 from util.log import Log
 
 # TODO: this is unused, delete?

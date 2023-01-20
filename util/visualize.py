@@ -7,8 +7,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from prototree.models import ProtoTree
 from prototree.node import InternalNode, Leaf, Node
-from prototree.prototree import ProtoTree
 
 
 def generate_tree_visualization(

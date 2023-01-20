@@ -6,7 +6,7 @@ import torch.optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.prototree import ProtoTree
+from prototree.models import ProtoTree
 from prototree.types import SamplingStrategy
 
 

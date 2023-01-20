@@ -7,7 +7,7 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 
-from prototree.prototree import ProtoTree
+from prototree.models import ProtoTree
 from util.data import get_dataloaders
 from util.visualize_prediction import gen_pred_vis
 

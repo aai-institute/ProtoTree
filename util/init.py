@@ -6,7 +6,7 @@ from typing import Union
 
 import torch
 
-from prototree.prototree import ProtoTree
+from prototree.models import ProtoTree
 
 
 def load_state(directory_path: str, device):

@@ -5,9 +5,9 @@ import torch
 from torch.utils.data import DataLoader
 
 from prototree.eval import eval_fidelity, eval_tree
+from prototree.models import ProtoTree
 from prototree.node import InternalNode
 from prototree.project import replace_prototypes_by_projections
-from prototree.prototree import ProtoTree
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
 from util.analyse import log_pruned_leaf_analysis
