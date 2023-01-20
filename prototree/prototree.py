@@ -14,48 +14,48 @@ from util.func import min_pool2d
 from util.l2conv import L2Conv2D
 
 
-class ProtoTree(nn.Module):
+class PrototypeBase(nn.Module):
     def __init__(
         self,
-        num_classes: int,
-        depth: int,
-        prototype_channels: int,
-        w_prototype: int,
-        h_prototype: int,
+        num_prototypes: int,
+        prototype_shape: tuple[int, int, int],
         feature_net: torch.nn.Module,
-        # TODO: add_on_layers that connect the feature net with the selected prototypes should be
-        #  created by default. Currently, the user has to figure out the shapes of the conv-layers by herself
         add_on_layers: nn.Module = None,
     ):
-        super().__init__()
-        self.num_classes = num_classes
+        """
 
-        self.tree_root = create_tree(depth, num_classes)
+        :param prototype_shape: shape of the prototypes. (channels, height, width)
+        :param feature_net: usually a pretrained network that extracts features from the input images
+        :param add_on_layers: used to connect the feature net with the prototypes.
+            TODO: add_on_layers that connect the feature net with the selected prototypes should be
+            created by default. Currently, the user has to figure out the shapes of the conv-layers by herself
+        """
+        super().__init__()
         self.prototype_layer = L2Conv2D(
-            self.num_internal_nodes, prototype_channels, w_prototype, h_prototype
+            num_prototypes,
+            *prototype_shape,
         )
         self._init_prototype_layer()
 
-        self.net = feature_net
         self.add_on = add_on_layers if add_on_layers is not None else nn.Identity()
-        self.node_to_proto_idx = {
-            node: idx
-            for idx, node in enumerate(self.tree_root.descendant_internal_nodes)
-        }
+        self.net = feature_net
 
-    def to(self, *args, **kwargs):
-        # accounting for the fact that the tree_root is not a module
-        # TODO: this is ugly and previously nodes were modules. However, they cannot be modules
-        #   anymore b/c of their recursive structure and pytorch automatic registration of modules...
-        #   Maybe there is some way around this, should ask a pytorch wiz.
-        self_copy = copy(self)
-        self_copy.net = self.net.to(*args, **kwargs)
-        self_copy.add_on = self.add_on.to(*args, **kwargs)
-        self_copy.prototype_layer = self.prototype_layer.to(*args, **kwargs)
-        # TODO: deepcopy instead?
-        for leaf in self_copy.leaves:
-            leaf.dist_params = leaf.dist_params.to(*args, **kwargs)
-        return self_copy
+    def _init_prototype_layer(self):
+        # TODO: wassup with the constants?
+        torch.nn.init.normal_(self.prototype_layer.prototype_tensors, mean=0.5, std=0.1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the minimal distances between the prototypes and the input.
+        The output has the shape (batch_size, num_prototypes)
+        """
+        x = self.extract_features(x)
+        x = self.prototype_layer(x)
+        return min_pool2d(x, kernel_size=x.shape[-2:]).squeeze()
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
 
     @property
     def num_prototypes(self):
@@ -64,14 +64,6 @@ class ProtoTree(nn.Module):
     @property
     def prototype_channels(self):
         return self.prototype_layer.input_channels
-
-    def _init_prototype_layer(self):
-        # TODO: wassup with the constants?
-        torch.nn.init.normal_(self.prototype_layer.prototype_tensors, mean=0.5, std=0.1)
-
-    @property
-    def device(self):
-        return next(self.parameters()).device
 
     @property
     def prototype_shape(self):
@@ -85,6 +77,89 @@ class ProtoTree(nn.Module):
         x = self.add_on(x)
         return x
 
+    # TODO: remove all saving things - delegate to downstream code
+    def save(self, basedir: PathLike, file_name: str = "model.pth"):
+        self.eval()
+        basedir = Path(basedir)
+        basedir.mkdir(parents=True, exist_ok=True)
+        torch.save(self, basedir / file_name)
+
+    def save_state(
+        self,
+        basedir: PathLike,
+        state_file_name="model_state.pth",
+        pickle_file_name="tree.pkl",
+    ):
+        basedir = Path(basedir)
+        basedir.mkdir(parents=True, exist_ok=True)
+        torch.save(self.state_dict(), basedir / state_file_name)
+        # TODO: what's up with this?
+        with open(basedir / pickle_file_name, "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @staticmethod
+    def load(directory_path: str):
+        return torch.load(directory_path + "/model.pth")
+
+
+class ProtoPNet(PrototypeBase):
+    def __init__(
+        self,
+        num_classes: int,
+        num_prototypes: int,
+        prototype_shape: tuple[int, int, int],
+        feature_net: nn.Module,
+    ):
+        super().__init__(num_prototypes, prototype_shape, feature_net)
+        self.classifier = nn.Linear(num_prototypes, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = super().forward(x)
+        return self.classifier(x)
+
+    def predict_proba(
+        self,
+        x: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the probabilities of the classes for the input.
+        The output has the shape (batch_size, num_classes)
+        """
+        x = self.forward(x)
+        return torch.softmax(x, dim=-1)
+
+    def predict(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.argmax(self.predict_proba(x), dim=-1)
+
+
+class ProtoTree(PrototypeBase):
+    def __init__(
+        self,
+        num_classes: int,
+        depth: int,
+        prototype_channels: int,
+        w_prototype: int,
+        h_prototype: int,
+        feature_net: torch.nn.Module,
+        # TODO: add_on_layers that connect the feature net with the selected prototypes should be
+        #  created by default. Currently, the user has to figure out the shapes of the conv-layers by herself
+        add_on_layers: nn.Module = None,
+    ):
+        # the number of internal nodes
+        num_prototypes = 2**depth - 1
+        super().__init__(
+            num_prototypes=num_prototypes,
+            prototype_shape=(prototype_channels, w_prototype, h_prototype),
+            feature_net=feature_net,
+            add_on_layers=add_on_layers,
+        )
+        self.num_classes = num_classes
+        self.tree_root = create_tree(depth, num_classes)
+        self.node_to_proto_idx = {
+            node: idx
+            for idx, node in enumerate(self.tree_root.descendant_internal_nodes)
+        }
+
     def _get_node_to_log_p_right(self, similarities: torch.Tensor):
         return {node: -similarities[:, i] for node, i in self.node_to_proto_idx.items()}
 
@@ -92,7 +167,7 @@ class ProtoTree(nn.Module):
         """
         Extracts the mapping `node->log_p_right` from the prototype similarities.
         """
-        similarities = self.prototype_similarities(x)
+        similarities = super().forward(x)
         return self._get_node_to_log_p_right(similarities)
 
     @staticmethod
@@ -208,26 +283,6 @@ class ProtoTree(nn.Module):
         logits = self.forward(x, strategy)[0]
         return logits.softmax(dim=1)
 
-    def prototype_similarities(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Computes the similarity between the prototypes and the input. The similarity is computed as the
-        minimum distance between the prototype and all suitable patches of the input.
-
-        :param x: input images of shape (batch_size, channels, height, width)
-        :return: tensor of shape (batch_size, num_prototypes)
-        """
-        # (batch_size, num_prototypes, n_patches_w, n_patches_h)
-        x = self.prototype_distances_to_patches(x)
-        return min_pool2d(x, kernel_size=x.shape[-2:]).squeeze()
-
-    def prototype_distances_to_patches(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Returns a tensor of shape `(batch_size, num_prototypes, n_patches_w, n_patches_h)`.
-        See documentation of `L2Conv2D` for more details.
-        """
-        x = self.extract_features(x)
-        return self.prototype_layer(x)
-
     @property
     def all_nodes(self) -> set:
         return self.tree_root.descendants
@@ -247,29 +302,6 @@ class ProtoTree(nn.Module):
     @property
     def num_leaves(self):
         return self.tree_root.num_leaves
-
-    def save(self, basedir: PathLike, file_name: str = "model.pth"):
-        self.eval()
-        basedir = Path(basedir)
-        basedir.mkdir(parents=True, exist_ok=True)
-        torch.save(self, basedir / file_name)
-
-    def save_state(
-        self,
-        basedir: PathLike,
-        state_file_name="model_state.pth",
-        pickle_file_name="tree.pkl",
-    ):
-        basedir = Path(basedir)
-        basedir.mkdir(parents=True, exist_ok=True)
-        torch.save(self.state_dict(), basedir / state_file_name)
-        # TODO: what's up with this?
-        with open(basedir / pickle_file_name, "wb") as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    @staticmethod
-    def load(directory_path: str):
-        return torch.load(directory_path + "/model.pth")
 
 
 def get_predicting_leaves(

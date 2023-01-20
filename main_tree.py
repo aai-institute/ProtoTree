@@ -76,7 +76,7 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # Training loop args
     disable_cuda = False
-    epochs = 10
+    epochs = 1
     evaluate_each_epoch = 20
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
@@ -192,7 +192,7 @@ def run_tree(args: Namespace, skip_visualization=True):
     log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
 
     # TODO: see todo in the function, IMPORTANT
-    tree = _prune_tree(tree, pruning_threshold_leaves, log)
+    _prune_tree(tree.tree_root, pruning_threshold_leaves, log)
 
     log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
     pruned_acc = eval_tree(tree, test_loader, eval_name="pruned")
@@ -243,7 +243,6 @@ def _prune_tree(root: InternalNode, pruning_threshold_leaves: float, log: Log):
         f"After pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
     log.log_message(f"Fraction of nodes pruned: {frac_nodes_pruned}")
-    return root
 
 
 # TODO: this only logs stuff and doesn't return anything...
