@@ -15,7 +15,7 @@ from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.init import init_tree_weights
 from util.log import Log
-from util.net import get_prototree_base_networks
+from util.net import BASE_ARCHITECTURE_TO_FEATURES
 
 
 def save_tree(
@@ -285,15 +285,12 @@ def create_proto_tree(
     :param pretrained:
     :return:
     """
-    features_net, add_on_layers = get_prototree_base_networks(
-        out_channels, net=net, pretrained=pretrained
-    )
+    features_net = BASE_ARCHITECTURE_TO_FEATURES[net](pretrained=pretrained)
     tree = ProtoTree(
         num_classes=num_classes,
         prototype_channels=out_channels,
         depth=depth,
         feature_net=features_net,
-        add_on_layers=add_on_layers,
         h_prototype=H1,
         w_prototype=W1,
     )

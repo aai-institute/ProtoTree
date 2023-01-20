@@ -1,5 +1,4 @@
 import pickle
-from copy import copy
 from os import PathLike
 from pathlib import Path
 from typing import List, Literal, Optional, Union
@@ -12,6 +11,7 @@ from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_t
 from prototree.types import SamplingStrategy
 from util.func import min_pool2d
 from util.l2conv import L2Conv2D
+from util.net import default_add_on_layers
 
 
 class PrototypeBase(nn.Module):
@@ -20,15 +20,13 @@ class PrototypeBase(nn.Module):
         num_prototypes: int,
         prototype_shape: tuple[int, int, int],
         feature_net: torch.nn.Module,
-        add_on_layers: nn.Module = None,
+        add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
     ):
         """
 
         :param prototype_shape: shape of the prototypes. (channels, height, width)
         :param feature_net: usually a pretrained network that extracts features from the input images
         :param add_on_layers: used to connect the feature net with the prototypes.
-            TODO: add_on_layers that connect the feature net with the selected prototypes should be
-            created by default. Currently, the user has to figure out the shapes of the conv-layers by herself
         """
         super().__init__()
         self.prototype_layer = L2Conv2D(
@@ -36,8 +34,12 @@ class PrototypeBase(nn.Module):
             *prototype_shape,
         )
         self._init_prototype_layer()
-
-        self.add_on = add_on_layers if add_on_layers is not None else nn.Identity()
+        if isinstance(add_on_layers, nn.Module):
+            self.add_on = add_on_layers
+        elif add_on_layers is None:
+            self.add_on = nn.Identity()
+        elif add_on_layers == "default":
+            self.add_on = default_add_on_layers(feature_net, prototype_shape[0])
         self.net = feature_net
 
     def _init_prototype_layer(self):
@@ -93,7 +95,6 @@ class PrototypeBase(nn.Module):
         basedir = Path(basedir)
         basedir.mkdir(parents=True, exist_ok=True)
         torch.save(self.state_dict(), basedir / state_file_name)
-        # TODO: what's up with this?
         with open(basedir / pickle_file_name, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -141,9 +142,7 @@ class ProtoTree(PrototypeBase):
         w_prototype: int,
         h_prototype: int,
         feature_net: torch.nn.Module,
-        # TODO: add_on_layers that connect the feature net with the selected prototypes should be
-        #  created by default. Currently, the user has to figure out the shapes of the conv-layers by herself
-        add_on_layers: nn.Module = None,
+        add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
     ):
         # the number of internal nodes
         num_prototypes = 2**depth - 1

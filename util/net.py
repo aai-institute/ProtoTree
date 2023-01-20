@@ -1,37 +1,8 @@
-import argparse
+from features.densenet_features import *
+from features.resnet_features import *
+from features.vgg_features import *
 
-import torch.nn as nn
-import torch.nn.functional as F
-
-from features.densenet_features import (
-    densenet121_features,
-    densenet161_features,
-    densenet169_features,
-    densenet201_features,
-)
-from features.resnet_features import (
-    ResNet_features,
-    resnet18_features,
-    resnet34_features,
-    resnet50_features,
-    resnet50_features_inat,
-    resnet101_features,
-    resnet152_features,
-)
-from features.vgg_features import (
-    vgg11_bn_features,
-    vgg11_features,
-    vgg13_bn_features,
-    vgg13_features,
-    vgg16_bn_features,
-    vgg16_features,
-    vgg19_bn_features,
-    vgg19_features,
-)
-from prototree.prototree import ProtoTree
-from util.log import Log
-
-base_architecture_to_features = {
+BASE_ARCHITECTURE_TO_FEATURES = {
     "resnet18": resnet18_features,
     "resnet34": resnet34_features,
     "resnet50": resnet50_features,
@@ -53,30 +24,15 @@ base_architecture_to_features = {
 }
 
 
-def get_prototree_base_networks(
-    out_channels: int, net="resnet50_inat", pretrained=True
-) -> tuple[nn.Module, nn.Module]:
-    """
-    Returns the backbone network with pretrained features and a 1x1 convolutional layer with the selected
-    out_channels that should be added at top, i.e. passed as add_on_layers to ProtoTree
-
-    :param out_channels:
-    :param net:
-    :param pretrained:
-    :return: (backbone_convnet, add_one_layers)
-    """
-    feature_convnet = base_architecture_to_features[net](pretrained=pretrained)
-
-    add_on_layer = nn.Sequential(
-        nn.Conv2d(
-            in_channels=num_out_channels(feature_convnet),
-            out_channels=out_channels,
-            kernel_size=1,
-            bias=False,
-        ),
-        nn.Sigmoid(),
+def default_add_on_layers(feature_convnet: nn.Module, out_channels: int):
+    conv_layer = nn.Conv2d(
+        in_channels=num_out_channels(feature_convnet),
+        out_channels=out_channels,
+        kernel_size=1,
+        bias=False,
     )
-    return feature_convnet, add_on_layer
+    # TODO: allow other activations
+    return nn.Sequential(conv_layer, nn.Sigmoid())
 
 
 def num_out_channels(convnet: nn.Module):
