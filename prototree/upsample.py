@@ -5,154 +5,114 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from PIL import Image
-from torch.utils.data import DataLoader
 
-from prototree.models import ProtoTree
-from util.log import Log
+from prototree.node import InternalNode
+from prototree.project import ProjectionPatchInfo
+from util.data import get_inverse_base_transform
 
 
 # adapted from protopnet
-def upsample_similarity_maps(
-    tree: ProtoTree,
-    upsample_threshold: float,
-    project_info: dict,
-    project_loader: DataLoader,
-    folder_name: str,
-    log: Log,
-    log_dir: os.PathLike,
-    dir_for_saving_images: os.PathLike,
+# TODO: refactor, use the feature pixels visual field instead of upsampling to some size
+@torch.no_grad()
+def save_prototype_visualizations(
+    node_to_patch_info: dict[InternalNode, ProjectionPatchInfo],
+    save_dir: os.PathLike,
+    upsample_threshold=0.98,
 ):
-    log_dir = Path(log_dir)
-    dir = log_dir / dir_for_saving_images / folder_name
-    dir.mkdir(parents=True, exist_ok=True)
-    with torch.no_grad():
-        sim_maps, project_info = get_similarity_maps(tree, project_info, log)
-        log.log_message("\nUpsampling prototypes for visualization...")
-        imgs = project_loader.dataset.imgs
-        for node, j in tree.out_map.items():
-            if node in tree.internal_nodes:  # do not upsample when node is pruned
-                prototype_info = project_info[j]
-                decision_node_idx = prototype_info["node_ix"]
-                x = Image.open(imgs[prototype_info["input_image_ix"]][0])
-                x.save(dir / f"{str(decision_node_idx)}_original_image.png")
+    save_dir = Path(save_dir)
+    inverse_transform = get_inverse_base_transform()
 
-                x_np = np.asarray(x)
-                x_np = np.float32(x_np) / 255
-                if x_np.ndim == 2:  # convert grayscale to RGB
-                    x_np = np.stack((x_np,) * 3, axis=-1)
+    for node, patch_info in node_to_patch_info.items():
+        x = inverse_transform(patch_info.image)
+        x.save(save_dir / f"{node.index}_original_image.png")
 
-                img_size = x_np.shape[:2]
-                similarity_map = sim_maps[j]
+        x_np = np.asarray(x)
+        img_size = x_np.shape[:2]
 
-                rescaled_sim_map = similarity_map - np.amin(similarity_map)
-                rescaled_sim_map = rescaled_sim_map / np.amax(rescaled_sim_map)
-                similarity_heatmap = cv2.applyColorMap(
-                    np.uint8(255 * rescaled_sim_map), cv2.COLORMAP_JET
-                )
-                similarity_heatmap = np.float32(similarity_heatmap) / 255
-                similarity_heatmap = similarity_heatmap[..., ::-1]
-                plt.imsave(
-                    fname=os.path.join(
-                        dir,
-                        "%s_heatmap_latent_similaritymap.png" % str(decision_node_idx),
-                    ),
-                    arr=similarity_heatmap,
-                    vmin=0.0,
-                    vmax=1.0,
-                )
+        x_np = np.float32(x_np) / 255
+        # TODO: are there grayscale images?
+        if x_np.ndim == 2:  # convert grayscale to RGB
+            x_np = np.stack((x_np,) * 3, axis=-1)
 
-                upsampled_act_pattern = cv2.resize(
-                    similarity_map,
-                    dsize=(img_size[1], img_size[0]),
-                    interpolation=cv2.INTER_CUBIC,
-                )
-                rescaled_act_pattern = upsampled_act_pattern - np.amin(
-                    upsampled_act_pattern
-                )
-                rescaled_act_pattern = rescaled_act_pattern / np.amax(
-                    rescaled_act_pattern
-                )
-                heatmap = cv2.applyColorMap(
-                    np.uint8(255 * rescaled_act_pattern), cv2.COLORMAP_JET
-                )
-                heatmap = np.float32(heatmap) / 255
-                heatmap = heatmap[..., ::-1]
+        similarity_map = torch.exp(-patch_info.all_patch_distances).cpu().numpy()
+        rescaled_sim_map = similarity_map - np.amin(similarity_map)
+        rescaled_sim_map = rescaled_sim_map / np.amax(rescaled_sim_map)
+        similarity_heatmap = cv2.applyColorMap(
+            np.uint8(255 * rescaled_sim_map), cv2.COLORMAP_JET
+        )
+        similarity_heatmap = np.float32(similarity_heatmap) / 255
+        similarity_heatmap = similarity_heatmap[..., ::-1]
+        plt.imsave(
+            fname=save_dir / f"{node.index}_heatmap_latent_similaritymap.png",
+            arr=similarity_heatmap,
+            vmin=0.0,
+            vmax=1.0,
+        )
 
-                overlayed_original_img = 0.5 * x_np + 0.2 * heatmap
-                plt.imsave(
-                    fname=os.path.join(
-                        dir, "%s_heatmap_original_image.png" % str(decision_node_idx)
-                    ),
-                    arr=overlayed_original_img,
-                    vmin=0.0,
-                    vmax=1.0,
-                )
+        upsampled_act_pattern = cv2.resize(
+            similarity_map,
+            dsize=(img_size[1], img_size[0]),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        rescaled_act_pattern = upsampled_act_pattern - np.amin(upsampled_act_pattern)
+        rescaled_act_pattern = rescaled_act_pattern / np.amax(rescaled_act_pattern)
+        heatmap = cv2.applyColorMap(
+            np.uint8(255 * rescaled_act_pattern), cv2.COLORMAP_JET
+        )
+        heatmap = np.float32(heatmap) / 255
+        heatmap = heatmap[..., ::-1]
 
-                # save the highly activated patch
-                masked_similarity_map = np.zeros(similarity_map.shape)
-                prototype_index = prototype_info["patch_ix"]
-                W, H = prototype_info["W"], prototype_info["H"]
-                assert W == H
-                masked_similarity_map[
-                    prototype_index // W, prototype_index % W
-                ] = 1  # mask similarity map such that only the nearest patch z* is visualized
+        overlayed_original_img = 0.5 * x_np + 0.2 * heatmap
+        plt.imsave(
+            fname=save_dir / f"{node.index}_heatmap_original_image.png",
+            arr=overlayed_original_img,
+            vmin=0.0,
+            vmax=1.0,
+        )
 
-                upsampled_prototype_pattern = cv2.resize(
-                    masked_similarity_map,
-                    dsize=(img_size[1], img_size[0]),
-                    interpolation=cv2.INTER_CUBIC,
-                )
-                plt.imsave(
-                    fname=os.path.join(
-                        dir, "%s_masked_upsampled_heatmap.png" % str(decision_node_idx)
-                    ),
-                    arr=upsampled_prototype_pattern,
-                    vmin=0.0,
-                    vmax=1.0,
-                )
+        # a single pixel is selected
+        feature_patches_mask = (
+            patch_info.all_patch_distances <= patch_info.closest_patch_distance
+        )
+        # and blown up with cubic interpolation to the desired size
+        pixels_mask = cv2.resize(
+            feature_patches_mask,
+            dsize=(img_size[1], img_size[0]),
+            interpolation=cv2.INTER_CUBIC,
+        )
+        plt.imsave(
+            fname=save_dir / f"{node.index}_masked_upsampled_heatmap.png",
+            arr=pixels_mask,
+            vmin=0.0,
+            vmax=1.0,
+        )
 
-                high_act_patch_indices = find_high_activation_crop(
-                    upsampled_prototype_pattern, upsample_threshold
-                )
-                high_act_patch = x_np[
-                    high_act_patch_indices[0] : high_act_patch_indices[1],
-                    high_act_patch_indices[2] : high_act_patch_indices[3],
-                    :,
-                ]
-                plt.imsave(
-                    fname=os.path.join(
-                        dir, "%s_nearest_patch_of_image.png" % str(decision_node_idx)
-                    ),
-                    arr=high_act_patch,
-                    vmin=0.0,
-                    vmax=1.0,
-                )
+        high_act_patch_indices = find_high_activation_crop(
+            pixels_mask, upsample_threshold
+        )
+        high_act_patch = x_np[
+            high_act_patch_indices[0] : high_act_patch_indices[1],
+            high_act_patch_indices[2] : high_act_patch_indices[3],
+            :,
+        ]
+        plt.imsave(
+            fname=save_dir / f"{node.index}_nearest_patch_of_image.png",
+            arr=high_act_patch,
+            vmin=0.0,
+            vmax=1.0,
+        )
 
-                # save the original image with bounding box showing high activation patch
-                imsave_with_bbox(
-                    fname=dir
-                    / f"{str(decision_node_idx)}_bounding_box_nearest_patch_of_image.png",
-                    img_rgb=x_np,
-                    bbox_height_start=high_act_patch_indices[0],
-                    bbox_height_end=high_act_patch_indices[1],
-                    bbox_width_start=high_act_patch_indices[2],
-                    bbox_width_end=high_act_patch_indices[3],
-                    color=(0, 255, 255),
-                )
-    return project_info
-
-
-def get_similarity_maps(tree: ProtoTree, project_info: dict):
-    sim_maps = {}
-    for j in project_info.keys():
-        nearest_x = project_info[j]["nearest_input"]
-        with torch.no_grad():
-            distances = tree.prototype_distances_per_patch(nearest_x)
-            sim_maps[j] = torch.exp(-distances[0, j, :, :]).cpu().numpy()
-        # TODO: jesus...
-        del project_info[j]["nearest_input"]
-    return sim_maps, project_info
+        # save the original image with bounding box showing high activation patch
+        imsave_with_bbox(
+            fname=save_dir / f"{node.index}_bounding_box_nearest_patch_of_image.png",
+            img_rgb=x_np,
+            bbox_height_start=high_act_patch_indices[0],
+            bbox_height_end=high_act_patch_indices[1],
+            bbox_width_start=high_act_patch_indices[2],
+            bbox_width_end=high_act_patch_indices[3],
+            color=(0, 255, 255),
+        )
+    return node_to_patch_info
 
 
 # copied from protopnet

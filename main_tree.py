@@ -10,7 +10,7 @@ from prototree.node import InternalNode
 from prototree.project import replace_prototypes_by_projections
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from prototree.upsample import upsample_similarity_maps
+from prototree.upsample import save_prototype_visualizations
 from util.analyse import log_pruned_leaf_analysis
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
@@ -78,25 +78,23 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # Training loop args
     disable_cuda = False
-    epochs = 1
+    epochs = 6
     evaluate_each_epoch = 20
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
     freeze_epochs = 0
 
     # prototree specifics
-    upsample_threshold = args.upsample_threshold
-    # This option should always be true, at least for now
     pruning_threshold_percentage = 0.1
     pruning_threshold_leaves = 1 / 3 * (1 + pruning_threshold_percentage)
 
     # Architecture args
     backbone = args.backbone
     pretrained = True
-    h_proto = 2
-    w_proto = 2
+    h_proto = 1
+    w_proto = 1
     channels_proto = args.num_features
-    depth = args.depth
+    depth = 4
 
     log = get_log(log_dir)
 
@@ -196,10 +194,10 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # EVALUATE AND ANALYSE TRAINED TREE
     print(f"Training Finished.")
+    tree = tree.eval()
 
     log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
 
-    # TODO: see todo in the function, IMPORTANT
     _prune_tree(tree.tree_root, pruning_threshold_leaves, log)
 
     log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
@@ -208,7 +206,7 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # PROJECT
     print("Projecting prototypes to nearest training patch (with class restrictions)")
-    replace_prototypes_by_projections(tree, project_loader)
+    node_to_patch_info = replace_prototypes_by_projections(tree, project_loader)
     log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
     test_acc = eval_tree(tree, test_loader, desc="pruned_and_projected")
     log.log_message(f"Test after pruning and projection: {test_acc:.3f}")
@@ -217,16 +215,12 @@ def run_tree(args: Namespace, skip_visualization=True):
     tree.tree_root.print_tree()
 
     # # Upsample prototype for visualization
-    # upsample_similarity_maps(
-    #     tree,
-    #     upsample_threshold,
-    #     project_info,
-    #     project_loader,
-    #     name,
-    #     log,
-    #     log_dir,
-    #     dir_for_saving_images,
-    # )
+    viz_path = Path("data") / "visualizations"
+    viz_path.mkdir(exist_ok=True, parents=True)
+    save_prototype_visualizations(
+        node_to_patch_info,
+        viz_path,
+    )
     # generate_tree_visualization(
     #     tree,
     #     name,
