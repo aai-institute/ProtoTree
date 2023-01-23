@@ -265,9 +265,8 @@ class Leaf(Node):
         self.dist_params = nn.Parameter(initial_dist, requires_grad=requires_grad)
 
     def to(self, *args, **kwargs):
-        result = copy(self)
-        result.dist_params = self.dist_params.to(*args, **kwargs)
-        return result
+        self.dist_params = self.dist_params.to(*args, **kwargs)
+        return self
 
     def predicted_label(self) -> int:
         return self.logits().argmax().item()

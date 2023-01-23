@@ -78,7 +78,7 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # Training loop args
     disable_cuda = False
-    epochs = 6
+    epochs = 10
     evaluate_each_epoch = 20
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
@@ -94,7 +94,7 @@ def run_tree(args: Namespace, skip_visualization=True):
     h_proto = 1
     w_proto = 1
     channels_proto = args.num_features
-    depth = 4
+    depth = 6
 
     log = get_log(log_dir)
 

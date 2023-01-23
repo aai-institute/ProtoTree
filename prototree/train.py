@@ -86,9 +86,9 @@ def update_leaf_distributions(
     # TODO: this is inefficient, find better way of inferring this info
     num_classes = logits.shape[-1]
 
-    log_eye = torch.log(torch.eye(num_classes))
+    log_eye = torch.log(torch.eye(num_classes, device=y_true.device))
     # one_hot encoded logits, -inf everywhere, zero at one entry
-    target_logits = log_eye[y_true].to(y_true.device)
+    target_logits = log_eye[y_true]
     with torch.no_grad():  # TODO: is no_grad still needed?
         for leaf in root.leaves:
             update_leaf(leaf, node_to_prob, logits, target_logits, scaling_factor)

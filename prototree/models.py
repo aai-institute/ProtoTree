@@ -168,6 +168,12 @@ class ProtoTree(PrototypeBase):
             for idx, node in enumerate(self.tree_root.descendant_internal_nodes)
         }
 
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        for leaf in self.tree_root.leaves:
+            leaf.to(*args, **kwargs)
+        return self
+
     def _get_node_to_log_p_right(self, similarities: torch.Tensor):
         return {node: -similarities[:, i] for node, i in self.node_to_proto_idx.items()}
 
