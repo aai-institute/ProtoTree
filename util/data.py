@@ -1,9 +1,10 @@
-from typing import Literal
+from typing import Callable, Literal
 
 import torch
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
+from PIL.Image import Image
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
@@ -73,7 +74,7 @@ def get_base_transform(img_size=(224, 224)):
     )
 
 
-def get_inverse_base_transform(img_size=(224, 224)):
+def get_inverse_base_transform(img_size=(224, 224)) -> Callable[[torch.Tensor], Image]:
     return transforms.Compose(
         [
             get_inverse_normalize_transform(),

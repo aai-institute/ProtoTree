@@ -120,15 +120,15 @@ def upsample_local(
 
         # save the original image with bounding box showing high activation patch
         imsave_with_bbox(
-            fname=os.path.join(
+            path=os.path.join(
                 dir,
                 "%s_bounding_box_nearest_patch_of_image.png" % str(decision_node_idx),
             ),
             img_rgb=x_np,
-            bbox_height_start=high_act_patch_indices[0],
-            bbox_height_end=high_act_patch_indices[1],
-            bbox_width_start=high_act_patch_indices[2],
-            bbox_width_end=high_act_patch_indices[3],
+            h_low=high_act_patch_indices[0],
+            h_high=high_act_patch_indices[1],
+            w_low=high_act_patch_indices[2],
+            w_high=high_act_patch_indices[3],
             color=(0, 255, 255),
         )
 
