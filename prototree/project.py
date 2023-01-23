@@ -1,14 +1,15 @@
-from collections import defaultdict
+from dataclasses import dataclass
+from functools import lru_cache
 
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from prototree.models import ProtoTree
-from prototree.node import Node
+from prototree.node import InternalNode, Node
 
 
+@torch.no_grad()
 def replace_prototypes_by_projections(
     tree: ProtoTree,
     project_loader: DataLoader,
@@ -23,48 +24,76 @@ def replace_prototypes_by_projections(
     :param project_loader:
     :param constrain_on_classes: if True, only consider patches from classes that are contained in
         the prototype's leaves' predictions
-    :return:
+    :return: a dictionary mapping nodes to an object holding information about the selected
+        latent patch
     """
-    tree.eval()
-    # TODO: what for?
-    torch.cuda.empty_cache()
+    node_to_patch_info: dict[Node, ProjectionPatchInfo] = {}
 
-    proto_idx_to_patch_dist = defaultdict(lambda: np.inf)
+    @lru_cache(maxsize=1)
+    def get_leaf_labels(node: InternalNode):
+        return {leaf.predicted_label() for leaf in node.leaves}
+
+    def process_sample(
+        node: InternalNode,
+        image: torch.Tensor,
+        true_label: int,
+        sample_patches_distances: torch.Tensor,
+        sample_patches: torch.Tensor,
+    ):
+        prev_patch_info = node_to_patch_info.get(node)
+
+        closest_patch = _get_closest_patch(sample_patches_distances, sample_patches)
+        closest_patch_distance = sample_patches_distances.min().item()
+
+        if (
+            not prev_patch_info
+            or closest_patch_distance < prev_patch_info.closest_patch_distance
+        ):
+            node_to_patch_info[node] = ProjectionPatchInfo(
+                node=node,
+                image=image,
+                true_label=true_label,
+                closest_patch=closest_patch,
+                closest_patch_distance=closest_patch_distance,
+                all_patch_distances=sample_patches_distances,
+            )
+
+    # TODO: is this the most efficient way of doing this? Maybe reverse loops or vectorize
     w_proto, h_proto = tree.prototype_shape[:2]
+    for x, y in tqdm(project_loader, desc="Projection", ncols=0):
+        x, y = x.to(tree.device), y.to(tree.device)
+        features = tree.extract_features(x)
+        distances = tree.prototype_layer(features)
+        # Shape: (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto)
+        patches = features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
 
-    node_to_leaf_y_pred: dict[Node, set[int]] = {
-        node: {leaf.predicted_label() for leaf in node.leaves}
-        for node in tree.internal_nodes
-    }
+        for node in tree.internal_nodes:
+            proto_idx = tree.node_to_proto_idx[node]
 
-    with torch.no_grad():
-        # TODO: is this the most efficient way of doing this? Maybe reverse loops or vectorize
-        for x, y in tqdm(project_loader, desc="Projection", ncols=0):
-            x, y = x.to(tree.device), y.to(tree.device)
-            features = tree.extract_features(x)
-            distances = tree.prototype_layer(features)
-            # TODO -- support for strides in finding patches? (corresponds to step size = 1 here)
-            # Shape: (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto)
-            patches = features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
+            for x_i, y_i, distances_i, patches_i in zip(
+                x, y, distances[:, proto_idx, :, :], patches
+            ):
+                if constrain_on_classes and y_i.item() not in get_leaf_labels(node):
+                    continue
+                process_sample(node, x_i, y_i, distances_i, patches_i)
 
-            for node in tree.internal_nodes:
-                proto_idx = tree.node_to_proto_idx[node]
-                leaf_predictions = node_to_leaf_y_pred[node]
+    def replace_proto_by_patch(proto_idx: int, patch: torch.Tensor):
+        tree.prototype_layer.prototype_tensors.data[proto_idx] = patch.data
 
-                for y_i, distances_i, patches_i in zip(
-                    y, distances[:, proto_idx, :, :], patches
-                ):
-                    if constrain_on_classes and y_i.item() not in leaf_predictions:
-                        continue
+    for node, patch_info in node_to_patch_info.items():
+        proto_idx = tree.node_to_proto_idx[node]
+        replace_proto_by_patch(proto_idx, patch_info.closest_patch)
+    return node_to_patch_info
 
-                    closest_patch = _get_closest_patch(distances_i, patches_i)
-                    closest_patch_distance = distances_i.min().item()
 
-                    if closest_patch_distance < proto_idx_to_patch_dist[proto_idx]:
-                        proto_idx_to_patch_dist[proto_idx] = closest_patch_distance
-                        tree.prototype_layer.prototype_tensors.data[
-                            proto_idx
-                        ] = closest_patch.data
+@dataclass
+class ProjectionPatchInfo:
+    image: torch.Tensor
+    true_label: int
+    closest_patch: torch.Tensor
+    closest_patch_distance: float
+    node: InternalNode
+    all_patch_distances: torch.Tensor = None
 
 
 def _get_closest_patch(sample_distances: torch.Tensor, sample_patches: torch.Tensor):
