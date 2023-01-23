@@ -1,4 +1,3 @@
-import argparse
 import os
 from pathlib import Path
 
@@ -14,15 +13,15 @@ from util.log import Log
 
 
 # adapted from protopnet
-def upsample(
+def upsample_similarity_maps(
     tree: ProtoTree,
     upsample_threshold: float,
     project_info: dict,
     project_loader: DataLoader,
     folder_name: str,
     log: Log,
-    log_dir,
-    dir_for_saving_images,
+    log_dir: os.PathLike,
+    dir_for_saving_images: os.PathLike,
 ):
     log_dir = Path(log_dir)
     dir = log_dir / dir_for_saving_images / folder_name
@@ -36,9 +35,7 @@ def upsample(
                 prototype_info = project_info[j]
                 decision_node_idx = prototype_info["node_ix"]
                 x = Image.open(imgs[prototype_info["input_image_ix"]][0])
-                x.save(
-                    os.path.join(dir, "%s_original_image.png" % str(decision_node_idx))
-                )
+                x.save(dir / f"{str(decision_node_idx)}_original_image.png")
 
                 x_np = np.asarray(x)
                 x_np = np.float32(x_np) / 255
@@ -134,11 +131,8 @@ def upsample(
 
                 # save the original image with bounding box showing high activation patch
                 imsave_with_bbox(
-                    fname=os.path.join(
-                        dir,
-                        "%s_bounding_box_nearest_patch_of_image.png"
-                        % str(decision_node_idx),
-                    ),
+                    fname=dir
+                    / f"{str(decision_node_idx)}_bounding_box_nearest_patch_of_image.png",
                     img_rgb=x_np,
                     bbox_height_start=high_act_patch_indices[0],
                     bbox_height_end=high_act_patch_indices[1],
@@ -149,22 +143,20 @@ def upsample(
     return project_info
 
 
-def get_similarity_maps(tree: ProtoTree, project_info: dict, log: Log = None):
-    log.log_message("\nCalculating similarity maps (after projection)...")
-
-    sim_maps = dict()
+def get_similarity_maps(tree: ProtoTree, project_info: dict):
+    sim_maps = {}
     for j in project_info.keys():
         nearest_x = project_info[j]["nearest_input"]
         with torch.no_grad():
-            distances = tree.prototype_distances_to_patches(nearest_x)
+            distances = tree.prototype_distances_per_patch(nearest_x)
             sim_maps[j] = torch.exp(-distances[0, j, :, :]).cpu().numpy()
-        del nearest_x
+        # TODO: jesus...
         del project_info[j]["nearest_input"]
     return sim_maps, project_info
 
 
 # copied from protopnet
-def find_high_activation_crop(mask, threshold):
+def find_high_activation_crop(mask: np.ndarray, threshold: float):
     threshold = 1.0 - threshold
     lower_y, upper_y, lower_x, upper_x = 0, 0, 0, 0
     for i in range(mask.shape[0]):
@@ -188,12 +180,12 @@ def find_high_activation_crop(mask, threshold):
 
 # copied from protopnet
 def imsave_with_bbox(
-    fname,
-    img_rgb,
-    bbox_height_start,
-    bbox_height_end,
-    bbox_width_start,
-    bbox_width_end,
+    fname: os.PathLike,
+    img_rgb: np.ndarray,
+    bbox_height_start: int,
+    bbox_height_end: int,
+    bbox_width_start: int,
+    bbox_width_end: int,
     color=(0, 255, 255),
 ):
     img_bgr_uint8 = cv2.cvtColor(np.uint8(255 * img_rgb), cv2.COLOR_RGB2BGR)
@@ -207,5 +199,4 @@ def imsave_with_bbox(
     img_rgb_uint8 = img_bgr_uint8[..., ::-1]
     img_rgb_float = np.float32(img_rgb_uint8) / 255
     plt.imshow(img_rgb_float)
-    # plt.axis('off')
     plt.imsave(fname, img_rgb_float)

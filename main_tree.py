@@ -10,12 +10,14 @@ from prototree.node import InternalNode
 from prototree.project import replace_prototypes_by_projections
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
+from prototree.upsample import upsample_similarity_maps
 from util.analyse import log_pruned_leaf_analysis
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.init import init_tree_weights
 from util.log import Log
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
+from util.visualize import generate_tree_visualization
 
 
 def save_tree(
@@ -88,13 +90,13 @@ def run_tree(args: Namespace, skip_visualization=True):
     pruning_threshold_percentage = 0.1
     pruning_threshold_leaves = 1 / 3 * (1 + pruning_threshold_percentage)
 
-    # Net architecture args
-    net = args.net
+    # Architecture args
+    backbone = args.backbone
     pretrained = True
-    h_prototype = 2
-    w_prototype = 2
+    h_proto = 2
+    w_proto = 2
+    channels_proto = args.num_features
     depth = args.depth
-    out_channels = args.num_features
 
     log = get_log(log_dir)
 
@@ -104,7 +106,13 @@ def run_tree(args: Namespace, skip_visualization=True):
     num_classes = len(test_loader.dataset.classes)
     log.log_message(f"Num classes (k): {num_classes}")
     tree = create_proto_tree(
-        h_prototype, w_prototype, num_classes, depth, net, out_channels, pretrained
+        h_proto=h_proto,
+        w_proto=w_proto,
+        channels_proto=channels_proto,
+        num_classes=num_classes,
+        depth=depth,
+        backbone=backbone,
+        pretrained=pretrained,
     )
     print(
         f"Max depth {depth}, so {tree.num_internal_nodes} internal nodes and {tree.num_leaves} leaves"
@@ -117,7 +125,7 @@ def run_tree(args: Namespace, skip_visualization=True):
     optimizer, params_to_freeze, params_to_train = get_optimizer(
         tree,
         optim_type,
-        net,
+        backbone,
         dataset,
         momentum,
         weight_decay,
@@ -172,7 +180,7 @@ def run_tree(args: Namespace, skip_visualization=True):
 
         if should_evaluate(epoch):
             test_acc = eval_tree(
-                tree, test_loader, eval_name=f"Testing after epoch: {epoch}"
+                tree, test_loader, desc=f"Testing after epoch: {epoch}"
             )
             # if test_acc > best_test_acc:
             #     best_test_acc = test_acc
@@ -195,38 +203,37 @@ def run_tree(args: Namespace, skip_visualization=True):
     _prune_tree(tree.tree_root, pruning_threshold_leaves, log)
 
     log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
-    pruned_acc = eval_tree(tree, test_loader, eval_name="pruned")
+    pruned_acc = eval_tree(tree, test_loader, desc="pruned")
     log.log_message(f"\nAccuracy with distributed routing: {pruned_acc:.3f}")
 
     # PROJECT
     print("Projecting prototypes to nearest training patch (with class restrictions)")
     replace_prototypes_by_projections(tree, project_loader)
     log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
-    test_acc = eval_tree(tree, test_loader, eval_name="pruned_and_projected")
+    test_acc = eval_tree(tree, test_loader, desc="pruned_and_projected")
     log.log_message(f"Test after pruning and projection: {test_acc:.3f}")
 
     perform_final_evaluation(tree, test_loader, log, eval_name="pruned_and_projected")
     tree.tree_root.print_tree()
 
-
-#     # Upsample prototype for visualization
-#     upsample(
-#         tree,
-#         upsample_threshold,
-#         project_info,
-#         project_loader,
-#         name,
-#         log,
-#         log_dir,
-#         dir_for_saving_images,
-#     )
-#     generate_tree_visualization(
-#         tree,
-#         name,
-#         tuple(range(num_classes)),
-#         log_dir,
-#         dir_for_saving_images,
-#     )
+    # # Upsample prototype for visualization
+    # upsample_similarity_maps(
+    #     tree,
+    #     upsample_threshold,
+    #     project_info,
+    #     project_loader,
+    #     name,
+    #     log,
+    #     log_dir,
+    #     dir_for_saving_images,
+    # )
+    # generate_tree_visualization(
+    #     tree,
+    #     name,
+    #     tuple(range(num_classes)),
+    #     log_dir,
+    #     dir_for_saving_images,
+    # )
 
 
 def _prune_tree(root: InternalNode, pruning_threshold_leaves: float, log: Log):
@@ -257,7 +264,7 @@ def perform_final_evaluation(
             projected_pruned_tree,
             test_loader,
             sampling_strategy=sampling_strategy,
-            eval_name=eval_name,
+            desc=eval_name,
         )
     fidelities = eval_fidelity(projected_pruned_tree, test_loader)
     for strategy, fidelity in fidelities.items():
@@ -265,34 +272,34 @@ def perform_final_evaluation(
 
 
 def create_proto_tree(
-    H1: int,
-    W1: int,
+    h_proto: int,
+    w_proto: int,
+    channels_proto: int,
     num_classes: int,
     depth: int,
-    net: str,
-    out_channels: int,
+    backbone="resnet50_inat",
     pretrained=True,
 ):
     """
 
-    :param H1: height of prototype
-    :param W1: width of prototype
+    :param h_proto: height of prototype
+    :param w_proto: width of prototype
+    :param channels_proto: number of input channels for the prototypes,
+        coincides with the output channels of the net+add_on layers, prior to prototype layers.
     :param num_classes:
-    :param depth:
-    :param net:
-    :param out_channels: number of output channels of the net+add_on layers, prior to prototype layers.
-        This coincides with the number of input channels for the prototypes
+    :param depth: depth of tree, will result in 2^depth leaves and 2^depth-1 internal nodes
+    :param backbone: name of backbone, e.g. resnet18
     :param pretrained:
     :return:
     """
-    features_net = BASE_ARCHITECTURE_TO_FEATURES[net](pretrained=pretrained)
+    features_net = BASE_ARCHITECTURE_TO_FEATURES[backbone](pretrained=pretrained)
     tree = ProtoTree(
         num_classes=num_classes,
-        prototype_channels=out_channels,
         depth=depth,
+        channels_proto=channels_proto,
+        h_proto=h_proto,
+        w_proto=w_proto,
         feature_net=features_net,
-        h_prototype=H1,
-        w_prototype=W1,
     )
     init_tree_weights(tree)
     return tree

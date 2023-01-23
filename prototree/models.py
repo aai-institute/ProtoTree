@@ -46,13 +46,30 @@ class PrototypeBase(nn.Module):
         # TODO: wassup with the constants?
         torch.nn.init.normal_(self.prototype_layer.prototype_tensors, mean=0.5, std=0.1)
 
+    def extract_features(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies the feature net and add_on layers to the input. The output
+        has the shape (batch_size, num_channels, height, width), where num_channels is the
+        number of channels of the prototypes.
+        """
+        x = self.net(x)
+        x = self.add_on(x)
+        return x
+
+    def prototype_distances_per_patch(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the minimal distances between the prototypes and the input.
+        The output has the shape (batch_size, num_prototypes, n_patches_w, n_patches_h)
+        """
+        x = self.extract_features(x)
+        return self.prototype_layer(x)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Computes the minimal distances between the prototypes and the input.
         The output has the shape (batch_size, num_prototypes)
         """
-        x = self.extract_features(x)
-        x = self.prototype_layer(x)
+        x = self.prototype_distances_per_patch(x)
         return min_pool2d(x, kernel_size=x.shape[-2:]).squeeze()
 
     @property
@@ -70,14 +87,6 @@ class PrototypeBase(nn.Module):
     @property
     def prototype_shape(self):
         return self.prototype_layer.prototype_shape
-
-    def extract_features(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Applies the feature net and add_on layers to the input.
-        """
-        x = self.net(x)
-        x = self.add_on(x)
-        return x
 
     # TODO: remove all saving things - delegate to downstream code
     def save(self, basedir: PathLike, file_name: str = "model.pth"):
@@ -138,9 +147,9 @@ class ProtoTree(PrototypeBase):
         self,
         num_classes: int,
         depth: int,
-        prototype_channels: int,
-        w_prototype: int,
-        h_prototype: int,
+        channels_proto: int,
+        h_proto: int,
+        w_proto: int,
         feature_net: torch.nn.Module,
         add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
     ):
@@ -148,7 +157,7 @@ class ProtoTree(PrototypeBase):
         num_prototypes = 2**depth - 1
         super().__init__(
             num_prototypes=num_prototypes,
-            prototype_shape=(prototype_channels, w_prototype, h_prototype),
+            prototype_shape=(channels_proto, w_proto, h_proto),
             feature_net=feature_net,
             add_on_layers=add_on_layers,
         )
@@ -232,9 +241,7 @@ class ProtoTree(PrototypeBase):
     def forward(
         self,
         x: torch.Tensor,
-        sampling_strategy: Literal[
-            "distributed", "sample_max", "greedy"
-        ] = "distributed",
+        sampling_strategy: SamplingStrategy = "distributed",
     ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
         If sampling_strategy is `distributed`, all leaves contribute to each prediction,
@@ -309,13 +316,13 @@ def get_predicting_leaves(
     sampling_strategy: Literal["sample_max", "greedy"],
 ):
     if sampling_strategy == "sample_max":
-        return get_max_p_arrival_leaves(root.leaves, node_to_probs)
+        return _get_max_p_arrival_leaves(root.leaves, node_to_probs)
     if sampling_strategy == "greedy":
-        return get_predicting_leaves_greedily(root, node_to_probs)
+        return _get_predicting_leaves_greedily(root, node_to_probs)
     raise ValueError(f"Unknown {sampling_strategy=}")
 
 
-def get_predicting_leaves_greedily(
+def _get_predicting_leaves_greedily(
     root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
 ) -> List[Leaf]:
 
@@ -337,7 +344,7 @@ def get_predicting_leaves_greedily(
     return [get_leaf_for_sample(i) for i in range(batch_size)]
 
 
-def get_max_p_arrival_leaves(
+def _get_max_p_arrival_leaves(
     leaves: List[Leaf], node_to_probs: dict[Node, NodeProbabilities]
 ) -> List[Leaf]:
     """

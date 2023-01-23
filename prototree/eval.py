@@ -15,10 +15,18 @@ def eval_tree(
     tree: ProtoTree,
     data_loader: DataLoader,
     sampling_strategy: SamplingStrategy = "distributed",
-    eval_name: str = "Eval",
+    desc: str = "evaluation",
 ) -> float:
+    """
+
+    :param tree:
+    :param data_loader:
+    :param sampling_strategy:
+    :param desc: description for the progress bar, passed to tqdm
+    :return:
+    """
     tree.eval()
-    tqdm_loader = tqdm(data_loader, desc=eval_name, ncols=0)
+    tqdm_loader = tqdm(data_loader, desc=desc, ncols=0)
     leaf_depths = []
     for x, y in tqdm_loader:
         x, y = x.to(tree.device), y.to(tree.device)
@@ -50,8 +58,7 @@ def eval_fidelity(
     test_sampling_strategies: tuple[SamplingStrategy] = ("sample_max", "greedy"),
     ref_sampling_strategy: SamplingStrategy = "distributed",
 ) -> dict[SamplingStrategy, float]:
-    # TODO: is this actually true? Should be n_batches, seems like the normalization is off
-    n_samples = len(data_loader)
+    n_batches = len(data_loader)
     tree.eval()
     result_dict = defaultdict(float)
     for x, y in tqdm(data_loader, desc="Evaluating fidelity", ncols=0):
@@ -61,7 +68,7 @@ def eval_fidelity(
         for sampling_strategy in test_sampling_strategies:
             y_pred_test = tree.predict(x, sampling_strategy=sampling_strategy)
             batch_fidelity = torch.sum(y_pred_reference == y_pred_test)
-            result_dict[sampling_strategy] += batch_fidelity / (len(y) * n_samples)
+            result_dict[sampling_strategy] += batch_fidelity / (len(y) * n_batches)
 
     return result_dict
 

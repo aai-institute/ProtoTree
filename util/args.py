@@ -23,7 +23,7 @@ def get_args() -> argparse.Namespace:
         help="Data set on which the ProtoTree should be trained",
     )
     parser.add_argument(
-        "--net",
+        "--backbone",
         type=str,
         default="resnet50_inat",
         help="Base network used in the tree. Pretrained network on iNaturalist is only available for resnet50_inat "

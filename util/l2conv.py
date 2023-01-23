@@ -27,7 +27,7 @@ class L2Conv2D(nn.Module):
         # TODO: make consistent ordering!!
         prototype_shape = (num_prototypes, input_channels, w, h)
         self.prototype_tensors = nn.Parameter(
-            torch.randn(prototype_shape), requires_grad=True
+            torch.randn(*prototype_shape), requires_grad=True
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
