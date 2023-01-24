@@ -44,7 +44,7 @@ def save_prototype_visualizations(
 
     def upsample(img: np.ndarray, img_size: tuple[int, int]):
         return cv2.resize(
-            img, size=(img_size[1], img_size[0]), interpolation=cv2.INTER_CUBIC
+            img, (img_size[1], img_size[0]), interpolation=cv2.INTER_CUBIC
         )
 
     def save(img: np.ndarray, fname: os.PathLike):
@@ -79,21 +79,21 @@ def save_prototype_visualizations(
         save(overlayed_original_img, f"{node.index}_heatmap_original_image.png")
 
         # a single pixel is selected
-        closes_patch_mask_pixels = similarity_map <= similarity_map.max()
-        closes_patch_mask_pixels = upsample(closes_patch_mask_pixels, img_size)
-        save(closes_patch_mask_pixels, f"{node.index}_closest_patch_mask.png")
+        closest_patch_mask_pixels = np.uint8(similarity_map == similarity_map.max())
+        closest_patch_mask_pixels = upsample(closest_patch_mask_pixels, img_size)
+        # save(closest_patch_mask_pixels, f"{node.index}_closest_patch_mask.png")
 
         # TODO: ugly as hell, refactor. We use a mask here, threshold has no meaning...
         #
         h_low, h_high, w_low, w_high = covering_rectangle_indices(
-            closes_patch_mask_pixels
+            closest_patch_mask_pixels
         )
-        closest_patch_in_pixels = x[
-            h_low:h_high,
-            w_low:w_high,
-            :,
-        ]
-        save(closest_patch_in_pixels, f"{node.index}_closest_patch.png")
+        # closest_patch_in_pixels = x[
+        #     h_low:h_high,
+        #     w_low:w_high,
+        #     :,
+        # ]
+        # save(closest_patch_in_pixels, f"{node.index}_closest_patch.png")
 
         im_with_bbox = get_im_with_bbox(x, h_low, h_high, w_low, w_high)
         save(im_with_bbox, f"{node.index}_bounding_box_closes_patch.png")
@@ -160,7 +160,7 @@ def get_im_with_bbox(
         color=color,
         thickness=2,
     )
-    img = img[..., ::-1]
+    # img = img[..., ::-1]
     img = np.float32(img) / 255
     return img
 

@@ -18,27 +18,23 @@ def train_epoch(
     tree: ProtoTree,
     train_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
-    epoch: int,
-    log: Log = None,
-    log_prefix: str = "log_train_epochs",
-    progress_prefix: str = "Train Epoch",
+    progress_desc: str = "Train Epoch",
 ) -> dict:
     # TODO: combine this block with the leaf distribution optimization below into a single, separate function
     tree.eval()
-    nr_batches = float(len(train_loader))
+    n_batches = float(len(train_loader))
 
-    train_iter = tqdm(
+    train_loader = tqdm(
         train_loader,
-        desc=f"{progress_prefix} {epoch}",
+        desc=progress_desc,
     )
     tree.train()
 
-    # IMPORTANT: contains only zero and -inf
     total_loss = 0.0
     total_acc = 0.0
-    for x, y in train_iter:
+    for x, y in train_loader:
         optimizer.zero_grad()
-        # TODO: to we need to send them to the device? pin_memory=True should be enough
+        tree.train()
         x, y = x.to(tree.device), y.to(tree.device)
         logits, node_to_prob, predicting_leaves = tree.forward(x)
         loss = F.nll_loss(logits, y)
@@ -46,8 +42,8 @@ def train_epoch(
         optimizer.step()
 
         # update the leaf dist_params in a derivative-free fashion
-        scaling_factor = 1 - 1 / nr_batches
-        tree.eval()  # TODO: is this and no_grad in the function necessary?
+        scaling_factor = 1 - 1 / n_batches
+        tree.eval()
         update_leaf_distributions(
             tree.tree_root, y, logits, node_to_prob, scaling_factor
         )
@@ -56,14 +52,14 @@ def train_epoch(
         y_pred = torch.argmax(logits, dim=1)
         acc = torch.sum(y_pred == y).item() / len(x)
 
-        train_iter.set_postfix_str(f"Loss: {loss.item():.3f}, Acc: {acc:.3f}")
+        train_loader.set_postfix_str(f"Loss: {loss.item():.3f}, Acc: {acc:.3f}")
         # Compute metrics over this batch
         total_loss += loss.item()
         total_acc += acc
 
     return {
-        "loss": total_loss / (nr_batches + 1),
-        "train_accuracy": total_acc / (nr_batches + 1),
+        "loss": total_loss / (n_batches + 1),
+        "train_accuracy": total_acc / (n_batches + 1),
     }
 
 
@@ -83,7 +79,6 @@ def update_leaf_distributions(
     :param scaling_factor: usually 1 - 1/n_batches. TODO: understand its role
     :return:
     """
-    # TODO: this is inefficient, find better way of inferring this info
     num_classes = logits.shape[-1]
 
     log_eye = torch.log(torch.eye(num_classes, device=y_true.device))

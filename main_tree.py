@@ -2,7 +2,7 @@ from argparse import Namespace
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, default_collate
 
 from prototree.eval import eval_fidelity, eval_tree
 from prototree.models import ProtoTree
@@ -78,7 +78,7 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # Training loop args
     disable_cuda = False
-    epochs = 10
+    epochs = 40
     evaluate_each_epoch = 20
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
@@ -98,8 +98,13 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     log = get_log(log_dir)
 
+    device = get_device(disable_cuda)
+    pin_memory = "cuda" in device.type
+
     train_loader, project_loader, test_loader = get_dataloaders(
-        dataset=dataset, disable_cuda=disable_cuda, batch_size=batch_size
+        dataset=dataset,
+        pin_memory=pin_memory,
+        batch_size=batch_size,
     )
     num_classes = len(test_loader.dataset.classes)
     log.log_message(f"Num classes (k): {num_classes}")
@@ -116,7 +121,6 @@ def run_tree(args: Namespace, skip_visualization=True):
         f"Max depth {depth}, so {tree.num_internal_nodes} internal nodes and {tree.num_leaves} leaves"
     )
 
-    device = get_device(disable_cuda)
     print(f"Running on: {device}")
     tree = tree.to(device)
 
@@ -167,7 +171,9 @@ def run_tree(args: Namespace, skip_visualization=True):
             log.log_message(f"\nUnfreezing network at {epoch=}.")
             unfreeze()
 
-        train_single_epoch(tree, epoch, log, optimizer, train_loader)
+        train_single_epoch(
+            tree, optimizer, train_loader, progress_desc=f"Train Epoch {epoch}:"
+        )
         scheduler.step()
 
         log_pruned_leaf_analysis(
@@ -217,6 +223,7 @@ def run_tree(args: Namespace, skip_visualization=True):
     # # Upsample prototype for visualization
     viz_path = Path("data") / "visualizations"
     viz_path.mkdir(exist_ok=True, parents=True)
+    print(f"Saving prototype visualizations to {viz_path}")
     save_prototype_visualizations(
         node_to_patch_info,
         viz_path,
@@ -301,18 +308,15 @@ def create_proto_tree(
 
 def train_single_epoch(
     tree: ProtoTree,
-    epoch: int,
-    log: Log,
     optimizer,
     trainloader: DataLoader,
+    progress_desc="Training",
 ):
     train_acc = train_epoch(
         tree,
         trainloader,
         optimizer,
-        epoch,
-        log,
-        "log_train_epochs",
+        progress_desc=progress_desc,
     )
     return train_acc
 

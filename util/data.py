@@ -29,17 +29,21 @@ def get_data(
 
 
 def get_dataloaders(
-    dataset: Literal["CUB", "CARS"] = "CUB", disable_cuda=False, batch_size=64
+    dataset: Literal["CUB", "CARS"] = "CUB", pin_memory=True, batch_size=64, **kwargs
 ) -> tuple[DataLoader[ImageFolder], DataLoader[ImageFolder], DataLoader[ImageFolder]]:
     """
-    Get data loaders
+
+    :param dataset:
+    :param pin_memory:
+    :param batch_size:
+    :param kwargs: passed to DataLoader
+    :return:
     """
     train_set, project_set, test_set = get_data(dataset)
-    pin_memory = not disable_cuda and torch.cuda.is_available()
 
     def get_loader(dataset: ImageFolder, batch_size=batch_size):
         return DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory
+            dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory, **kwargs
         )
 
     train_loader = get_loader(train_set)
