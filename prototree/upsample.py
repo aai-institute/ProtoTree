@@ -106,8 +106,9 @@ def covering_rectangle_indices(mask: np.ndarray):
     :param mask: 2D array of ones and zeros
     :return: indices of the smallest rectangle that covers the component
     """
-    lower = np.min(np.where(mask == 1), axis=1)
-    upper = np.max(np.where(mask == 1), axis=1)
+    nonzero_indices = mask.nonzero()
+    lower = np.min(nonzero_indices, axis=1)
+    upper = np.max(nonzero_indices, axis=1)
     return lower[0], upper[0] + 1, lower[1], upper[1] + 1
 
 
