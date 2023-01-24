@@ -171,8 +171,8 @@ def run_tree(args: Namespace, skip_visualization=True):
             log.log_message(f"\nUnfreezing network at {epoch=}.")
             unfreeze()
 
-        train_single_epoch(
-            tree, optimizer, train_loader, progress_desc=f"Train Epoch {epoch}:"
+        train_epoch(
+            tree, train_loader, optimizer, progress_desc=f"Train Epoch {epoch}:"
         )
         scheduler.step()
 
@@ -304,21 +304,6 @@ def create_proto_tree(
     )
     init_tree_weights(tree)
     return tree
-
-
-def train_single_epoch(
-    tree: ProtoTree,
-    optimizer,
-    trainloader: DataLoader,
-    progress_desc="Training",
-):
-    train_acc = train_epoch(
-        tree,
-        trainloader,
-        optimizer,
-        progress_desc=progress_desc,
-    )
-    return train_acc
 
 
 def get_device(disable_cuda=False):

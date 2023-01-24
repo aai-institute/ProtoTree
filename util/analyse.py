@@ -48,7 +48,7 @@ def log_pruned_leaf_analysis(
             unpruned_leaves.append(leaf.index)
 
     log.log_message(
-        f"\nLeafs with max > {pruning_threshold:.2f}: {len(unpruned_leaves)}"
+        f"\nLeaves with max > {pruning_threshold:.2f}: {len(unpruned_leaves)}"
     )
 
     num_classes = leaves[0].num_classes

@@ -11,7 +11,7 @@ from prototree.models import ProtoTree
 from prototree.node import Leaf, Node, NodeProbabilities
 from util.log import Log
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 def train_epoch(
@@ -21,7 +21,6 @@ def train_epoch(
     progress_desc: str = "Train Epoch",
 ) -> dict:
     # TODO: combine this block with the leaf distribution optimization below into a single, separate function
-    tree.eval()
     n_batches = float(len(train_loader))
 
     train_loader = tqdm(
@@ -33,8 +32,8 @@ def train_epoch(
     total_loss = 0.0
     total_acc = 0.0
     for x, y in train_loader:
-        optimizer.zero_grad()
         tree.train()
+        optimizer.zero_grad()
         x, y = x.to(tree.device), y.to(tree.device)
         logits, node_to_prob, predicting_leaves = tree.forward(x)
         loss = F.nll_loss(logits, y)
@@ -57,12 +56,17 @@ def train_epoch(
         total_loss += loss.item()
         total_acc += acc
 
+    total_loss /= (n_batches + 1)
+    total_acc /= (n_batches + 1)
+
+    log.info(f"Train Epoch: Loss: {total_loss:.3f}, Acc: {total_acc:.3f}")
     return {
-        "loss": total_loss / (n_batches + 1),
-        "train_accuracy": total_acc / (n_batches + 1),
+        "loss": total_loss,
+        "train_accuracy": total_acc,
     }
 
 
+@torch.no_grad()
 def update_leaf_distributions(
     root: Node,
     y_true: torch.Tensor,
@@ -84,9 +88,8 @@ def update_leaf_distributions(
     log_eye = torch.log(torch.eye(num_classes, device=y_true.device))
     # one_hot encoded logits, -inf everywhere, zero at one entry
     target_logits = log_eye[y_true]
-    with torch.no_grad():  # TODO: is no_grad still needed?
-        for leaf in root.leaves:
-            update_leaf(leaf, node_to_prob, logits, target_logits, scaling_factor)
+    for leaf in root.leaves:
+        update_leaf(leaf, node_to_prob, logits, target_logits, scaling_factor)
 
 
 def update_leaf(

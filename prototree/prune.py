@@ -39,7 +39,7 @@ def prune_unconfident_leaves(root: InternalNode, leaf_confidence_threshold: floa
         remove_from_tree(node)
 
     try:
-        health_check(root, height=original_height)
+        health_check(root, max_height=original_height)
     except AssertionError:
         log.error(
             "Pruning failed, the tree is not healthy anymore. This is probably an implementation error."

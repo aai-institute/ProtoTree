@@ -556,18 +556,18 @@ def _health_check_root(root: InternalNode):
     assert len(roots) == 1, f"Tree should have exactly one root but got: {roots}"
 
 
-def health_check(root: InternalNode, height: int = None):
+def health_check(root: InternalNode, max_height: int = None):
     """
     Checks that the tree is valid, i.e. that all nodes have the correct number of children and that the tree is
     connected. Raises an AssertionError if the tree is invalid.
 
     :param root: The root node of the tree to check.
-    :param height: If passed, will also check that the tree has the correct height.
+    :param max_height: If passed, will also check that the tree has the correct height.
     """
-    if height is not None:
+    if max_height is not None:
         assert (
-            root.max_height() == height
-        ), f"Root max_height should be {height} but got: {root.max_height}"
+                root.max_height() <= max_height
+        ), f"Root max_height should be {max_height} but got: {root.max_height()}"
 
     _health_check_root(root)
     _health_check_height_depth(root)
