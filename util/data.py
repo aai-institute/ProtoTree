@@ -1,8 +1,6 @@
-from typing import Callable, Literal
+from typing import Callable
 
 import torch
-import torch.optim
-import torch.utils.data
 import torchvision.transforms as transforms
 from PIL.Image import Image
 from torch.utils.data import DataLoader
@@ -11,39 +9,25 @@ from torchvision.datasets import ImageFolder
 from config import project_dir, test_dir, train_dir
 
 
-def get_data(
-    dataset: Literal["CUB", "CARS"] = "CUB", augment_train_set=True
-) -> tuple[ImageFolder, ImageFolder, ImageFolder]:
-    """
-    Load the proper dataset based on the parsed arguments
-    :return: tuple consisting of:
-        - The train data set
-        - The project data set (usually train data set without augmentation)
-        - The test data set
-    """
-    if dataset == "CUB":
-        return get_birds(augment_train_set=augment_train_set)
-    if dataset == "CARS":
-        raise NotImplementedError()
-    raise ValueError(f'Could not load "{dataset=}"')
-
-
 def get_dataloaders(
-    dataset: Literal["CUB", "CARS"] = "CUB", pin_memory=True, batch_size=64, **kwargs
+    pin_memory=True, batch_size=64, **kwargs
 ) -> tuple[DataLoader[ImageFolder], DataLoader[ImageFolder], DataLoader[ImageFolder]]:
     """
 
-    :param dataset:
     :param pin_memory:
     :param batch_size:
     :param kwargs: passed to DataLoader
     :return:
     """
-    train_set, project_set, test_set = get_data(dataset)
+    train_set, project_set, test_set = get_data()
 
     def get_loader(dataset: ImageFolder, batch_size=batch_size):
         return DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, pin_memory=pin_memory, **kwargs
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            pin_memory=pin_memory,
+            **kwargs
         )
 
     train_loader = get_loader(train_set)
@@ -88,7 +72,18 @@ def get_inverse_base_transform(img_size=(224, 224)) -> Callable[[torch.Tensor], 
     )
 
 
-def get_birds(
+def get_augmentation_transform():
+    return transforms.RandomOrder(
+        [
+            transforms.RandomPerspective(distortion_scale=0.2, p=0.5),
+            transforms.ColorJitter((0.6, 1.4), (0.6, 1.4), (0.6, 1.4), (-0.02, 0.02)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomAffine(degrees=10, shear=(-2, 2), translate=[0.05, 0.05]),
+        ]
+    )
+
+
+def get_data(
     augment_train_set=True, img_size=(224, 224)
 ) -> tuple[ImageFolder, ImageFolder, ImageFolder]:
     """
@@ -103,19 +98,8 @@ def get_birds(
         # TODO: why first augment and then resize?
         train_transform = transforms.Compose(
             [
+                get_augmentation_transform(),
                 transforms.Resize(size=img_size),
-                transforms.RandomOrder(
-                    [
-                        transforms.RandomPerspective(distortion_scale=0.2, p=0.5),
-                        transforms.ColorJitter(
-                            (0.6, 1.4), (0.6, 1.4), (0.6, 1.4), (-0.02, 0.02)
-                        ),
-                        transforms.RandomHorizontalFlip(),
-                        transforms.RandomAffine(
-                            degrees=10, shear=(-2, 2), translate=[0.05, 0.05]
-                        ),
-                    ]
-                ),
                 transforms.ToTensor(),
                 get_normalize_transform(),
             ]

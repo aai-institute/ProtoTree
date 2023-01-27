@@ -1,5 +1,5 @@
+import logging
 from abc import ABC, abstractmethod
-from copy import copy
 from dataclasses import dataclass
 from typing import Callable, Optional, TypeVar, Union
 
@@ -12,6 +12,7 @@ from torch.nn import functional as F
 # TODO: a lot of stuff here is very poorly optimized, multiple time exponential complexity calls, even in properties
 
 T = TypeVar("T")
+log = logging.getLogger(__name__)
 
 
 def log1mexp(log_p: torch.Tensor) -> torch.Tensor:
@@ -272,7 +273,7 @@ class Leaf(Node):
         return self.logits().argmax().item()
 
     def conf_predicted_label(self) -> float:
-        return self.logits().max().exp().item()
+        return self.y_proba().max().item()
 
     # Note: this doesn't compute anything, it just returns the stored distribution copied batch_size times.
     def forward(self, node_to_probs: dict[Node, "NodeProbabilities"]) -> torch.Tensor:
@@ -566,7 +567,7 @@ def health_check(root: InternalNode, max_height: int = None):
     """
     if max_height is not None:
         assert (
-                root.max_height() <= max_height
+            root.max_height() <= max_height
         ), f"Root max_height should be {max_height} but got: {root.max_height()}"
 
     _health_check_root(root)
@@ -609,3 +610,32 @@ class NodeProbabilities:
     @property
     def batch_size(self) -> int:
         return self.log_p_arrival.shape[0]
+
+
+def log_leaves_properties(
+    leaves: list[Leaf],
+    confidence_threshold: float,
+):
+    """
+    Logs information about which leaves have a sufficiently high confidence and whether there
+    are classes not predicted by any leaf. Useful for debugging the training process.
+
+    :param leaves:
+    :param confidence_threshold:
+    :return:
+    """
+    n_leaves_above_threshold = 0
+    classes_covered = set()
+    for leaf in leaves:
+        classes_covered.add(leaf.predicted_label())
+        if leaf.conf_predicted_label() > confidence_threshold:
+            n_leaves_above_threshold += 1
+
+    log.info(
+        f"Leaves with confidence > {confidence_threshold:.2f}: {n_leaves_above_threshold}"
+    )
+
+    num_classes = leaves[0].num_classes
+    class_labels_without_leaf = set(range(num_classes)) - classes_covered
+    if class_labels_without_leaf:
+        log.info(f"Never predicted classes: {class_labels_without_leaf}")

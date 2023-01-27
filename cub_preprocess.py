@@ -1,24 +1,18 @@
 """
 This script creates a dataset of cropped images from the CUB dataset. It currently copies a lot of stuff around
-and is thus very inefficient in terms of storage, possibly also in terms of I/O. In a future version we might
-want to assemble the dataset on the fly. Need to check how I/O compares to processing time.
+and is thus very inefficient in terms of storage. In a future version we might want to assemble the dataset on the fly.
 """
-
 
 import logging
 import shutil
+from functools import cache
 from pathlib import Path
 from typing import Literal
 
 from PIL import Image
 from tqdm import tqdm
 
-from config import dataset_dir
-from cub_metadata import (
-    get_image_id_bbox_dict,
-    get_image_id_path_dict,
-    get_image_id_train_test_dict,
-)
+from config import cub_dir, cub_images_dir, dataset_dir
 
 train_crop_dir = dataset_dir / "train_crop"
 train_corners_dir = dataset_dir / "train_corners"
@@ -37,6 +31,51 @@ def save_image(image: Image, path: Path):
     log.debug(f"Saving image to: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path)
+
+
+cub_images_txt = cub_dir / "images.txt"
+cub_split_indices_txt = cub_dir / "train_test_split.txt"
+cub_bounding_boxes = cub_dir / "bounding_boxes.txt"
+cub_labels = cub_dir / "image_class_labels.txt"
+
+
+@cache
+def get_image_id_path_dict() -> dict[int, Path]:
+    """
+    Mapping image ids to their path (relative to the root dir).
+    """
+    image_id_path_dict = {}
+    with open(cub_images_txt, "r") as f:
+        for line in f:
+            image_id, image_subpath = line.split()
+            image_id_path_dict[int(image_id)] = cub_images_dir / image_subpath
+    return image_id_path_dict
+
+
+@cache
+def get_image_id_train_test_dict() -> dict[int, bool]:
+    """
+    Mapping image_id to whether it is a train image or not.
+    """
+    image_id_train_test_dict = {}
+    with open(cub_split_indices_txt, "r") as f:
+        for line in f:
+            image_id, is_train = line.split()
+            image_id_train_test_dict[int(image_id)] = bool(int(is_train))
+    return image_id_train_test_dict
+
+
+@cache
+def get_image_id_bbox_dict() -> dict[int, tuple[int, int, int, int]]:
+    """
+    Mapping image ids to bounding boxes. The bounding boxes are tuples of (left, top, right, bottom).
+    """
+    image_id_bbox_dict = {}
+    with open(cub_bounding_boxes, "r") as f:
+        for line in f:
+            image_id, x, y, w, h = [int(float(i)) for i in line.split()]
+            image_id_bbox_dict[image_id] = (x, y, x + w, y + h)
+    return image_id_bbox_dict
 
 
 def save_cropped_cub_images(overwrite: bool = False):
@@ -74,15 +113,10 @@ def save_cropped_cub_images(overwrite: bool = False):
         save_image(cropped_image, cropped_image_path)
 
         if is_train:
-            # special treatment for train images, we extract corners and full images as candidates for prototypes
-            # and save them in the appropriate directories
-            # TODO: this is a MASSIVE waste of space and I/O, should happen at runtime.
-            #   It is unclear why this is needed at all, prototypes could be extracted from the full images
-            #   or from the cropped images.
-            #   Note that there is a lot of redundancy here as one single image is blown up to 5, each of them
-            #   containing the object. They are later rescaled to the same size before the prototype search begins,
-            #   so the patches in them don't exactly coincide, but I still have the feeling that this treatment
-            #   is an overkill.
+            # special treatment for train images:
+            # we extract corners (larger than the cropped ones) as training images
+            # The center-cropped images are used during the projection as source for the prototypes
+            # TODO: unclear whether that's really necessary, why don't we train on the center-cropped images?
             save_corner_subimages(image, bbox, image_path)
             normal_image_path = (
                 train_corners_dir / image_path.parent.name / f"normal_{image_path.name}"
@@ -92,7 +126,7 @@ def save_cropped_cub_images(overwrite: bool = False):
 
 def get_corner_bbox(
     orientation_y: Literal["upper", "lower"],
-    orientation_x: ["left", "right"],
+    orientation_x: Literal["left", "right"],
     bbox: tuple[int, int, int, int],
     full_size: tuple[int, int],
     margin_percentage=0.1,

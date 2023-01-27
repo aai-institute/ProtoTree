@@ -20,7 +20,6 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     progress_desc: str = "Train Epoch",
 ) -> dict:
-    # TODO: combine this block with the leaf distribution optimization below into a single, separate function
     n_batches = float(len(train_loader))
 
     train_loader = tqdm(
@@ -40,24 +39,20 @@ def train_epoch(
         loss.backward()
         optimizer.step()
 
-        # update the leaf dist_params in a derivative-free fashion
         scaling_factor = 1 - 1 / n_batches
         tree.eval()
         update_leaf_distributions(
             tree.tree_root, y, logits, node_to_prob, scaling_factor
         )
 
-        # Count the number of correct classifications
         y_pred = torch.argmax(logits, dim=1)
         acc = torch.sum(y_pred == y).item() / len(x)
-
-        train_loader.set_postfix_str(f"Loss: {loss.item():.3f}, Acc: {acc:.3f}")
-        # Compute metrics over this batch
+        train_loader.set_postfix_str(f"(batch) loss: {loss.item():.3f}, acc: {acc:.3f}")
         total_loss += loss.item()
         total_acc += acc
 
-    total_loss /= (n_batches + 1)
-    total_acc /= (n_batches + 1)
+    total_loss /= n_batches + 1
+    total_acc /= n_batches + 1
 
     log.info(f"Train Epoch: Loss: {total_loss:.3f}, Acc: {total_acc:.3f}")
     return {

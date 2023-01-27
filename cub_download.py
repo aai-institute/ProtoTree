@@ -11,14 +11,11 @@ URL = "https://drive.google.com/uc?id=1hbzc_P1FuxMkcabkgn9ZKinBwW683j45"
 
 cub_tarball_path = c.cub_dir / "CUB_200_2011.tgz"
 
-overwrite = False
-extract = True
-delete_tar = True
+log = logging.getLogger(Path(__file__).name.rstrip(".py"))
 
 
-def download_cub():
-    if not c.cub_dir.exists():
-        c.cub_dir.mkdir(parents=True)
+def download_cub_tar(overwrite=False):
+    cub_tarball_path.parent.mkdir(parents=True, exist_ok=True)
     if not cub_tarball_path.exists() or overwrite:
         log.info(f"Downloading CUB_200_2011 to {cub_tarball_path}")
         gdown.download(URL, str(cub_tarball_path), quiet=False)
@@ -27,8 +24,11 @@ def download_cub():
 
 
 if __name__ == "__main__":
+    overwrite = False
+    extract = True
+    delete_tar = True
+
     logging.basicConfig(level=logging.INFO)
-    log = logging.getLogger(Path(__file__).name.rstrip(".py"))
 
     if delete_tar and not extract:
         raise ValueError(f"Passing {delete_tar=} when {extract=} is disallowed")
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     if cub_tarball_path.exists() and not overwrite:
         log.info(f"Skipping download b/c {cub_tarball_path} exists and {overwrite=}")
     else:
-        download_cub()
+        download_cub_tar(overwrite=overwrite)
 
     if extract:
         log.info(f"Extracting CUB data to: {c.cub_dir}")

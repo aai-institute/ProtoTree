@@ -4,7 +4,6 @@ import os
 import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
-import torchvision.models as models
 
 model_urls = {
     "resnet18": "https://download.pytorch.org/models/resnet18-5c106cde.pth",

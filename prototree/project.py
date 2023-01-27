@@ -9,6 +9,7 @@ from prototree.models import ProtoTree
 from prototree.node import InternalNode, Node
 
 
+# TODO: generalize to ProtoBase
 @torch.no_grad()
 def replace_prototypes_by_projections(
     tree: ProtoTree,
@@ -19,6 +20,7 @@ def replace_prototypes_by_projections(
     The goal is to find the latent patch that minimizes the L2 distance to each prototype.
     This is done by iterating through a dataset (typically the train dataset) and
     replacing each prototype by the closest latent patch.
+    **Important**: This modifies the prototype weights in-place!
 
     :param tree:
     :param project_loader:
@@ -35,7 +37,7 @@ def replace_prototypes_by_projections(
 
     def process_sample(
         node: InternalNode,
-        image: torch.Tensor,
+        image_latent: torch.Tensor,
         true_label: int,
         sample_patches_distances: torch.Tensor,
         sample_patches: torch.Tensor,
@@ -51,7 +53,7 @@ def replace_prototypes_by_projections(
         ):
             node_to_patch_info[node] = ProjectionPatchInfo(
                 node=node,
-                image=image,
+                image_latent=image_latent,
                 true_label=true_label,
                 closest_patch=closest_patch,
                 closest_patch_distance=closest_patch_distance,
@@ -59,6 +61,8 @@ def replace_prototypes_by_projections(
             )
 
     # TODO: is this the most efficient way of doing this? Maybe reverse loops or vectorize
+    # The logic is: loop over batches -> loop over nodes ->
+    # loop over samples in batch to find closest patch for current node
     w_proto, h_proto = tree.prototype_shape[:2]
     for x, y in tqdm(project_loader, desc="Projection", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
@@ -88,12 +92,15 @@ def replace_prototypes_by_projections(
 
 @dataclass
 class ProjectionPatchInfo:
-    image: torch.Tensor
+    image_latent: torch.Tensor
     true_label: int
     closest_patch: torch.Tensor
     closest_patch_distance: float
     node: InternalNode
     all_patch_distances: torch.Tensor = None
+
+    def get_similarities_latent(self) -> torch.Tensor:
+        return torch.exp(-self.all_patch_distances)
 
 
 def _get_closest_patch(sample_distances: torch.Tensor, sample_patches: torch.Tensor):

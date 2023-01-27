@@ -15,6 +15,8 @@ from prototree.node import InternalNode, Leaf, Node
 log = logging.getLogger(__name__)
 
 
+# TODO: use pydot
+@torch.no_grad()
 def generate_tree_visualization(
     tree: ProtoTree,
     classes: tuple,
@@ -40,12 +42,11 @@ def generate_tree_visualization(
     node_vis_dir.mkdir(parents=True, exist_ok=True)
     upsample_dir.mkdir(parents=True, exist_ok=True)
 
-    with torch.no_grad():
-        s = 'digraph T {margin=0;ranksep=".03";nodesep="0.05";splines="false";\n'
-        s += 'node [shape=rect, label=""];\n'
-        s += _gen_dot_nodes(tree.tree_root, destination_folder, upsample_dir, classes)
-        s += _gen_dot_edges(tree.tree_root, classes)[0]
-        s += "}\n"
+    s = 'digraph T {margin=0;ranksep=".03";nodesep="0.05";splines="false";\n'
+    s += 'node [shape=rect, label=""];\n'
+    s += _gen_dot_nodes(tree.tree_root, destination_folder, upsample_dir, classes)
+    s += _gen_dot_edges(tree.tree_root, classes)[0]
+    s += "}\n"
 
     dot_file = destination_folder / "tree.dot"
     log.info(f"Saving tree visualization to {dot_file}")

@@ -1,5 +1,4 @@
 import argparse
-import os
 import pickle
 from pathlib import Path
 from typing import Literal, Union

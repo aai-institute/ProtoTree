@@ -1,2 +1,6 @@
+
 lovely-tensors
 pptree
+torch
+torchvision
+tqdm

@@ -2,22 +2,30 @@ from argparse import Namespace
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader, default_collate
+from torch.utils.data import DataLoader
 
 from prototree.eval import eval_fidelity, eval_tree
 from prototree.models import ProtoTree
-from prototree.node import InternalNode
+from prototree.node import InternalNode, log_leaves_properties
 from prototree.project import replace_prototypes_by_projections
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from prototree.upsample import save_prototype_visualizations
-from util.analyse import log_pruned_leaf_analysis
+from prototree.visualization import save_prototype_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
-from util.init import init_tree_weights
 from util.log import Log
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
-from util.visualize import generate_tree_visualization
+
+
+@torch.no_grad()
+def apply_xavier(tree: ProtoTree):
+    def _xavier_on_conv(m):
+        if type(m) == torch.nn.Conv2d:
+            torch.nn.init.xavier_normal_(
+                m.weight, gain=torch.nn.init.calculate_gain("sigmoid")
+            )
+
+    tree.add_on.apply(_xavier_on_conv)
 
 
 def save_tree(
@@ -56,7 +64,8 @@ def get_log(log_dir: str):
     return log
 
 
-def run_tree(args: Namespace, skip_visualization=True):
+# TODO: remove dependency on args everywhere
+def run_tree(args: Namespace):
     # data and paths
     dataset = args.dataset
     log_dir = args.log_dir
@@ -78,8 +87,8 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     # Training loop args
     disable_cuda = False
-    epochs = 40
-    evaluate_each_epoch = 20
+    epochs = 10
+    evaluate_each_epoch = 5
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
     freeze_epochs = 0
@@ -98,16 +107,17 @@ def run_tree(args: Namespace, skip_visualization=True):
 
     log = get_log(log_dir)
 
+    # PREPARE DATA
     device = get_device(disable_cuda)
     pin_memory = "cuda" in device.type
-
     train_loader, project_loader, test_loader = get_dataloaders(
-        dataset=dataset,
         pin_memory=pin_memory,
         batch_size=batch_size,
     )
     num_classes = len(test_loader.dataset.classes)
-    log.log_message(f"Num classes (k): {num_classes}")
+    log.log_message(f"Num classes: {num_classes}")
+
+    # PREPARE MODEL
     tree = create_proto_tree(
         h_proto=h_proto,
         w_proto=w_proto,
@@ -120,10 +130,10 @@ def run_tree(args: Namespace, skip_visualization=True):
     print(
         f"Max depth {depth}, so {tree.num_internal_nodes} internal nodes and {tree.num_leaves} leaves"
     )
-
     print(f"Running on: {device}")
     tree = tree.to(device)
 
+    # PREPARE OPTIMIZER AND SCHEDULER
     optimizer, params_to_freeze, params_to_train = get_optimizer(
         tree,
         optim_type,
@@ -140,8 +150,7 @@ def run_tree(args: Namespace, skip_visualization=True):
         optimizer=optimizer, milestones=milestones, gamma=gamma
     )
 
-    # tree.save(f"{log.checkpoint_dir}/tree_init")
-
+    # TRAINING HELPERS
     def should_evaluate(epoch: int):
         if evaluate_each_epoch > 0 and epoch == 0:
             return False
@@ -165,6 +174,7 @@ def run_tree(args: Namespace, skip_visualization=True):
         log.log_message(f"\nFreezing network for {freeze_epochs} epochs.")
         freeze()
 
+    # TRAIN
     print("Starting training")
     for epoch in range(epochs):
         if params_frozen and epoch > freeze_epochs:
@@ -172,55 +182,44 @@ def run_tree(args: Namespace, skip_visualization=True):
             unfreeze()
 
         train_epoch(
-            tree, train_loader, optimizer, progress_desc=f"Train Epoch {epoch}:"
+            tree,
+            train_loader,
+            optimizer,
+            progress_desc=f"Train Epoch {epoch + 1}/{epochs}:",
         )
         scheduler.step()
 
-        log_pruned_leaf_analysis(
+        log_leaves_properties(
             tree.leaves,
             pruning_threshold_leaves,
-            log,
         )
 
         if should_evaluate(epoch):
-            test_acc = eval_tree(
-                tree, test_loader, desc=f"Testing after epoch: {epoch}"
-            )
-            # if test_acc > best_test_acc:
-            #     best_test_acc = test_acc
-            #     tree.save(f"{log.checkpoint_dir}/best_test_model")
-    # only evaluate and for some reason also save, I disabled it for now
-    # else:  # tree was loaded and not trained, so evaluate only
-    #     raise NotImplementedError("This is not implemented yet")
-    # eval_info = eval(tree, test_loader, epoch, device, log)
-    # test_acc = eval_info["test_accuracy"]
-    # save_tree(
-    #     tree, optimizer, scheduler, log.checkpoint_dir, "best_test_model"
-    # )
+            eval_tree(tree, test_loader, desc=f"Testing after epoch: {epoch}")
 
     # EVALUATE AND ANALYSE TRAINED TREE
     print(f"Training Finished.")
     tree = tree.eval()
 
-    log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
+    log_leaves_properties(tree.leaves, pruning_threshold_leaves)
 
     _prune_tree(tree.tree_root, pruning_threshold_leaves, log)
 
-    log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
+    log_leaves_properties(tree.leaves, pruning_threshold_leaves)
     pruned_acc = eval_tree(tree, test_loader, desc="pruned")
     log.log_message(f"\nAccuracy with distributed routing: {pruned_acc:.3f}")
 
     # PROJECT
     print("Projecting prototypes to nearest training patch (with class restrictions)")
     node_to_patch_info = replace_prototypes_by_projections(tree, project_loader)
-    log_pruned_leaf_analysis(tree.leaves, pruning_threshold_leaves, log)
+    log_leaves_properties(tree.leaves, pruning_threshold_leaves)
     test_acc = eval_tree(tree, test_loader, desc="pruned_and_projected")
     log.log_message(f"Test after pruning and projection: {test_acc:.3f}")
 
     perform_final_evaluation(tree, test_loader, log, eval_name="pruned_and_projected")
     tree.tree_root.print_tree()
 
-    # # Upsample prototype for visualization
+    # SAVE VISUALIZATIONS
     viz_path = Path("data") / "visualizations"
     viz_path.mkdir(exist_ok=True, parents=True)
     print(f"Saving prototype visualizations to {viz_path}")
@@ -228,21 +227,14 @@ def run_tree(args: Namespace, skip_visualization=True):
         node_to_patch_info,
         viz_path,
     )
-    # generate_tree_visualization(
-    #     tree,
-    #     name,
-    #     tuple(range(num_classes)),
-    #     log_dir,
-    #     dir_for_saving_images,
-    # )
 
 
 def _prune_tree(root: InternalNode, pruning_threshold_leaves: float, log: Log):
-    log.log_message("\nPruning...")
     log.log_message(
         f"Before pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
     num_nodes_before = len(root.descendant_internal_nodes)
+
     # all work happens here, the rest is just logging
     prune_unconfident_leaves(root, pruning_threshold_leaves)
 
@@ -253,7 +245,6 @@ def _prune_tree(root: InternalNode, pruning_threshold_leaves: float, log: Log):
     log.log_message(f"Fraction of nodes pruned: {frac_nodes_pruned}")
 
 
-# TODO: this only logs stuff and doesn't return anything...
 def perform_final_evaluation(
     projected_pruned_tree: ProtoTree,
     test_loader: DataLoader,
@@ -302,7 +293,7 @@ def create_proto_tree(
         w_proto=w_proto,
         feature_net=features_net,
     )
-    init_tree_weights(tree)
+    apply_xavier(tree)
     return tree
 
 
@@ -326,4 +317,4 @@ if __name__ == "__main__":
                 "lovely_tensors not installed, not monkey patching. "
                 "For more efficient debugging, we recommend installing it with `pip install lovely-tensors`."
             )
-    run_tree(get_args(), skip_visualization=True)
+    run_tree(get_args())
