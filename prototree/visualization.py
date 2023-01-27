@@ -82,9 +82,6 @@ def save_prototype_visualizations(
         original_image = inverse_transform(patch_info.image_latent)
         original_image = np.array(original_image, dtype=np.float32) / 255
 
-        # # TODO: are there grayscale images?
-        # if original_image.ndim == 2:  # convert grayscale to RGB
-        #     original_image = np.stack((x,) * 3, axis=-1)
         # closest_patch_in_pixels = original_image[
         #     h_low:h_high,
         #     w_low:w_high,
@@ -93,7 +90,7 @@ def save_prototype_visualizations(
         # save(closest_patch_in_pixels, f"{node.index}_closest_patch.png")
 
         im_with_bbox = get_im_with_bbox(original_image, h_low, h_high, w_low, w_high)
-        save(im_with_bbox, f"{node.index}_bounding_box_closes_patch.png")
+        save(im_with_bbox, f"{node.index}_bounding_box_closest_patch.png")
 
         if save_heatmaps:
             pixel_heatmap = latent_to_pixel(similarity_map)

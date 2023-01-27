@@ -77,7 +77,7 @@ def train_prototree(args: Namespace):
     # Optimizer args
     optim_type = args.optimizer
     # batch_size = args.batch_size
-    batch_size = 32
+    batch_size = 40
     lr = args.lr
     lr_block = args.lr_block
     lr_net = args.lr_net
@@ -87,7 +87,7 @@ def train_prototree(args: Namespace):
 
     # Training loop args
     disable_cuda = False
-    epochs = 30
+    epochs = 100
     evaluate_each_epoch = 5
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
@@ -95,7 +95,7 @@ def train_prototree(args: Namespace):
 
     # prototree specifics
     pruning_threshold_percentage = 0.1
-    pruning_threshold_leaves = 1 / 3 * (1 + pruning_threshold_percentage)
+    pruning_threshold_leaves = 1 / 200 * (1 + pruning_threshold_percentage)
 
     # Architecture args
     backbone = args.backbone
@@ -103,7 +103,7 @@ def train_prototree(args: Namespace):
     h_proto = 1
     w_proto = 1
     channels_proto = args.num_features
-    depth = 6
+    depth = 9
 
     log = get_log(log_dir)
 
