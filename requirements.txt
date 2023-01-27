@@ -1,6 +1,8 @@
-
 lovely-tensors
 pptree
 torch
 torchvision
 tqdm
+Pillow
+install opencv-python-headless
+matplotlib

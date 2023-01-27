@@ -83,7 +83,7 @@ def save_cropped_cub_images(overwrite: bool = False):
     image_id_train_test_dict = get_image_id_train_test_dict()
     image_id_bbox_dict = get_image_id_bbox_dict()
 
-    for image_id, is_train in tqdm(image_id_train_test_dict.items()):
+    for image_id, is_train in tqdm(image_id_train_test_dict.items(), desc="Saving processed images"):
         is_test = not is_train
         image_path = image_id_path_dict[image_id]
         bbox = image_id_bbox_dict[image_id]

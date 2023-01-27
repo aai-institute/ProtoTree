@@ -23,6 +23,7 @@ def download_cub_tar(overwrite=False):
         log.info(f"Using existing CUB_200_2011 at {cub_tarball_path}")
 
 
+# TODO: fix directory structure, currently it's CUB_200_2011/CUB_200_2011
 if __name__ == "__main__":
     overwrite = False
     extract = True
