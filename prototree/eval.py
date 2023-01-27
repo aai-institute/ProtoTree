@@ -15,7 +15,7 @@ def eval_tree(
     tree: ProtoTree,
     data_loader: DataLoader,
     sampling_strategy: SamplingStrategy = "distributed",
-    desc: str = "evaluation",
+    desc: str = "Evaluating",
 ) -> float:
     """
 
@@ -28,14 +28,19 @@ def eval_tree(
     tree.eval()
     tqdm_loader = tqdm(data_loader, desc=desc, ncols=0)
     leaf_depths = []
+    total_acc = 0
+    n_batches = len(tqdm_loader)
+
     for x, y in tqdm_loader:
         x, y = x.to(tree.device), y.to(tree.device)
         logits, _, predicting_leaves = tree.forward(
             x, sampling_strategy=sampling_strategy
         )
         y_pred = torch.argmax(logits, dim=1)
-        acc = (y_pred == y).sum().item() / len(y)
-        tqdm_loader.set_postfix_str(f"Acc: {acc:.3f}")
+        batch_acc = (y_pred == y).sum().item() / len(y)
+        tqdm_loader.set_postfix_str(f"(batch) acc: {batch_acc:.3f}")
+        total_acc += batch_acc / n_batches
+
         # TODO: maybe factor out
         if predicting_leaves:
             leaf_depths.extend([leaf.depth() for leaf in set(predicting_leaves)])
@@ -43,12 +48,12 @@ def eval_tree(
     if leaf_depths:
         leaf_depths = np.array(leaf_depths)
         print(
-            f"Average path length is {leaf_depths.mean():.2f} with std {leaf_depths.std():.2f}"
+            f"\nAverage path length is {leaf_depths.mean():.2f} with std {leaf_depths.std():.2f}"
         )
         print(
             f"Longest path has length {leaf_depths.max()}, shortest path has length {leaf_depths.min()}"
         )
-    return acc
+    return total_acc
 
 
 @torch.no_grad()
@@ -71,57 +76,6 @@ def eval_fidelity(
             result_dict[sampling_strategy] += batch_fidelity / (len(y) * n_batches)
 
     return result_dict
-
-
-#
-# @torch.no_grad()
-# def eval_ensemble(
-#     trees: list,
-#     test_loader: DataLoader,
-#     device,
-#     log: Log,
-#     args: argparse.Namespace,
-#     sampling_strategy: str = "distributed",
-#     progress_prefix: str = "Eval Ensemble",
-# ):
-#     # Keep an info dict about the procedure
-#     info = dict()
-#     # Build a confusion matrix
-#     cm = np.zeros((trees[0]._num_classes, trees[0]._num_classes), dtype=int)
-#
-#     # Show progress on progress bar
-#     test_iter = tqdm(
-#         enumerate(test_loader), total=len(test_loader), desc=progress_prefix, ncols=0
-#     )
-#
-#     # Iterate through the test set
-#     for i, (xs, ys) in test_iter:
-#         xs, ys = xs.to(device), ys.to(device)
-#         outs = []
-#         for tree in trees:
-#             # Make sure the model is in evaluation mode
-#             tree.eval_tree()
-#             tree = tree.to(device)
-#             # Use the model to classify this batch of input data
-#             out, _ = tree.forward(xs, sampling_strategy)
-#             outs.append(out)
-#             del out
-#         stacked = torch.stack(outs, dim=0)
-#         ys_pred = torch.argmax(torch.mean(stacked, dim=0), dim=1)
-#
-#         for y_pred, y_true in zip(ys_pred, ys):
-#             cm[y_true][y_pred] += 1
-#
-#         test_iter.set_postfix_str(f"Batch [{i + 1}/{len(test_iter)}]")
-#         del outs
-#
-#     info["confusion_matrix"] = cm
-#     info["test_accuracy"] = acc_from_cm(cm)
-#     log.log_message(
-#         "Ensemble accuracy with %s routing: %s"
-#         % (sampling_strategy, str(info["test_accuracy"]))
-#     )
-#     return info
 
 
 # TODO: use some inbuilt of torch or sklearn
