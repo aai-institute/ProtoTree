@@ -11,7 +11,7 @@ from torch.nn import functional as F
 
 # TODO: a lot of stuff here is very poorly optimized, multiple time exponential complexity calls, even in properties
 
-T = TypeVar("T")
+TNode = TypeVar("TNode", bound="Node")
 log = logging.getLogger(__name__)
 
 
@@ -35,12 +35,14 @@ def log1mexp(log_p: torch.Tensor) -> torch.Tensor:
 
 # TODO: replace properties by methods, they are actually rather expensive to compute!
 class Node(ABC):
-    def __init__(self, index: int, parent: "InternalNode" = None):
+    def __init__(self, index: int, parent: Optional["InternalNode"] = None):
         super().__init__()
         self.parent = parent
         self.index = index
 
-    def get_path_from_ancestor(self, start_node: "Node" = None) -> list["Node"]:
+    def get_path_from_ancestor(
+        self, start_node: Optional["Node"] = None
+    ) -> list["Node"]:
         """
         Returns a path from the selected start_node to self.
 
@@ -93,7 +95,7 @@ class Node(ABC):
         return self.parent.right == self
 
     @property
-    def sibling(self: T) -> T:
+    def sibling(self: TNode) -> TNode:
         return self.parent.left if self.is_right_child else self.parent.right
 
     @property
@@ -108,7 +110,10 @@ class Node(ABC):
     def name(self):
         return str(self.index)
 
-    def forward(self, node_to_probs: dict["Node", "NodeProbabilities"]) -> torch.Tensor:
+    @abstractmethod
+    def forward(
+        self, node_to_probs: dict[Union["InternalNode", "Leaf"], "NodeProbabilities"]
+    ) -> torch.Tensor:
         """
         Computes the predicted logits for the batch
 
@@ -130,7 +135,7 @@ class Node(ABC):
         return len(self.descendants)
 
     @property
-    def descendants(self) -> list["Node"]:
+    def descendants(self) -> list[Union["Leaf", "InternalNode"]]:
         return self.descendant_internal_nodes + self.leaves
 
     @property
@@ -186,21 +191,21 @@ class InternalNode(Node):
     def __init__(
         self,
         index: int,
-        left: Node = None,
-        right: Node = None,
-        parent: "InternalNode" = None,
+        left: Union["InternalNode", "Leaf"] = None,
+        right: Union["InternalNode", "Leaf"] = None,
+        parent: Optional["InternalNode"] = None,
     ):
         super().__init__(index, parent=parent)
         # not optional b/c in a healthy tree, every node has a left and right child
         # they can be passed as None in init b/c it is more convenient to create a tree this way,
         # see create_tree implementation
-        self.left: Union[InternalNode, Leaf] = left
-        self.right: Union[InternalNode, Leaf] = right
+        self.left = left
+        self.right = right
 
     # TODO: remove kwargs everywhere, make leaf and internal node forwards consistent
     def forward(
         self,
-        node_to_probs: dict[Node, "NodeProbabilities"],
+        node_to_probs: dict[Union["InternalNode", "Leaf"], "NodeProbabilities"],
     ):
         probs = node_to_probs[self]
 
@@ -227,7 +232,7 @@ class InternalNode(Node):
         return [leaf for child in self.child_nodes for leaf in child.leaves]
 
     @property
-    def child_nodes(self) -> list["Node"]:
+    def child_nodes(self) -> list[Union["InternalNode", "Leaf"]]:
         return [self.left, self.right]
 
     @property
@@ -254,16 +259,9 @@ class Leaf(Node):
         parent: InternalNode = None,
     ):
         super().__init__(index, parent=parent)
-        # TODO: disallow gradient based optim altogether? Apparently it doesn't converge at all
-        derivative_free_optim = True
-
-        if derivative_free_optim:
-            initial_dist, requires_grad = torch.zeros(num_classes), False
-        else:
-            initial_dist, requires_grad = torch.randn(num_classes), True
 
         self.num_classes = num_classes
-        self.dist_params = nn.Parameter(initial_dist, requires_grad=requires_grad)
+        self.dist_params = nn.Parameter(torch.zeros(num_classes), requires_grad=False)
 
     def to(self, *args, **kwargs):
         self.dist_params = self.dist_params.to(*args, **kwargs)
@@ -276,7 +274,9 @@ class Leaf(Node):
         return self.y_proba().max().item()
 
     # Note: this doesn't compute anything, it just returns the stored distribution copied batch_size times.
-    def forward(self, node_to_probs: dict[Node, "NodeProbabilities"]) -> torch.Tensor:
+    def forward(
+        self, node_to_probs: dict[Union["InternalNode", "Leaf"], "NodeProbabilities"]
+    ) -> torch.Tensor:
         return self.logits_batch(node_to_probs[self].batch_size)
 
     def logits_batch(self, batch_size: int) -> torch.Tensor:
@@ -454,11 +454,11 @@ def _health_check_height_depth(root: Node):
             node_min_height = node.min_height()
             assert (
                 node_max_height <= cur_max_height
-            ), f"Node {node} has height {node.height} but should be at most {cur_max_height}"
+            ), f"Node {node} has max_height {node.max_height} but should be at most {cur_max_height}"
             if node.is_leaf:
                 assert (
                     node_max_height == 0
-                ), f"Leaf {node} has height {node.height} but should be 0"
+                ), f"Leaf {node} has max_height {node.max_height} but should be 0"
             else:
                 assert (
                     node_min_height >= 1

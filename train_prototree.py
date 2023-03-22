@@ -77,7 +77,7 @@ def train_prototree(args: Namespace):
     # Optimizer args
     optim_type = args.optimizer
     # batch_size = args.batch_size
-    batch_size = 40
+    batch_size = 64
     lr = args.lr
     lr_block = args.lr_block
     lr_net = args.lr_net
@@ -91,7 +91,7 @@ def train_prototree(args: Namespace):
     evaluate_each_epoch = 5
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
-    freeze_epochs = 0
+    freeze_epochs = 30
 
     # prototree specifics
     pruning_threshold_percentage = 0.1
@@ -310,7 +310,7 @@ def create_proto_tree(
 
 def get_device(disable_cuda=False):
     if not disable_cuda and torch.cuda.is_available():
-        device_str = f"cuda:{torch.cuda.current_device()}"
+        device_str = f"cuda:2"
     else:
         device_str = "cpu"
     return torch.device(device_str)

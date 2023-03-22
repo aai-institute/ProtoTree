@@ -119,8 +119,7 @@ def update_leaf(
     dist_update = torch.exp(log_dist_update)
     # TODO: why is this scaling of dist_params needed?
     leaf.dist_params *= scaling_factor
-    leaf.dist_params += dist_update
     # dist_params values can get slightly negative because of floating point issues, so set to zero.
-    # TODO: previously this line had no effect, I reinstated it. I hope it doesn't break stuff...
-    #   Unclear why we would need this at all, dist_params only go out with softmax and can be negative
-    F.relu(leaf.dist_params, inplace=True)
+    # TODO: Unclear why we would need this at all, dist_params only go out with softmax and can be negative
+    F.relu_(leaf.dist_params)
+    leaf.dist_params += dist_update
