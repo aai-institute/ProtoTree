@@ -107,10 +107,6 @@ def update_leaf(
     log_p_arrival = node_to_prob[leaf].log_p_arrival.unsqueeze(1)
     # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
     leaf_logits = leaf.logits()
-    # TODO: clarify what is happening here. torch.log(target) seems to contain
-    #   negative infinity everywhere and zero at one place.
-    #   We are also summing together tensors of different shapes.
-    #   There is probably a clearer and more efficient way to compute this, also check paper
 
     masked_log_p_arrival = y_true_mask * log_p_arrival
     masked_leaf_logits = y_true_mask * leaf_logits
@@ -118,8 +114,10 @@ def update_leaf(
 
     log_combined = masked_log_p_arrival + masked_leaf_logits - masked_logits
 
+    combined = log_combined.to_dense()
+    combined = torch.where(combined == 0.0, -torch.inf, combined)
     log_dist_update = torch.logsumexp(
-        log_combined.to_dense(),
+        combined,
         dim=0,
     )
 

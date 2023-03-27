@@ -298,8 +298,9 @@ if __name__ == "__main__":
     DEBUG = True
     if DEBUG:
         try:
-            import lovely_tensors
-            lovely_tensors.monkey_patch()
+            #import lovely_tensors
+            #lovely_tensors.monkey_patch()
+            pass
         except ImportError:
             log.warn(
                 "lovely_tensors not installed, not monkey patching. "
