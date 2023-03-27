@@ -166,19 +166,6 @@ def get_args() -> argparse.Namespace:
         "networks are initialized with weights from ImageNet",
     )
     parser.add_argument(
-        "--kontschieder_train",
-        action="store_true",
-        help="Flag that first trains the leaves for one epoch, and then trains the rest of ProtoTree (instead of "
-        "interleaving leaf and other updates). Computationally more expensive.",
-    )
-    parser.add_argument(
-        "--kontschieder_normalization",
-        action="store_true",
-        help="Flag that disables softmax but uses a normalization factor to convert the leaf parameters to a "
-        "probability distribution, as done by Kontschieder et al. (2015). Will iterate over the data 10 times "
-        "to update the leaves. Computationally more expensive.",
-    )
-    parser.add_argument(
         "--pruning_threshold_leaves",
         type=float,
         default=0.055,  # TODO: Where does this value come from?
