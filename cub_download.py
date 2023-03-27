@@ -1,7 +1,8 @@
 import logging
+from pathlib import Path
+import shutil
 import sys
 import tarfile
-from pathlib import Path
 
 import gdown
 
@@ -23,7 +24,6 @@ def download_cub_tar(overwrite=False):
         log.info(f"Using existing CUB_200_2011 at {cub_tarball_path}")
 
 
-# TODO: fix directory structure, currently it's CUB_200_2011/CUB_200_2011
 if __name__ == "__main__":
     overwrite = False
     extract = True
@@ -53,5 +53,10 @@ if __name__ == "__main__":
         if delete_tar:
             log.info(f"Deleting CUB data tarball: {cub_tarball_path}")
             cub_tarball_path.unlink()
+
+        cub_extracted_data_dir = c.cub_dir / "CUB_200_2011"
+        log.info(f"Moving main CUB data from {cub_extracted_data_dir} to {c.cub_dir}")
+        shutil.copytree(cub_extracted_data_dir, c.cub_dir, dirs_exist_ok=True)
+        shutil.rmtree(cub_extracted_data_dir)
 
     log.info(f"CUB data is ready to be used in {c.cub_dir}")
