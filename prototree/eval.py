@@ -1,4 +1,5 @@
 from collections import defaultdict
+import logging
 
 import numpy as np
 import torch
@@ -8,6 +9,8 @@ from tqdm import tqdm
 
 from prototree.models import ProtoTree
 from prototree.types import SamplingStrategy
+
+log = logging.getLogger(__name__)
 
 
 @torch.no_grad()
@@ -51,10 +54,10 @@ def eval_tree(
 
     if leaf_depths:
         leaf_depths = np.array(leaf_depths)
-        print(
+        log.info(
             f"\nAverage path length is {leaf_depths.mean():.3f} with std {leaf_depths.std():.3f}"
         )
-        print(
+        log.info(
             f"Longest path has length {leaf_depths.max()}, shortest path has length {leaf_depths.min()}"
         )
     return avg_acc

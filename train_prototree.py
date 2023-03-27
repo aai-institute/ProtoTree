@@ -1,5 +1,7 @@
 from argparse import Namespace
 from pathlib import Path
+import logging
+from typing import Literal
 
 import torch
 from torch.utils.data import DataLoader
@@ -13,8 +15,9 @@ from prototree.train import train_epoch
 from prototree.visualization import save_prototype_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
-from util.log import Log
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
+
+log = logging.getLogger(__name__)
 
 
 @torch.no_grad()
@@ -41,27 +44,6 @@ def save_tree(
     tree.save_state(basedir)
     torch.save(optimizer.state_dict(), basedir / "optimizer_state.pth")
     torch.save(scheduler.state_dict(), basedir / "scheduler_state.pth")
-
-
-# TODO: use ptl, make this obsolete
-def get_log(log_dir: str):
-    log = Log(log_dir)
-    print("Log dir: ", log_dir, flush=True)
-    log.create_log(
-        "log_epoch_overview",
-        "epoch",
-        "test_acc",
-        "mean_train_acc",
-        "mean_train_crossentropy_loss_during_epoch",
-    )
-    log.create_log(
-        "log_train_epochs_losses",
-        "epoch",
-        "batch",
-        "loss",
-        "batch_train_acc",
-    )
-    return log
 
 
 # TODO: remove dependency on args everywhere
@@ -102,8 +84,7 @@ def train_prototree(args: Namespace):
     channels_proto = args.num_features
     depth = args.depth
 
-    log = get_log(log_dir)
-    log.log_message(f"Training and testing ProtoTree with {args=}.")
+    log.info(f"Training and testing ProtoTree with {args=}.")
 
     # PREPARE DATA
     device = get_device(disable_cuda)
@@ -113,7 +94,7 @@ def train_prototree(args: Namespace):
         batch_size=batch_size,
     )
     num_classes = len(test_loader.dataset.classes)
-    log.log_message(f"Num classes: {num_classes}")
+    log.info(f"Num classes: {num_classes}")
 
     # PREPARE MODEL
     tree = create_proto_tree(
@@ -125,10 +106,10 @@ def train_prototree(args: Namespace):
         backbone=backbone,
         pretrained=pretrained,
     )
-    log.log_message(
+    log.info(
         f"Max depth {depth}, so {tree.num_internal_nodes} internal nodes and {tree.num_leaves} leaves."
     )
-    log.log_message(f"Running on {device=}")
+    log.info(f"Running on {device=}")
     tree = tree.to(device)
 
     # PREPARE OPTIMIZER AND SCHEDULER
@@ -168,14 +149,14 @@ def train_prototree(args: Namespace):
         params_frozen = False
 
     if freeze_epochs > 0:
-        log.log_message(f"\nFreezing network for {freeze_epochs} epochs.")
+        log.info(f"\nFreezing network for {freeze_epochs} epochs.")
         freeze()
 
     # TRAIN
-    log.log_message("Starting training.")
+    log.info("Starting training.")
     for epoch in range(1, epochs + 1):
         if params_frozen and epoch > freeze_epochs:
-            log.log_message(f"\nUnfreezing network at {epoch=}.")
+            log.info(f"\nUnfreezing network at {epoch=}.")
             unfreeze()
 
         train_epoch(
@@ -193,36 +174,36 @@ def train_prototree(args: Namespace):
 
         if should_evaluate(epoch):
             eval_tree(tree, test_loader, desc=f"Testing after epoch: {epoch}")
-    log.log_message(f"Finished training.")
+    log.info(f"Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE
     tree = tree.eval()
     perform_final_evaluation(
-        tree, train_loader, log, eval_name="Sampling strategies on train data"
+        tree, train_loader, eval_name="Sampling strategies on train data"
     )
 
     log_leaves_properties(tree.leaves, pruning_threshold_leaves)
 
-    _prune_tree(tree.tree_root, pruning_threshold_leaves, log)
+    _prune_tree(tree.tree_root, pruning_threshold_leaves)
 
     log_leaves_properties(tree.leaves, pruning_threshold_leaves)
     pruned_acc = eval_tree(tree, test_loader, desc="pruned")
-    log.log_message(f"\nTest acc. after pruning: {pruned_acc:.3f}")
+    log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
 
     # PROJECT
-    log.log_message("Projecting prototypes to nearest training patch (with class restrictions).")
+    log.info("Projecting prototypes to nearest training patch (with class restrictions).")
     node_to_patch_info = replace_prototypes_by_projections(tree, project_loader)
     log_leaves_properties(tree.leaves, pruning_threshold_leaves)
     test_acc = eval_tree(tree, test_loader)
-    log.log_message(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
+    log.info(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
 
-    perform_final_evaluation(tree, test_loader, log)
+    perform_final_evaluation(tree, test_loader)
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
     viz_path = Path("data") / "visualizations"
     viz_path.mkdir(exist_ok=True, parents=True)
-    log.log_message(f"Saving prototype visualizations to {viz_path}.")
+    log.info(f"Saving prototype visualizations to {viz_path}.")
     save_prototype_visualizations(
         node_to_patch_info,
         viz_path,
@@ -231,8 +212,8 @@ def train_prototree(args: Namespace):
     return tree
 
 
-def _prune_tree(root: InternalNode, pruning_threshold_leaves: float, log: Log):
-    log.log_message(
+def _prune_tree(root: InternalNode, pruning_threshold_leaves: float):
+    log.info(
         f"Before pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
     num_nodes_before = len(root.descendant_internal_nodes)
@@ -241,21 +222,20 @@ def _prune_tree(root: InternalNode, pruning_threshold_leaves: float, log: Log):
     prune_unconfident_leaves(root, pruning_threshold_leaves)
 
     frac_nodes_pruned = 1 - len(root.descendant_internal_nodes) / num_nodes_before
-    log.log_message(
+    log.info(
         f"After pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
-    log.log_message(f"Fraction of nodes pruned: {frac_nodes_pruned}")
+    log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")
 
 
 def perform_final_evaluation(
     projected_pruned_tree: ProtoTree,
     test_loader: DataLoader,
-    log: Log,
     eval_name="Final evaluation",
 ):
-    test_sampling_strategies = ["sample_max", "greedy"]
-    strat2acc = {}
-    for sampling_strategy in ["sample_max", "greedy"]:
+    test_sampling_strategies: list[Literal] = ["sample_max", "greedy"]
+    strat2acc: dict[Literal, float] = {}
+    for sampling_strategy in test_sampling_strategies:
         acc = eval_tree(
             projected_pruned_tree,
             test_loader,
@@ -265,8 +245,8 @@ def perform_final_evaluation(
         strat2acc[sampling_strategy] = acc
     strat2fidelity = eval_fidelity(projected_pruned_tree, test_loader)
     for strategy in test_sampling_strategies:
-        log.log_message(f"Accuracy of {strategy} routing: {strat2acc[strategy]:.2f}")
-        log.log_message(
+        log.info(f"Accuracy of {strategy} routing: {strat2acc[strategy]:.2f}")
+        log.info(
             f"Fidelity of {strategy} routing: {strat2fidelity[strategy]:.2f}"
         )
 
@@ -318,13 +298,12 @@ if __name__ == "__main__":
     if DEBUG:
         try:
             import lovely_tensors
-
             lovely_tensors.monkey_patch()
         except ImportError:
-            print(
+            log.warn(
                 "lovely_tensors not installed, not monkey patching. "
                 "For more efficient debugging, we recommend installing it with `pip install lovely-tensors`."
             )
 
-    args = get_args()
-    train_prototree(args)
+    parsed_args = get_args()
+    train_prototree(parsed_args)
