@@ -8,6 +8,7 @@ This will probably be turned into a Python package and moved to a new repository
 1. Create a Python >=3.9 environment.
 2. Install requirements from `requirements.txt` and `requirements-download.txt`.
 3. Install [Graphviz](https://graphviz.org/). With the current code you need to be able to call `dot` from the terminal.
+4. You can train the tree model and see its performance on the test set with `python train_prototree.py`. 
 
 ### For CUB dataset
 1. Run `cub_download.py`.
