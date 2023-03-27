@@ -43,7 +43,10 @@ class PrototypeBase(nn.Module):
         self.net = feature_net
 
     def _init_prototype_layer(self):
-        # TODO: wassup with the constants?
+        # TODO: The parameters in this hardcoded initialization seem to (very, very) roughly correspond to a random
+        #  average-looking latent patch (which is a good start point for the prototypes), but it would be nice if we had
+        #  a more principled way of choosing the initialization.
+        # NOTE: The paper means std=0.1 when it says N(0.5, 0.1), not var=0.1.
         torch.nn.init.normal_(self.prototype_layer.prototype_tensors, mean=0.5, std=0.1)
 
     def extract_features(self, x: torch.Tensor) -> torch.Tensor:

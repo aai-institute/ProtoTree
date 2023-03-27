@@ -26,6 +26,9 @@ class L2Conv2D(nn.Module):
         self.prototype_shape = (w, h, input_channels)
         # TODO: make consistent ordering!!
         prototype_shape = (num_prototypes, input_channels, w, h)
+
+        # TODO: N(0, 1) here isn't the final value, it's set again in _init_prototype_layer. Is is possible to make this
+        #  clearer?
         self.prototype_tensors = nn.Parameter(
             torch.randn(*prototype_shape), requires_grad=True
         )
