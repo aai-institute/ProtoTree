@@ -9,7 +9,6 @@ from tqdm import tqdm
 
 from prototree.models import ProtoTree
 from prototree.node import Leaf, Node, NodeProbabilities
-from util.log import Log
 
 log = logging.getLogger(__name__)
 
@@ -121,9 +120,6 @@ def update_leaf(
     # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
     # weighted moving average, designed to ensure stability of the leaf class probability distributions (
     # leaf.dist_params), by filtering out noise from minibatching in the optimization.
-    leaf.dist_params *= scaling_factor
+    leaf.dist_params.mul_(scaling_factor)
 
-    # dist_params values can get slightly negative because of floating point issues, so set to zero.
-    # TODO: Unclear why we would need this at all, dist_params only go out with softmax and can be negative
-    F.relu_(leaf.dist_params)
-    leaf.dist_params += dist_update
+    leaf.dist_params.add_(dist_update)
