@@ -288,7 +288,7 @@ def create_proto_tree(
 
 def get_device(disable_cuda=False):
     if not disable_cuda and torch.cuda.is_available():
-        device_str = f"cuda:2"  # TODO: Spread this out to allow for multiple processes on multi-GPU machines.
+        device_str = f"cuda:2"  # TODO: Spread this out to allow for more processes on multi-GPU machines.
     else:
         device_str = "cpu"
     return torch.device(device_str)
