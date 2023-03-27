@@ -1,6 +1,7 @@
 import logging
 
 import torch
+from torch.masked import masked_tensor
 import torch.nn.functional as F
 import torch.optim
 import torch.utils.data
@@ -79,28 +80,26 @@ def update_leaf_distributions(
     :param scaling_factor: usually 1 - 1/n_batches. TODO: understand its role
     :return:
     """
-    num_classes = logits.shape[-1]
-
-    log_eye = torch.log(torch.eye(num_classes, device=y_true.device))
-    # one_hot encoded logits, -inf everywhere, zero at one entry
-    target_logits = log_eye[y_true]
+    batch_size, _ = logits.shape
+    y_true_range = torch.arange(0, batch_size)
+    y_true_indices = torch.stack((y_true_range, y_true))
+    y_true_mask = torch.sparse_coo_tensor(y_true_indices, torch.ones_like(y_true, dtype=torch.bool), logits.shape)
     for leaf in root.leaves:
-        update_leaf(leaf, node_to_prob, logits, target_logits, scaling_factor)
+        update_leaf(leaf, node_to_prob, logits, y_true_mask, scaling_factor)
 
 
 def update_leaf(
     leaf: Leaf,
     node_to_prob: dict[Node, NodeProbabilities],
     logits: torch.Tensor,
-    target_logits: torch.Tensor,
+    y_true_mask: torch.Tensor,
     scaling_factor: float,
 ):
     """
-
     :param leaf:
     :param node_to_prob:
     :param logits: of shape (batch_size, k)
-    :param target_logits: of shape (batch_size, k)
+    :param y_true_mask: of shape (batch_size, k)
     :param scaling_factor:
     :return:
     """
@@ -112,12 +111,20 @@ def update_leaf(
     #   negative infinity everywhere and zero at one place.
     #   We are also summing together tensors of different shapes.
     #   There is probably a clearer and more efficient way to compute this, also check paper
-    log_dist_update = torch.logsumexp(
-        log_p_arrival + leaf_logits + target_logits - logits,
-        dim=0,
-    )
-    # should have zero everywhere except one entry
-    dist_update = torch.exp(log_dist_update)
+
+    masked_log_p_arrival = y_true_mask * log_p_arrival
+    masked_leaf_logits = y_true_mask * leaf_logits
+    masked_logits = logits.sparse_mask(y_true_mask.coalesce())
+
+    log_combined = masked_log_p_arrival + masked_leaf_logits - masked_logits
+    combined = torch.exp(log_combined.to_dense())
+
+    # log_dist_update = torch.logsumexp(
+    #     combined,
+    #     dim=0,
+    # )
+
+    dist_update = torch.sum(combined, (0,))
 
     # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
     # weighted moving average, designed to ensure stability of the leaf class probability distributions (
