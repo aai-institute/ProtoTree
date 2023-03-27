@@ -25,6 +25,7 @@ def train_epoch(
         train_loader,
         desc=progress_desc,
     )
+    tqdm_loader.update()  # Stops earlier logging appearing after tqdm starts showing progress.
     tree.train()
 
     total_loss = 0.0

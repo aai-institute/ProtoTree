@@ -125,10 +125,10 @@ def train_prototree(args: Namespace):
         backbone=backbone,
         pretrained=pretrained,
     )
-    print(
-        f"Max depth {depth}, so {tree.num_internal_nodes} internal nodes and {tree.num_leaves} leaves"
+    log.log_message(
+        f"Max depth {depth}, so {tree.num_internal_nodes} internal nodes and {tree.num_leaves} leaves."
     )
-    print(f"Running on: {device}")
+    log.log_message(f"Running on {device=}")
     tree = tree.to(device)
 
     # PREPARE OPTIMIZER AND SCHEDULER
@@ -172,7 +172,7 @@ def train_prototree(args: Namespace):
         freeze()
 
     # TRAIN
-    print("Starting training")
+    log.log_message("Starting training.")
     for epoch in range(1, epochs + 1):
         if params_frozen and epoch > freeze_epochs:
             log.log_message(f"\nUnfreezing network at {epoch=}.")
@@ -193,7 +193,7 @@ def train_prototree(args: Namespace):
 
         if should_evaluate(epoch):
             eval_tree(tree, test_loader, desc=f"Testing after epoch: {epoch}")
-    print(f"Training Finished.")
+    log.log_message(f"Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE
     tree = tree.eval()
@@ -210,7 +210,7 @@ def train_prototree(args: Namespace):
     log.log_message(f"\nTest acc. after pruning: {pruned_acc:.3f}")
 
     # PROJECT
-    print("Projecting prototypes to nearest training patch (with class restrictions)")
+    log.log_message("Projecting prototypes to nearest training patch (with class restrictions).")
     node_to_patch_info = replace_prototypes_by_projections(tree, project_loader)
     log_leaves_properties(tree.leaves, pruning_threshold_leaves)
     test_acc = eval_tree(tree, test_loader)
@@ -222,7 +222,7 @@ def train_prototree(args: Namespace):
     # SAVE VISUALIZATIONS
     viz_path = Path("data") / "visualizations"
     viz_path.mkdir(exist_ok=True, parents=True)
-    print(f"Saving prototype visualizations to {viz_path}")
+    log.log_message(f"Saving prototype visualizations to {viz_path}.")
     save_prototype_visualizations(
         node_to_patch_info,
         viz_path,
@@ -307,7 +307,7 @@ def create_proto_tree(
 
 def get_device(disable_cuda=False):
     if not disable_cuda and torch.cuda.is_available():
-        device_str = f"cuda:2"
+        device_str = f"cuda:2"  # TODO: Spread this out to allow for multiple processes on multi-GPU machines.
     else:
         device_str = "cpu"
     return torch.device(device_str)

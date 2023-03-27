@@ -4,7 +4,7 @@ from pathlib import Path
 from util.args import save_args
 
 
-# TODO: won't work on windows, either fix or remove entirely
+# TODO: Why has the code rolled its own logging library? (Also, this doesn't work on Windows.)
 class Log:
 
     """
