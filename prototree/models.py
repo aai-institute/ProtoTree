@@ -6,10 +6,10 @@ from typing import List, Literal, Optional, Union
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
 from prototree.types import SamplingStrategy
+from util.func import min_pool2d
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers
 
@@ -67,10 +67,12 @@ class PrototypeBase(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Computes the minimal distances between the prototypes and the input.
-        The output has the shape (batch_size, num_prototypes)
+        The input has the shape (batch_size, num_channels, H, W).
+        The output has the shape (batch_size, num_prototypes).
         """
         x = self.prototype_distances_per_patch(x)
-        return F.max_pool2d(x, kernel_size=x.shape[-2:]).squeeze()
+        kernel_size = x.shape[-2:]
+        return min_pool2d(x, kernel_size).squeeze()
 
     @property
     def device(self):
