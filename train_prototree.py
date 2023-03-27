@@ -17,6 +17,7 @@ from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
 
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
@@ -149,7 +150,7 @@ def train_prototree(args: Namespace):
         params_frozen = False
 
     if freeze_epochs > 0:
-        log.info(f"\nFreezing network for {freeze_epochs} epochs.")
+        log.info(f"Freezing network for {freeze_epochs} epochs.")
         freeze()
 
     # TRAIN
