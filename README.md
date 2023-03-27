@@ -1,6 +1,16 @@
 # ProtoTrees
 
-Refactoring the original repository to make it more modular and easier to use.
-Will probable be turned into a python package and moved to a new repository.
+Refactored version of https://github.com/M-Nauta/ProtoTree and parts of https://github.com/cfchen-duke/ProtoPNet to make them more modular and easier to use.
+This will probably be turned into a Python package and moved to a new repository.
 
-WIP
+## Setup
+### For all datasets
+1. Create a Python >=3.9 environment.
+2. Install requirements from `requirements.txt` and `requirements-download.txt`.
+3. Install [Graphviz](https://graphviz.org/). With the current code you need to be able to call `dot` from the terminal.
+4. You can train the tree model and see its performance on the test set with `python train_prototree.py`. 
+
+### For CUB dataset
+1. Run `cub_download.py`.
+2. Run `cub_preprocess.py`.
+3. (Optional, but recommended) Download a [ResNet50 pretrained on iNaturalist2017](https://drive.google.com/drive/folders/1yHme1iFQy-Lz_11yZJPlNd9bO_YPKlEU) (filename on Google Drive: `BBN.iNaturalist2017.res50.180epoch.best_model.pth`) and place it in the folder `features/state_dicts`.
