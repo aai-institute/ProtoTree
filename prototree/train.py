@@ -20,7 +20,7 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     progress_desc: str = "Train Epoch",
 ) -> dict:
-    n_batches = float(len(train_loader))
+    n_batches = len(train_loader)
 
     train_loader = tqdm(
         train_loader,
@@ -117,8 +117,12 @@ def update_leaf(
     )
     # should have zero everywhere except one entry
     dist_update = torch.exp(log_dist_update)
-    # TODO: why is this scaling of dist_params needed?
+
+    # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
+    # weighted moving average, designed to ensure stability of the leaf class probability distributions (
+    # leaf.dist_params), by filtering out noise from minibatching in the optimization.
     leaf.dist_params *= scaling_factor
+
     # dist_params values can get slightly negative because of floating point issues, so set to zero.
     # TODO: Unclear why we would need this at all, dist_params only go out with softmax and can be negative
     F.relu_(leaf.dist_params)
