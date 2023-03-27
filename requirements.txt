@@ -1,8 +1,9 @@
 lovely-tensors
+matplotlib
+numpy
+opencv-python-headless
 pptree
+Pillow
 torch
 torchvision
 tqdm
-Pillow
-opencv-python-headless
-matplotlib
