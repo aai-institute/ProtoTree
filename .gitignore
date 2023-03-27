@@ -1,6 +1,7 @@
 # custom
 .idea
 data
+features/state_dicts
 runs
 
 ### Python template

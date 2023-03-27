@@ -4,5 +4,5 @@ torch
 torchvision
 tqdm
 Pillow
-install opencv-python-headless
+opencv-python-headless
 matplotlib
