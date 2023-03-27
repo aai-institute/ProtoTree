@@ -84,7 +84,9 @@ def update_leaf_distributions(
     #      y_true_range = torch.arange(0, batch_size)
     #      y_true_indices = torch.stack((y_true_range, y_true))
     #      y_true_one_hot = torch.sparse_coo_tensor(y_true_indices,
-    #          torch.ones_like(y_true, dtype=torch.bool), logits.shape)
+    #          torch.ones_like(y_true, dtype=torch.bool), logits.shape),
+    #  or even better,
+    #      y_true_one_hot = F.sparse_one_hot(y_true, num_classes=num_classes, dtype=torch.bool),
     #  but PyTorch doesn't yet have sufficient support for sparse masks.
     y_true_one_hot = F.one_hot(y_true, num_classes=num_classes).to(dtype=torch.bool)
 
