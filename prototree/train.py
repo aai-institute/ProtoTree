@@ -117,7 +117,8 @@ def update_leaf(
 
     masked_log_combined = log_p_arrival + (leaf_logits - masked_logits)
 
-    # TODO: Can't use logsumexp because masked tensors don't support it, will this cause problems?
+    # TODO: Can't use logsumexp because masked tensors don't support it. If this causes problems we may need to revert
+    #  to the original non-mask approach with a target_logits tensor containing 0s and -Infs.
     masked_combined = torch.exp(masked_log_combined)
     masked_dist_update = torch.sum(
         masked_combined,
