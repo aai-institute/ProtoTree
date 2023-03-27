@@ -43,7 +43,7 @@ def train_epoch(
         scaling_factor = 1 - 1 / n_batches
         tree.eval()
         update_leaf_distributions(
-            tree.tree_root, y, logits, node_to_prob, scaling_factor
+            tree.tree_root, y, logits.detach(), node_to_prob, scaling_factor
         )
 
         y_pred = torch.argmax(logits, dim=1)
@@ -83,7 +83,8 @@ def update_leaf_distributions(
     batch_size, _ = logits.shape
     y_true_range = torch.arange(0, batch_size)
     y_true_indices = torch.stack((y_true_range, y_true))
-    y_true_mask = torch.sparse_coo_tensor(y_true_indices, torch.ones_like(y_true, dtype=torch.bool), logits.shape)
+    y_true_mask = torch.sparse_coo_tensor(y_true_indices, torch.ones_like(y_true, dtype=torch.bool), logits.shape)\
+        .coalesce()
     for leaf in root.leaves:
         update_leaf(leaf, node_to_prob, logits, y_true_mask, scaling_factor)
 
@@ -108,20 +109,17 @@ def update_leaf(
     # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
     leaf_logits = leaf.logits()
 
-    masked_log_p_arrival = y_true_mask * log_p_arrival
-    masked_leaf_logits = y_true_mask * leaf_logits
-    masked_logits = logits.sparse_mask(y_true_mask.coalesce())
+    y_true_mask_dense = y_true_mask.to_dense()
 
-    log_combined = masked_log_p_arrival + masked_leaf_logits - masked_logits
+    masked_logits = masked_tensor(logits, y_true_mask_dense)
 
-    combined = log_combined.to_dense()
-    combined = torch.where(combined == 0.0, -torch.inf, combined)
-    log_dist_update = torch.logsumexp(
+    log_combined = log_p_arrival + (leaf_logits - masked_logits)
+    combined = torch.exp(log_combined)
+
+    dist_update = torch.sum(
         combined,
         dim=0,
-    )
-
-    dist_update = torch.exp(log_dist_update)
+    ).to_tensor(0.0)
 
     # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
     # weighted moving average, designed to ensure stability of the leaf class probability distributions (
