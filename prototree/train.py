@@ -87,7 +87,7 @@ def update_leaf_distributions(
     #          torch.ones_like(y_true, dtype=torch.bool), logits.shape),
     #  or even better,
     #      y_true_one_hot = F.sparse_one_hot(y_true, num_classes=num_classes, dtype=torch.bool),
-    #  but PyTorch doesn't yet have sufficient support for sparse masks.
+    #  but PyTorch doesn't yet have sufficient sparse mask support for the logic in update_leaf to work.
     y_true_one_hot = F.one_hot(y_true, num_classes=num_classes).to(dtype=torch.bool)
 
     for leaf in root.leaves:
