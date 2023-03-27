@@ -117,14 +117,13 @@ def update_leaf(
     masked_logits = logits.sparse_mask(y_true_mask.coalesce())
 
     log_combined = masked_log_p_arrival + masked_leaf_logits - masked_logits
-    combined = torch.exp(log_combined.to_dense())
 
-    # log_dist_update = torch.logsumexp(
-    #     combined,
-    #     dim=0,
-    # )
+    log_dist_update = torch.logsumexp(
+        log_combined.to_dense(),
+        dim=0,
+    )
 
-    dist_update = torch.sum(combined, (0,))
+    dist_update = torch.exp(log_dist_update)
 
     # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
     # weighted moving average, designed to ensure stability of the leaf class probability distributions (
