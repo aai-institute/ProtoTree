@@ -71,39 +71,36 @@ def train_prototree(args: Namespace):
     log_dir = args.log_dir
 
     # training hardware
-    milestones = args.milestones
+    milestones = args.milestones_list
     gamma = args.gamma
 
     # Optimizer args
     optim_type = args.optimizer
-    # batch_size = args.batch_size
-    batch_size = 64
+    batch_size = args.batch_size
     lr = args.lr
     lr_block = args.lr_block
     lr_net = args.lr_net
-    lr_pi = args.lr_pi
     momentum = args.momentum
     weight_decay = args.weight_decay
 
     # Training loop args
-    disable_cuda = False
-    epochs = 100
+    disable_cuda = args.disable_cuda
+    epochs = args.epochs
     evaluate_each_epoch = 5
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
-    freeze_epochs = 30
+    freeze_epochs = args.freeze_epochs
 
     # prototree specifics
-    pruning_threshold_percentage = 0.1
-    pruning_threshold_leaves = 1 / 200 * (1 + pruning_threshold_percentage)
+    pruning_threshold_leaves = args.pruning_threshold_leaves
 
     # Architecture args
     backbone = args.backbone
-    pretrained = True
-    h_proto = 1
-    w_proto = 1
+    pretrained = not args.disable_pretrained
+    h_proto = args.H1
+    w_proto = args.W1
     channels_proto = args.num_features
-    depth = 9
+    depth = args.depth
 
     log = get_log(log_dir)
 
@@ -143,7 +140,6 @@ def train_prototree(args: Namespace):
         weight_decay,
         lr,
         lr_block,
-        lr_pi,
         lr_net,
     )
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
@@ -151,10 +147,10 @@ def train_prototree(args: Namespace):
     )
 
     # TRAINING HELPERS
-    def should_evaluate(epoch: int):
-        if evaluate_each_epoch > 0 and epoch == 0:
+    def should_evaluate(candidate_epoch: int):
+        if evaluate_each_epoch > 0 and candidate_epoch == 0:
             return False
-        return epoch % evaluate_each_epoch == 0 or epoch == epochs
+        return candidate_epoch % evaluate_each_epoch == 0 or candidate_epoch == epochs
 
     params_frozen = False
 
@@ -176,7 +172,7 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     print("Starting training")
-    for epoch in range(epochs):
+    for epoch in range(1, epochs + 1):
         if params_frozen and epoch > freeze_epochs:
             log.log_message(f"\nUnfreezing network at {epoch=}.")
             unfreeze()
@@ -185,7 +181,7 @@ def train_prototree(args: Namespace):
             tree,
             train_loader,
             optimizer,
-            progress_desc=f"Train Epoch {epoch + 1}/{epochs}",
+            progress_desc=f"Training epoch {epoch}/{epochs}",
         )
         scheduler.step()
 

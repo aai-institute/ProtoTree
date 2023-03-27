@@ -261,7 +261,7 @@ class Leaf(Node):
         super().__init__(index, parent=parent)
 
         self.num_classes = num_classes
-        self.dist_params = nn.Parameter(torch.zeros(num_classes), requires_grad=False)
+        self.dist_params: nn.Parameter = nn.Parameter(torch.zeros(num_classes), requires_grad=False)
 
     def to(self, *args, **kwargs):
         self.dist_params = self.dist_params.to(*args, **kwargs)

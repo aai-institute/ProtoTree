@@ -73,7 +73,7 @@ class PrototypeBase(nn.Module):
         The output has the shape (batch_size, num_prototypes)
         """
         x = self.prototype_distances_per_patch(x)
-        return F.max_pool2d(x, kernel_size=x.shape[-2:]).squeeze()
+        return -F.max_pool2d(-x, kernel_size=x.shape[-2:]).squeeze()
 
     @property
     def device(self):

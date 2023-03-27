@@ -21,7 +21,7 @@ def train_epoch(
 ) -> dict:
     n_batches = len(train_loader)
 
-    train_loader = tqdm(
+    tqdm_loader = tqdm(
         train_loader,
         desc=progress_desc,
     )
@@ -29,7 +29,7 @@ def train_epoch(
 
     total_loss = 0.0
     total_acc = 0.0
-    for x, y in train_loader:
+    for batch_num, (x, y) in enumerate(tqdm_loader):
         tree.train()
         optimizer.zero_grad()
         x, y = x.to(tree.device), y.to(tree.device)
@@ -46,17 +46,18 @@ def train_epoch(
 
         y_pred = torch.argmax(logits, dim=1)
         acc = torch.sum(y_pred == y).item() / len(x)
-        train_loader.set_postfix_str(f"(batch) loss: {loss.item():.3f}, acc: {acc:.3f}")
+        tqdm_loader.set_postfix_str(f"batch: loss={loss.item():.5f}, {acc=:.5f}")
         total_loss += loss.item()
         total_acc += acc
 
-    total_loss /= n_batches + 1
-    total_acc /= n_batches + 1
+        if batch_num == n_batches - 1:  # TODO: Hack due to https://github.com/tqdm/tqdm/issues/1369
+            avg_loss = total_loss / n_batches
+            avg_acc = total_acc / n_batches
+            tqdm_loader.set_postfix_str(f"average: loss={total_loss:.5f}, acc={total_acc:.5f}")
 
-    log.info(f"Train Epoch: Loss: {total_loss:.3f}, Acc: {total_acc:.3f}")
     return {
-        "loss": total_loss,
-        "train_accuracy": total_acc,
+        "loss": avg_loss,
+        "train_accuracy": avg_acc,
     }
 
 
