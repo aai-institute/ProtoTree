@@ -103,6 +103,7 @@ def train_prototree(args: Namespace):
     depth = args.depth
 
     log = get_log(log_dir)
+    log.log_message(f"Training and testing ProtoTree with {args=}.")
 
     # PREPARE DATA
     device = get_device(disable_cuda)
@@ -324,4 +325,6 @@ if __name__ == "__main__":
                 "lovely_tensors not installed, not monkey patching. "
                 "For more efficient debugging, we recommend installing it with `pip install lovely-tensors`."
             )
-    train_prototree(get_args())
+
+    args = get_args()
+    train_prototree(args)
