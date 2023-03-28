@@ -1,4 +1,5 @@
 import logging
+import math
 
 import torch
 import torch.nn.functional as F
@@ -77,27 +78,22 @@ def update_leaf_distributions(
     :param node_to_prob:
     :param smoothing_factor:
     """
-    batch_size, num_classes = logits.shape
-
-    y_true_one_hot = F.one_hot(y_true, num_classes=num_classes)
-    y_true_logits = torch.log(y_true_one_hot)
-
     for leaf in root.leaves:
-        update_leaf(leaf, node_to_prob, logits, y_true_logits, smoothing_factor)
+        update_leaf(leaf, node_to_prob, logits, y_true, smoothing_factor)
 
 
 def update_leaf(
     leaf: Leaf,
     node_to_prob: dict[Node, NodeProbabilities],
     logits: torch.Tensor,
-    y_true_logits: torch.Tensor,
+    y_true: torch.Tensor,
     smoothing_factor: float,
 ):
     """
     :param leaf:
     :param node_to_prob:
     :param logits: of shape (batch_size, num_classes)
-    :param y_true_logits: of shape (batch_size, num_classes)
+    :param y_true:
     :param smoothing_factor:
     :return:
     """
@@ -106,6 +102,7 @@ def update_leaf(
     # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
     leaf_logits = leaf.logits()
 
+    res = fast(log_p_arrival, leaf_logits, logits, y_true)
     # TODO: y_true_logits is mostly -Inf terms (the rest being 0s) that won't contribute to the total, and we are also
     #  summing together tensors of different shapes. We should be able to express this more clearly and efficiently by
     #  taking advantage of this sparsity.
@@ -122,3 +119,40 @@ def update_leaf(
     leaf.dist_params.mul_(smoothing_factor)
 
     leaf.dist_params.add_(dist_update)
+
+
+@torch.jit.script
+def fast(
+    log_p_arrival: torch.Tensor,
+    leaf_logits: torch.Tensor,
+    logits: torch.Tensor,
+    y_true: torch.Tensor,
+):
+    batch_size, num_classes = logits.shape
+    y_true_range = torch.arange(0, batch_size)
+    y_true_indices = torch.stack((y_true_range, y_true))
+
+    log_dist_update_contributors: list[list[int]] = []
+    for j in range(num_classes):
+        contributors_j: list[int] = []
+        log_dist_update_contributors.append(contributors_j)
+    for i in range(batch_size):
+        j = y_true[i]
+        log_dist_update_contributors[j].append(i)
+
+    log_dist_updates = torch.zeros_like(leaf_logits)
+    for j in range(num_classes):
+        contributions_j: list[float] = []
+
+        update =
+
+    return log_dist_update_contributors
+
+
+@torch.jit.script
+def logsumexp(arr: list[float]):
+    c = max(arr)
+    subtracted_arr = [x - c for x in arr]
+    exp_arr = [math.exp(x) for x in subtracted_arr]
+    arr_sum = sum(exp_arr)
+    return c + math.log(arr_sum)
