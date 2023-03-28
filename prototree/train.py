@@ -1,7 +1,6 @@
 import logging
 
 import torch
-from torch.masked import masked_tensor
 import torch.nn.functional as F
 import torch.optim
 import torch.utils.data
@@ -80,32 +79,26 @@ def update_leaf_distributions(
     """
     batch_size, num_classes = logits.shape
 
-    # TODO: Ideally we could to do something like
-    #      y_true_range = torch.arange(0, batch_size)
-    #      y_true_indices = torch.stack((y_true_range, y_true))
-    #      y_true_one_hot = torch.sparse_coo_tensor(y_true_indices,
-    #          torch.ones_like(y_true, dtype=torch.bool), logits.shape)  # Or other more suitable sparse format,
-    #  or even better,
-    #      y_true_one_hot = F.sparse_one_hot(y_true, num_classes=num_classes, dtype=torch.bool),
-    #  but PyTorch doesn't yet have sufficient sparse mask support for the logic in update_leaf to work.
-    y_true_one_hot = F.one_hot(y_true, num_classes=num_classes).to(dtype=torch.bool)
+    log_eye = torch.log(torch.eye(num_classes, device=y_true.device))
+    # one_hot encoded logits, -inf everywhere, zero at one entry
+    target_logits = log_eye[y_true]
 
     for leaf in root.leaves:
-        update_leaf(leaf, node_to_prob, logits, y_true_one_hot, smoothing_factor)
+        update_leaf(leaf, node_to_prob, logits, target_logits, smoothing_factor)
 
 
 def update_leaf(
     leaf: Leaf,
     node_to_prob: dict[Node, NodeProbabilities],
     logits: torch.Tensor,
-    y_true_one_hot: torch.Tensor,
+    target_logits: torch.Tensor,
     smoothing_factor: float,
 ):
     """
     :param leaf:
     :param node_to_prob:
     :param logits: of shape (batch_size, num_classes)
-    :param y_true_one_hot: boolean tensor of shape (batch_size, num_classes)
+    :param target_logits: of shape (batch_size, num_classes)
     :param smoothing_factor:
     :return:
     """
@@ -113,19 +106,17 @@ def update_leaf(
     log_p_arrival = node_to_prob[leaf].log_p_arrival.unsqueeze(1)
     # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
     leaf_logits = leaf.logits()
-    masked_logits = masked_tensor(logits, y_true_one_hot)
 
-    masked_log_combined = log_p_arrival + (leaf_logits - masked_logits)
-
-    # TODO: Can't use logsumexp because masked tensors don't support it. If this causes problems we may need to revert
-    #  to the original non-mask approach with a target_logits tensor containing 0s and -Infs.
-    masked_combined = torch.exp(masked_log_combined)
-    masked_dist_update = torch.sum(
-        masked_combined,
+    # TODO: clarify what is happening here. torch.log(target) seems to contain
+    #   negative infinity everywhere and zero at one place.
+    #   We are also summing together tensors of different shapes.
+    #   There is probably a clearer and more efficient way to compute this, also check paper
+    log_dist_update = torch.logsumexp(
+        log_p_arrival + leaf_logits + target_logits - logits,
         dim=0,
     )
 
-    dist_update = masked_dist_update.to_tensor(0.0)
+    dist_update = torch.exp(log_dist_update)
 
     # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
     # weighted moving average, designed to ensure stability of the leaf class probability distributions (
