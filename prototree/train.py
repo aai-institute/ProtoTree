@@ -40,10 +40,10 @@ def train_epoch(
         loss.backward()
         optimizer.step()
 
-        scaling_factor = 1 - 1 / n_batches
+        smoothing_factor = 1 - 1 / n_batches
         tree.eval()
         update_leaf_distributions(
-            tree.tree_root, y, logits.detach(), node_to_prob, scaling_factor
+            tree.tree_root, y, logits.detach(), node_to_prob, smoothing_factor
         )
 
         y_pred = torch.argmax(logits, dim=1)
@@ -69,14 +69,14 @@ def update_leaf_distributions(
     y_true: torch.Tensor,
     logits: torch.Tensor,
     node_to_prob: dict[Node, NodeProbabilities],
-    scaling_factor: float,
+    smoothing_factor: float,
 ):
     """
     :param root:
     :param y_true: shape (batch_size)
     :param logits: shape (batch_size, num_classes)
     :param node_to_prob:
-    :param scaling_factor:
+    :param smoothing_factor:
     """
     batch_size, num_classes = logits.shape
 
@@ -91,7 +91,7 @@ def update_leaf_distributions(
     y_true_one_hot = F.one_hot(y_true, num_classes=num_classes).to(dtype=torch.bool)
 
     for leaf in root.leaves:
-        update_leaf(leaf, node_to_prob, logits, y_true_one_hot, scaling_factor)
+        update_leaf(leaf, node_to_prob, logits, y_true_one_hot, smoothing_factor)
 
 
 def update_leaf(
@@ -99,14 +99,14 @@ def update_leaf(
     node_to_prob: dict[Node, NodeProbabilities],
     logits: torch.Tensor,
     y_true_one_hot: torch.Tensor,
-    scaling_factor: float,
+    smoothing_factor: float,
 ):
     """
     :param leaf:
     :param node_to_prob:
     :param logits: of shape (batch_size, num_classes)
     :param y_true_one_hot: boolean tensor of shape (batch_size, num_classes)
-    :param scaling_factor:
+    :param smoothing_factor:
     :return:
     """
     # shape (batch_size, 1)
@@ -130,6 +130,6 @@ def update_leaf(
     # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
     # weighted moving average, designed to ensure stability of the leaf class probability distributions (
     # leaf.dist_params), by filtering out noise from minibatching in the optimization.
-    leaf.dist_params.mul_(scaling_factor)
+    leaf.dist_params.mul_(smoothing_factor)
 
     leaf.dist_params.add_(dist_update)
