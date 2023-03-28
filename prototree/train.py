@@ -79,9 +79,8 @@ def update_leaf_distributions(
     """
     batch_size, num_classes = logits.shape
 
-    log_eye = torch.log(torch.eye(num_classes, device=y_true.device))
-    # one_hot encoded logits, -inf everywhere, zero at one entry
-    target_logits = log_eye[y_true]
+    target_one_hot = F.one_hot(y_true, num_classes=num_classes)
+    target_logits = torch.log(target_one_hot)
 
     for leaf in root.leaves:
         update_leaf(leaf, node_to_prob, logits, target_logits, smoothing_factor)
