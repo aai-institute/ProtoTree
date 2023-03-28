@@ -79,25 +79,25 @@ def update_leaf_distributions(
     """
     batch_size, num_classes = logits.shape
 
-    target_one_hot = F.one_hot(y_true, num_classes=num_classes)
-    target_logits = torch.log(target_one_hot)
+    y_true_one_hot = F.one_hot(y_true, num_classes=num_classes)
+    y_true_logits = torch.log(y_true_one_hot)
 
     for leaf in root.leaves:
-        update_leaf(leaf, node_to_prob, logits, target_logits, smoothing_factor)
+        update_leaf(leaf, node_to_prob, logits, y_true_logits, smoothing_factor)
 
 
 def update_leaf(
     leaf: Leaf,
     node_to_prob: dict[Node, NodeProbabilities],
     logits: torch.Tensor,
-    target_logits: torch.Tensor,
+    y_true_logits: torch.Tensor,
     smoothing_factor: float,
 ):
     """
     :param leaf:
     :param node_to_prob:
     :param logits: of shape (batch_size, num_classes)
-    :param target_logits: of shape (batch_size, num_classes)
+    :param y_true_logits: of shape (batch_size, num_classes)
     :param smoothing_factor:
     :return:
     """
@@ -106,12 +106,11 @@ def update_leaf(
     # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
     leaf_logits = leaf.logits()
 
-    # TODO: clarify what is happening here. torch.log(target) seems to contain
-    #   negative infinity everywhere and zero at one place.
-    #   We are also summing together tensors of different shapes.
-    #   There is probably a clearer and more efficient way to compute this, also check paper
+    # TODO: y_true_logits is mostly -Inf terms (the rest being 0s) that won't contribute to the total, and we are also
+    #  summing together tensors of different shapes. We should be able to express this more clearly and efficiently by
+    #  taking advantage of this sparsity.
     log_dist_update = torch.logsumexp(
-        log_p_arrival + leaf_logits + target_logits - logits,
+        log_p_arrival + leaf_logits + y_true_logits - logits,
         dim=0,
     )
 
