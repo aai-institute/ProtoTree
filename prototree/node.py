@@ -261,7 +261,7 @@ class Leaf(Node):
         super().__init__(index, parent=parent)
 
         self.num_classes = num_classes
-        self.dist_params = nn.Parameter(torch.zeros(num_classes), requires_grad=False)
+        self.dist_params: nn.Parameter = nn.Parameter(torch.zeros(num_classes), requires_grad=False)
 
     def to(self, *args, **kwargs):
         self.dist_params = self.dist_params.to(*args, **kwargs)
@@ -614,25 +614,25 @@ class NodeProbabilities:
 
 def log_leaves_properties(
     leaves: list[Leaf],
-    confidence_threshold: float,
+    leaf_pruning_threshold: float,
 ):
     """
     Logs information about which leaves have a sufficiently high confidence and whether there
     are classes not predicted by any leaf. Useful for debugging the training process.
 
     :param leaves:
-    :param confidence_threshold:
+    :param leaf_pruning_threshold:
     :return:
     """
     n_leaves_above_threshold = 0
     classes_covered = set()
     for leaf in leaves:
         classes_covered.add(leaf.predicted_label())
-        if leaf.conf_predicted_label() > confidence_threshold:
+        if leaf.conf_predicted_label() > leaf_pruning_threshold:
             n_leaves_above_threshold += 1
 
     log.info(
-        f"Leaves with confidence > {confidence_threshold:.2f}: {n_leaves_above_threshold}"
+        f"Leaves with confidence > {leaf_pruning_threshold:.3f}: {n_leaves_above_threshold}"
     )
 
     num_classes = leaves[0].num_classes
