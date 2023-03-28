@@ -55,7 +55,7 @@ def train_epoch(
         if batch_num == n_batches - 1:  # TODO: Hack due to https://github.com/tqdm/tqdm/issues/1369
             avg_loss = total_loss / n_batches
             avg_acc = total_acc / n_batches
-            tqdm_loader.set_postfix_str(f"average: loss={total_loss:.5f}, acc={total_acc:.5f}")
+            tqdm_loader.set_postfix_str(f"average: loss={avg_loss:.5f}, acc={avg_acc:.5f}")
 
     return {
         "loss": avg_loss,
