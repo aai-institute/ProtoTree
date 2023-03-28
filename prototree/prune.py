@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 #   and maybe even projected later. This is not efficient and, importantly, wouldn't work properly for pruning
 #   during training. Make an issue about this. We should be able to prune after some epochs and then continue
 #   training with the pruned tree. This is not possible with the current implementation.
-def prune_unconfident_leaves(root: InternalNode, leaf_confidence_threshold: float):
+def prune_unconfident_leaves(root: InternalNode, leaf_pruning_threshold: float):
     def should_prune(n: Node):
         """
         True if none of the leaves of the given node predict with a confidence
@@ -27,7 +27,7 @@ def prune_unconfident_leaves(root: InternalNode, leaf_confidence_threshold: floa
         the entire subtree can be pruned.
         """
         for leaf in n.leaves:
-            if torch.any(leaf.y_proba() > leaf_confidence_threshold):
+            if torch.any(leaf.y_proba() > leaf_pruning_threshold):
                 return False
         return True
 

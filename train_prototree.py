@@ -18,7 +18,7 @@ from util.data import get_dataloaders
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
+log = logging.getLogger("train_prototree")
 
 
 @torch.no_grad()
@@ -75,7 +75,7 @@ def train_prototree(args: Namespace):
     freeze_epochs = args.freeze_epochs
 
     # prototree specifics
-    pruning_threshold_leaves = args.pruning_threshold_leaves
+    leaf_pruning_multiplier = args.leaf_pruning_multiplier
 
     # Architecture args
     backbone = args.backbone
@@ -112,6 +112,13 @@ def train_prototree(args: Namespace):
     )
     log.info(f"Running on {device=}")
     tree = tree.to(device)
+
+    # PREPARE PRUNING
+    # Leaves that didn't learn anything will have a distribution close to torch.ones(num_classes) / num_classes, so we
+    # prune leaves where no probability is fairly close to the "no-learning" value of 1 / num_classes. The
+    # multiplication by leaf_pruning_multiplier determines what's considered close enough to "no-learning".
+    # TODO: Perhaps we should instead tune this threshold with a search algorithm.
+    leaf_pruning_threshold = leaf_pruning_multiplier / num_classes
 
     # PREPARE OPTIMIZER AND SCHEDULER
     optimizer, params_to_freeze, params_to_train = get_optimizer(
@@ -170,7 +177,7 @@ def train_prototree(args: Namespace):
 
         log_leaves_properties(
             tree.leaves,
-            pruning_threshold_leaves,
+            leaf_pruning_threshold,
         )
 
         if should_evaluate(epoch):
@@ -183,18 +190,18 @@ def train_prototree(args: Namespace):
         tree, train_loader, eval_name="Sampling strategies on train data"
     )
 
-    log_leaves_properties(tree.leaves, pruning_threshold_leaves)
+    log_leaves_properties(tree.leaves, leaf_pruning_threshold)
 
-    _prune_tree(tree.tree_root, pruning_threshold_leaves)
+    _prune_tree(tree.tree_root, leaf_pruning_threshold)
 
-    log_leaves_properties(tree.leaves, pruning_threshold_leaves)
+    log_leaves_properties(tree.leaves, leaf_pruning_threshold)
     pruned_acc = eval_tree(tree, test_loader, desc="pruned")
     log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
 
     # PROJECT
     log.info("Projecting prototypes to nearest training patch (with class restrictions).")
     node_to_patch_info = replace_prototypes_by_projections(tree, project_loader)
-    log_leaves_properties(tree.leaves, pruning_threshold_leaves)
+    log_leaves_properties(tree.leaves, leaf_pruning_threshold)
     test_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
 
@@ -213,14 +220,14 @@ def train_prototree(args: Namespace):
     return tree
 
 
-def _prune_tree(root: InternalNode, pruning_threshold_leaves: float):
+def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
     log.info(
         f"Before pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
     num_nodes_before = len(root.descendant_internal_nodes)
 
     # all work happens here, the rest is just logging
-    prune_unconfident_leaves(root, pruning_threshold_leaves)
+    prune_unconfident_leaves(root, leaf_pruning_threshold)
 
     frac_nodes_pruned = 1 - len(root.descendant_internal_nodes) / num_nodes_before
     log.info(
@@ -246,9 +253,9 @@ def perform_final_evaluation(
         strat2acc[sampling_strategy] = acc
     strat2fidelity = eval_fidelity(projected_pruned_tree, test_loader)
     for strategy in test_sampling_strategies:
-        log.info(f"Accuracy of {strategy} routing: {strat2acc[strategy]:.2f}")
+        log.info(f"Accuracy of {strategy} routing: {strat2acc[strategy]:.3f}")
         log.info(
-            f"Fidelity of {strategy} routing: {strat2fidelity[strategy]:.2f}"
+            f"Fidelity of {strategy} routing: {strat2fidelity[strategy]:.3f}"
         )
 
 
@@ -301,7 +308,7 @@ if __name__ == "__main__":
             import lovely_tensors
             lovely_tensors.monkey_patch()
         except ImportError:
-            log.warn(
+            log.warning(
                 "lovely_tensors not installed, not monkey patching. "
                 "For more efficient debugging, we recommend installing it with `pip install lovely-tensors`."
             )

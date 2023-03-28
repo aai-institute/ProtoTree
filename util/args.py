@@ -149,7 +149,7 @@ def get_args() -> argparse.Namespace:
         "--dir_for_saving_images",
         type=str,
         default="upsampling_results",
-        help="Directory for saving the prototypes, patches and heatmaps",
+        help="Directory for saving the prototypes, patches, and heatmaps",
     )
     parser.add_argument(
         "--upsample_threshold",
@@ -166,11 +166,12 @@ def get_args() -> argparse.Namespace:
         "networks are initialized with weights from ImageNet",
     )
     parser.add_argument(
-        "--pruning_threshold_leaves",
+        "--leaf_pruning_multiplier",
         type=float,
-        default=0.055,  # TODO: Where does this value come from?
-        help="An internal node will be pruned when the maximum class probability in the distributions of all leaves"
-        " below this node are lower than this threshold.",
+        default=11.0,  # This value was chosen empirically.
+        help="An internal node will be pruned when the maximum class probability in the distributions of all leaves "
+             "below the node are lower than some threshold. This multiplier is used in calculating the exact threshold,"
+             " please look at the code using this argument to see how the threshold is calculated.",
     )
     parser.add_argument(
         "--nr_trees_ensemble",
@@ -189,41 +190,6 @@ def get_milestones_list(milestones_str: str):
         :param milestones_str: The milestones as a comma separated string, e.g. "23,34,45"
     """
     return list(map(int, milestones_str.split(","))) if milestones_str else []
-
-
-def save_args(args: argparse.Namespace, directory_path: Union[str, Path]) -> None:
-    """
-    Save the arguments in the specified directory as
-        - a text file called 'args.txt'
-        - a pickle file called 'args.pickle'
-    :param args: The arguments to be saved
-    :param directory_path: The path to the directory where the arguments should be saved
-    """
-    directory_path = Path(directory_path)
-    directory_path.mkdir(parents=True, exist_ok=True)
-    # Save the args in a text file
-    with open(directory_path / "args.txt", "w") as f:
-        for arg in vars(args):
-            val = getattr(args, arg)
-            if isinstance(
-                val, str
-            ):  # Add quotation marks to indicate that the argument is of string type
-                val = f"'{val}'"
-            f.write("{}: {}\n".format(arg, val))
-    # Pickle the args for possible reuse
-    with open(directory_path / "args.pickle", "wb") as f:
-        pickle.dump(args, f)
-
-
-def load_args(directory_path: Union[str, Path]) -> argparse.Namespace:
-    """
-    Load the pickled arguments from the specified directory
-    :param directory_path: The path to the directory from which the arguments should be loaded
-    :return: the unpickled arguments
-    """
-    with open(directory_path / "args.pickle", "rb") as f:
-        args = pickle.load(f)
-    return args
 
 
 def get_optimizer(
