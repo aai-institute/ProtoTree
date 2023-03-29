@@ -11,6 +11,8 @@ from tqdm import tqdm
 from prototree.models import ProtoTree
 from prototree.node import Leaf, Node, NodeProbabilities
 
+from time import time
+
 log = logging.getLogger(__name__)
 
 
@@ -42,9 +44,12 @@ def train_epoch(
 
         smoothing_factor = 1 - 1 / n_batches
         tree.eval()
+        t1 = time()
         update_leaf_distributions(
             tree.tree_root, y, logits.detach(), node_to_prob, smoothing_factor
         )
+        t2 = time()
+        print(f"{t2 - t1}")
 
         y_pred = torch.argmax(logits, dim=1)
         acc = torch.sum(y_pred == y).item() / len(x)
@@ -102,16 +107,7 @@ def update_leaf(
     # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
     leaf_logits = leaf.logits()
 
-    res = fast(log_p_arrival, leaf_logits, logits, y_true)
-    # TODO: y_true_logits is mostly -Inf terms (the rest being 0s) that won't contribute to the total, and we are also
-    #  summing together tensors of different shapes. We should be able to express this more clearly and efficiently by
-    #  taking advantage of this sparsity.
-    log_dist_update = torch.logsumexp(
-        log_p_arrival + leaf_logits + y_true_logits - logits,
-        dim=0,
-    )
-
-    dist_update = torch.exp(log_dist_update)
+    dist_update = compute_dist_update(log_p_arrival, leaf_logits, logits, y_true)
 
     # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
     # weighted moving average, designed to ensure stability of the leaf class probability distributions (
@@ -122,7 +118,7 @@ def update_leaf(
 
 
 @torch.jit.script
-def fast(
+def compute_dist_update(
     log_p_arrival: torch.Tensor,
     leaf_logits: torch.Tensor,
     logits: torch.Tensor,
@@ -130,7 +126,7 @@ def fast(
 ):
     batch_size, num_classes = logits.shape
     y_true_range = torch.arange(0, batch_size)
-    y_true_indices = torch.stack((y_true_range, y_true))
+    #y_true_indices = torch.stack((y_true_range, y_true))
 
     log_dist_update_contributors: list[list[int]] = []
     for j in range(num_classes):
@@ -140,13 +136,16 @@ def fast(
         j = y_true[i]
         log_dist_update_contributors[j].append(i)
 
-    log_dist_updates = torch.zeros_like(leaf_logits)
+    log_dist_update = torch.zeros_like(leaf_logits)
     for j in range(num_classes):
-        contributions_j: list[float] = []
+        num_i_for_j = len(log_dist_update_contributors[j])
+        contributions_j = torch.zeros((num_i_for_j,), dtype=logits.dtype)
 
-        update =
+        for i in log_dist_update_contributors[j]:
+            contributions_j = log_p_arrival[i] + leaf_logits[j] - logits[i, j]
+        log_dist_update[j] = torch.logsumexp(contributions_j, dim=0)
 
-    return log_dist_update_contributors
+    return torch.exp(log_dist_update)
 
 
 @torch.jit.script
