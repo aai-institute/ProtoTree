@@ -125,8 +125,6 @@ def compute_dist_update(
     y_true: torch.Tensor,
 ):
     batch_size, num_classes = logits.shape
-    y_true_range = torch.arange(0, batch_size)
-    #y_true_indices = torch.stack((y_true_range, y_true))
 
     log_dist_update_contributors: list[list[int]] = []
     for j in range(num_classes):
