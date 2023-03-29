@@ -118,6 +118,16 @@ def update_leaf(
 
 
 @torch.jit.script
+def logsumexp(arr: list[float]):
+    if not arr:
+        return -float("inf")
+    c = max(arr)
+    subtracted_arr = [x - c for x in arr]
+    exp_arr = [math.exp(x) for x in subtracted_arr]
+    arr_sum = sum(exp_arr)
+    return c + math.log(arr_sum)
+
+@torch.jit.script
 def compute_dist_update(
     log_p_arrival: torch.Tensor,
     leaf_logits: torch.Tensor,
@@ -137,19 +147,13 @@ def compute_dist_update(
     log_dist_update = torch.zeros_like(leaf_logits)
     for j in range(num_classes):
         num_i_for_j = len(log_dist_update_contributors[j])
-        contributions_j = torch.zeros((num_i_for_j,), dtype=logits.dtype)
+        #contributions_j = torch.zeros((num_i_for_j,), dtype=logits.dtype)
+        contributions_j: list[float] = []
 
         for i in log_dist_update_contributors[j]:
-            contributions_j = log_p_arrival[i] + leaf_logits[j] - logits[i, j]
-        log_dist_update[j] = torch.logsumexp(contributions_j, dim=0)
+            x = (log_p_arrival[i] + leaf_logits[j] - logits[i, j]).item()
+            contributions_j.append(x)
+        log_dist_update[j] = logsumexp(contributions_j)
 
     return torch.exp(log_dist_update)
 
-
-@torch.jit.script
-def logsumexp(arr: list[float]):
-    c = max(arr)
-    subtracted_arr = [x - c for x in arr]
-    exp_arr = [math.exp(x) for x in subtracted_arr]
-    arr_sum = sum(exp_arr)
-    return c + math.log(arr_sum)
