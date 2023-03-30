@@ -49,7 +49,7 @@ def train_epoch(
             tree.tree_root, y, logits.detach(), node_to_prob, smoothing_factor
         )
         t2 = time()
-        print(f"{t2 - t1}")
+        #print(f"{t2 - t1}")
 
         y_pred = torch.argmax(logits, dim=1)
         acc = torch.sum(y_pred == y).item() / len(x)
@@ -126,6 +126,7 @@ def logsumexp(arr: list[float]):
     exp_arr = [math.exp(x) for x in subtracted_arr]
     arr_sum = sum(exp_arr)
     return c + math.log(arr_sum)
+
 
 @torch.jit.script
 def compute_dist_update(
