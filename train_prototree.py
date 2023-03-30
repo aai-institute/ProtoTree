@@ -94,7 +94,7 @@ def train_prototree(args: Namespace):
         pin_memory=pin_memory,
         batch_size=batch_size,
     )
-    num_classes = len(test_loader.dataset.classes)
+    num_classes = 200 #len(test_loader.dataset.classes)
     log.info(f"Num classes: {num_classes}")
 
     # PREPARE MODEL

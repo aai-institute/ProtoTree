@@ -5,6 +5,7 @@ import torchvision.transforms as transforms
 from PIL.Image import Image
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
+from torch.utils.data import Subset
 
 from config import project_dir, test_dir, train_dir
 
@@ -112,4 +113,8 @@ def get_data(
     train_set = ImageFolder(train_dir, transform=train_transform)
     project_set = ImageFolder(project_dir, transform=base_transform)
     test_set = ImageFolder(test_dir, transform=base_transform)
-    return train_set, project_set, test_set
+    idx = [i for i in range(5 * 16)]
+    train_set_small = Subset(train_set, idx)
+    project_set_small = Subset(project_set, idx)
+    test_set_small = Subset(test_set, idx)
+    return train_set_small, project_set_small, test_set_small

@@ -26,6 +26,9 @@ def prune_unconfident_leaves(root: InternalNode, leaf_pruning_threshold: float):
         This means that none of the leaves have learned something useful and thus
         the entire subtree can be pruned.
         """
+#        if n.is_root or n.parent.is_root or n.parent.parent.is_root:
+#            return False
+
         for leaf in n.leaves:
             if torch.any(leaf.y_proba() > leaf_pruning_threshold):
                 return False
