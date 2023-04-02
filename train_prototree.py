@@ -1,5 +1,6 @@
 from argparse import Namespace
 from pathlib import Path
+from random import randint
 import logging
 from typing import Literal
 
@@ -296,7 +297,8 @@ def create_proto_tree(
 
 def get_device(disable_cuda=False):
     if not disable_cuda and torch.cuda.is_available():
-        device_str = f"cuda:2"  # TODO: Spread this out to allow for more processes on multi-GPU machines.
+        num_cudas = torch.cuda.device_count()
+        device_str = f"cuda:{randint(0, num_cudas - 1)}"  # TODO: Do this properly.
     else:
         device_str = "cpu"
     return torch.device(device_str)
