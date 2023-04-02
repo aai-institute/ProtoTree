@@ -53,7 +53,7 @@ def replace_prototypes_by_projections(
         ):
             node_to_patch_info[node] = ProjectionPatchInfo(
                 node=node,
-                image_latent=image_latent,
+                transformed_image=image_latent,
                 true_label=true_label,
                 closest_patch=closest_patch,
                 closest_patch_distance=closest_patch_distance,
@@ -92,7 +92,7 @@ def replace_prototypes_by_projections(
 
 @dataclass
 class ProjectionPatchInfo:
-    image_latent: torch.Tensor
+    transformed_image: torch.Tensor
     true_label: int
     closest_patch: torch.Tensor
     closest_patch_distance: float

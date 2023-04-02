@@ -91,10 +91,10 @@ def get_args() -> argparse.Namespace:
         help="Flag that disables GPU usage if set",
     )
     parser.add_argument(
-        "--log_dir",
+        "--output_dir",
         type=str,
         default="./runs/run_prototree",
-        help="The directory in which train progress should be logged",
+        help="The directory for output from training, testing, and visualizing the tree.",
     )
     parser.add_argument(
         "--W1",

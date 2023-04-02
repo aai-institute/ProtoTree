@@ -12,10 +12,11 @@ from prototree.node import InternalNode, log_leaves_properties
 from prototree.project import replace_prototypes_by_projections
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from prototree.visualization import save_prototype_visualizations
+from prototree.visualize.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
+from prototree.visualize.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -51,7 +52,7 @@ def save_tree(
 def train_prototree(args: Namespace):
     # data and paths
     dataset = args.dataset
-    log_dir = args.log_dir
+    output_dir = Path(args.output_dir)
 
     # training hardware
     milestones = args.milestones_list
@@ -90,11 +91,12 @@ def train_prototree(args: Namespace):
     # PREPARE DATA
     device = get_device(disable_cuda)
     pin_memory = "cuda" in device.type
-    train_loader, project_loader, test_loader = get_dataloaders(
+    class_names, train_loader, project_loader, test_loader = get_dataloaders(
         pin_memory=pin_memory,
         batch_size=batch_size,
     )
-    num_classes = 200 #len(test_loader.dataset.classes)
+
+    num_classes = len(class_names)
     log.info(f"Num classes: {num_classes}")
 
     # PREPARE MODEL
@@ -209,13 +211,12 @@ def train_prototree(args: Namespace):
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
-    viz_path = Path("data") / "visualizations"
+    viz_path = output_dir / "visualizations"
     viz_path.mkdir(exist_ok=True, parents=True)
     log.info(f"Saving prototype visualizations to {viz_path}.")
-    save_prototype_visualizations(
-        node_to_patch_info,
-        viz_path,
-    )
+    patches_path = viz_path / "patches"
+    save_patch_visualizations(node_to_patch_info, patches_path)
+    save_tree_visualization(tree, patches_path, viz_path / "tree", class_names)
 
     return tree
 
