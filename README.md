@@ -17,4 +17,4 @@ This will probably be turned into a Python package and moved to a new repository
 
 ### For development
 1. Install requirements from `requirements-dev.txt`.
-2. You can run tests with just the command `pytest`.
+2. You can run tests with the command `pytest`.
