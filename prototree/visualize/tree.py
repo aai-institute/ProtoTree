@@ -157,14 +157,10 @@ def _gen_leaf_img(node: Leaf) -> Image:
 def _gen_internal_node_img(node: InternalNode, patches_path: os.PathLike) -> Image:
     internal_node_id = node.index
     # TODO: move hardcoded strings to config
-    patch_img_orig = Image.open(
-        os.path.join(patches_path, f"{internal_node_id}_closest_patch.png")
-    )
-    bb_img_orig = Image.open(
-        os.path.join(
-            patches_path, f"{internal_node_id}_bounding_box_closest_patch.png"
-        )
-    )
+    patch_path = os.path.join(patches_path, f"{internal_node_id}_closest_patch.png")
+    bb_path = os.path.join(patches_path, f"{internal_node_id}_bounding_box_closest_patch.png")
+    patch_img_orig = Image.open(patch_path)
+    bb_img_orig = Image.open(bb_path)
 
     bb_img = ImageOps.contain(bb_img_orig, INTERNAL_NODE_IMG_SIZE)
     patch_img = ImageOps.contain(patch_img_orig, INTERNAL_NODE_IMG_SIZE)
