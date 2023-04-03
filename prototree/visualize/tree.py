@@ -22,10 +22,7 @@ INTERNAL_NODE_IMG_GAP = 4
 
 @torch.no_grad()
 def save_tree_visualization(
-        tree: ProtoTree,
-        patches_dir: os.PathLike,
-        save_dir: os.PathLike,
-        class_names: tuple,
+        tree: ProtoTree, patches_dir: os.PathLike, save_dir: os.PathLike, class_names: tuple
 ):
     """
     Saves visualization as a DOT file and png.
@@ -46,10 +43,7 @@ def save_tree_visualization(
 
 
 def _gen_pydot_tree(
-        root: Node,
-        patches_dir: os.PathLike,
-        node_imgs_dir: os.PathLike,
-        class_names: tuple,
+        root: Node, patches_dir: os.PathLike, node_imgs_dir: os.PathLike, class_names: tuple
 ) -> pydot.Dot:
     pydot_tree = pydot.Dot("prototree", graph_type="digraph", bgcolor="white", margin=0.0, ranksep=0.03, nodesep=0.05,
                            splines=False)
@@ -65,10 +59,7 @@ def _gen_pydot_tree(
 
 
 def _gen_pydot_nodes(
-        subtree_root: Node,
-        patches_dir: os.PathLike,
-        node_imgs_dir: os.PathLike,
-        class_names: tuple,
+        subtree_root: Node, patches_dir: os.PathLike, node_imgs_dir: os.PathLike, class_names: tuple
 ) -> list[pydot.Node]:
     if isinstance(subtree_root, InternalNode):
         img = _gen_internal_node_img(subtree_root, patches_dir)
@@ -116,11 +107,8 @@ def _gen_internal_node_img(node: InternalNode, patches_dir: os.PathLike) -> Imag
     wbb, hbb = bb_img.size
     w, h = patch_img.size
 
-    total_w = w + INTERNAL_NODE_IMG_GAP + wbb
-    total_h = max(h, hbb)
-
-    together = Image.new(patch_img.mode, (total_w, total_h), color=(255, 255, 255))
+    together_w, together_h = w + INTERNAL_NODE_IMG_GAP + wbb, max(h, hbb)
+    together = Image.new(patch_img.mode, (together_w, together_h), color=(255, 255, 255))
     together.paste(patch_img, (0, 0))
     together.paste(bb_img, (w + INTERNAL_NODE_IMG_GAP, 0))
-
     return together.convert("RGB")

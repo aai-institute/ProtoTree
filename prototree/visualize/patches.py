@@ -111,18 +111,13 @@ def get_im_with_bbox(
     return img
 
 
-def _to_rgb_map(arr: Union[torch.Tensor, np.ndarray]):
+def _to_rgb_map(arr: np.ndarray):
     """
     Turns a single-channel heatmap into an RGB heatmap.
     """
-    if isinstance(arr, torch.Tensor):
-        arr = arr.detach().cpu().numpy()
     arr = (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
     arr = np.uint8(255 * arr)
     arr = cv2.applyColorMap(arr, cv2.COLORMAP_JET)
     arr = np.float32(arr) / 255
-    # Reverse the channels. This is because for a similarity array the smallest values are the best matches (which
-    # we want to denote by red).
-    arr = arr[:, :, ::-1]
-
+    arr = arr[:, :, ::-1]  # Reverse channels, for similarity data we want red (best matches) for the smallest values.
     return arr
