@@ -11,8 +11,7 @@ from prototree.node import InternalNode, Leaf, Node
 
 log = logging.getLogger(__name__)
 
-# TODO: See if there's a non-clunky (i.e. without defining for the base class) way to do single dispatch on `Node`s in
-#  this file.
+# TODO: See if there's a non-clunky (i.e. no base class def) way to do single dispatch on `Node`s in this file.
 
 # TODO: Less hardcoding (particularly of numbers), both here and elsewhere in the file.
 FONT = "Helvetica"
