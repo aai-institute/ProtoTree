@@ -17,17 +17,17 @@ from util.data import get_inverse_base_transform
 @torch.no_grad()
 def save_patch_visualizations(
     node_to_patch_info: dict[InternalNode, ProjectionPatchInfo],
-    save_path: os.PathLike,
+    save_dir: os.PathLike,
     img_size=(224, 224),
 ):
     """
     :param node_to_patch_info:
-    :param save_path:
+    :param save_dir:
     :param img_size: size of images that were used to train the model, i.e. the input to `resize` in the transforms.
         Will be used to create the inverse transform.
     :return:
     """
-    save_path = Path(save_path)
+    save_dir = Path(save_dir)
     inverse_transform = get_inverse_base_transform(img_size=img_size)
 
     def latent_to_pixel(latent_img: np.ndarray):
@@ -36,7 +36,7 @@ def save_patch_visualizations(
         )
 
     def save(img: np.ndarray, fname: str):
-        path = save_path / fname
+        path = save_dir / fname
         path.parent.mkdir(parents=True, exist_ok=True)
         plt.imsave(
             path,
@@ -121,7 +121,7 @@ def _to_rgb_map(arr: Union[torch.Tensor, np.ndarray]):
     arr = np.uint8(255 * arr)
     arr = cv2.applyColorMap(arr, cv2.COLORMAP_JET)
     arr = np.float32(arr) / 255
-    # Swap the R and B channels. This is because for a similarity array the smallest values are the best matches (which
+    # Reverse the channels. This is because for a similarity array the smallest values are the best matches (which
     # we want to denote by red).
     arr = arr[:, :, ::-1]
 

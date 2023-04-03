@@ -213,12 +213,12 @@ def train_prototree(args: Namespace):
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
-    viz_path = output_dir / "visualizations"
-    viz_path.mkdir(exist_ok=True, parents=True)
-    log.info(f"Saving prototype visualizations to {viz_path}.")
-    patches_path = viz_path / "patches"
-    save_patch_visualizations(node_to_patch_info, patches_path)
-    save_tree_visualization(tree, patches_path, viz_path / "tree", class_names)
+    vis_dir = output_dir / "visualizations"
+    vis_dir.mkdir(exist_ok=True, parents=True)
+    log.info(f"Saving prototype visualizations to {vis_dir}.")
+    patches_dir = vis_dir / "patches"
+    save_patch_visualizations(node_to_patch_info, patches_dir)
+    save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
 
     return tree
 
