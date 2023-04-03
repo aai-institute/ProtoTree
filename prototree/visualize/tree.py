@@ -129,7 +129,7 @@ def _gen_node_rgb(node: Node, patches_path: os.PathLike):
     elif isinstance(node, InternalNode):
         img = _gen_internal_node_img(node, patches_path)
     else:
-        raise Exception(f"Unknown node {node}.")
+        raise ValueError(f"Unknown node {node}.")
 
     return img.convert("RGB")
 
