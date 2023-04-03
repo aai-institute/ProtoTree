@@ -13,6 +13,8 @@ from prototree.node import InternalNode, Leaf, Node
 
 log = logging.getLogger(__name__)
 
+# TODO: See if there's a non-clunky way to do single dispatch on `Node`s in this file.
+
 # TODO: Less hardcoding (particularly of numbers).
 FONT = "Helvetica"
 EDGE_ATTRS = dict(fontsize=10, tailport="s", headport="n", fontname=FONT)
