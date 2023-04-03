@@ -1,7 +1,5 @@
 import argparse
-import pickle
-from pathlib import Path
-from typing import Literal, Union
+from typing import Literal
 
 import torch
 import torch.optim
