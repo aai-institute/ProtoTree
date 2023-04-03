@@ -86,9 +86,9 @@ def _gen_pydot_nodes(
         leaf_probs = torch.exp(subtree_root.logits()).detach()
         max_prob_inds = np.argmax(leaf_probs, keepdims=True)
         max_prob = leaf_probs[max_prob_inds[0]]
-        predicted_classes = f"p = {max_prob:.5f}:\n" + ",\n".join([class_names[i] for i in max_prob_inds])
+        top_classes = f"p = {max_prob:.5f}:\n" + ",\n".join([class_names[i] for i in max_prob_inds])
 
-        pydot_node = pydot.Node(subtree_root.index, label=predicted_classes, labelfontcolor="gray50", fontname=FONT,
+        pydot_node = pydot.Node(subtree_root.index, label=top_classes, labelfontcolor="gray50", fontname=FONT,
                                 shape="box")
         return [pydot_node]
 
