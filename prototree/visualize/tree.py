@@ -92,8 +92,6 @@ def _gen_pydot_nodes(
                                 shape="box")
         return [pydot_node]
 
-    raise ValueError(f"Unknown node {subtree_root}.")
-
 
 def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
     if isinstance(subtree_root, InternalNode):
@@ -104,8 +102,6 @@ def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
         return [l_edge, r_edge] + l_descendants + r_descendants
     if isinstance(subtree_root, Leaf):
         return []
-
-    raise ValueError(f"Unknown node {subtree_root}.")
 
 
 def _gen_internal_node_img(node: InternalNode, patches_dir: os.PathLike) -> Image:
