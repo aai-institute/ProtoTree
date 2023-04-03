@@ -69,7 +69,7 @@ def save_patch_visualizations(
         save(im_with_bbox, f"{node.index}_bounding_box_closest_patch.png")
 
         pixel_heatmap = latent_to_pixel(similarity_map)
-        colored_heatmap = _apply_color_map(pixel_heatmap)
+        colored_heatmap = _to_rgb_map(pixel_heatmap)
         overlaid_original_img = 0.5 * original_image + 0.2 * colored_heatmap
         save(overlaid_original_img, f"{node.index}_heatmap_original_image.png")
 
@@ -94,37 +94,26 @@ def get_im_with_bbox(
     h_high: int,
     w_low: int,
     w_high: int,
-    color=(0, 255, 255),
+    bbox_color=(0, 255, 255),
 ):
     """
-    :param img: 3D array of shape (H, W, 3). Assumed to be floats, in range [0, 1], and in RGB format.
-    :param h_low:
-    :param h_high:
-    :param w_low:
-    :param w_high:
-    :param color:
-    :return:
+    Takes a 3D float array of shape (H, W, 3), range [0, 1], and RGB format, and superimposes a bounding box.
     """
     img = np.uint8(255 * img)
     img = cv2.rectangle(
         img,
         pt1=(w_low, h_low),
         pt2=(w_high, h_high),
-        color=color,
+        color=bbox_color,
         thickness=2,
     )
     img = np.float32(img) / 255
     return img
 
 
-# TODO: maybe optimize? Why is this necessary at all?
-def _apply_color_map(arr: Union[torch.Tensor, np.ndarray]):
+def _to_rgb_map(arr: Union[torch.Tensor, np.ndarray]):
     """
-    Applies cv2 colormap to a 2D array, I suppose for better visibility.
-    There might be redundant operations here, I extracted this from the original code.
-
-    :param arr:
-    :return:
+    Turns a single-channel heatmap into an RGB heatmap.
     """
     if isinstance(arr, torch.Tensor):
         arr = arr.detach().cpu().numpy()
@@ -132,6 +121,4 @@ def _apply_color_map(arr: Union[torch.Tensor, np.ndarray]):
     arr = np.uint8(255 * arr)
     arr = cv2.applyColorMap(arr, cv2.COLORMAP_JET)
     arr = np.float32(arr) / 255
-    # What's this, why do we need it and the ellipsis? Is this switching the RGB channels?
-    arr = arr[..., ::-1]
     return arr
