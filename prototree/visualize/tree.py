@@ -109,7 +109,7 @@ def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
     raise ValueError(f"Unknown node {subtree_root}.")
 
 
-def _gen_node_rgb(node: Node, patches_path: os.PathLike):
+def _gen_node_rgb(node: Node, patches_path: os.PathLike) -> Image:
     if isinstance(node, Leaf):
         img = _gen_leaf_img(node)
     elif isinstance(node, InternalNode):
@@ -120,7 +120,7 @@ def _gen_node_rgb(node: Node, patches_path: os.PathLike):
     return img.convert("RGB")
 
 
-def _gen_leaf_img(node: Leaf):
+def _gen_leaf_img(node: Leaf) -> Image:
     pixel_depth = 255
     height = 24
     footer_height = 10
@@ -154,7 +154,7 @@ def _gen_leaf_img(node: Leaf):
     return img
 
 
-def _gen_internal_node_img(node: InternalNode, patches_path: os.PathLike):
+def _gen_internal_node_img(node: InternalNode, patches_path: os.PathLike) -> Image:
     internal_node_id = node.index
     # TODO: move hardcoded strings to config
     patch_img_orig = Image.open(
