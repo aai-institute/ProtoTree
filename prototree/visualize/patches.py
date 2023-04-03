@@ -78,7 +78,7 @@ def covering_rectangle_indices(mask: np.ndarray):
     """
     Assuming that mask contains a single connected component with ones, find the indices of the
     smallest rectangle that covers the component.
-    TODO: Handle the case of multiple maxima.
+    TODO: Handle the case of multiple maxima? (not urgent since it's very unlikely on real data)
     :param mask: 2D array of ones and zeros
     :return: indices of the smallest rectangle that covers the component
     """
@@ -121,4 +121,8 @@ def _to_rgb_map(arr: Union[torch.Tensor, np.ndarray]):
     arr = np.uint8(255 * arr)
     arr = cv2.applyColorMap(arr, cv2.COLORMAP_JET)
     arr = np.float32(arr) / 255
+    # Swap the R and B channels. This is because for a similarity array the smallest values are the best matches (which
+    # we want to denote by red).
+    arr = arr[:, :, ::-1]
+
     return arr
