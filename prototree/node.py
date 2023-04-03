@@ -271,7 +271,7 @@ class Leaf(Node):
         return self.logits().argmax().item()
 
     def conf_predicted_label(self) -> float:
-        return self.probs().max().item()
+        return self.y_proba().max().item()
 
     # Note: this doesn't compute anything, it just returns the stored distribution copied batch_size times.
     def forward(
@@ -287,7 +287,7 @@ class Leaf(Node):
     def logits(self) -> torch.Tensor:
         return F.log_softmax(self.dist_params, dim=0)
 
-    def probs(self):
+    def y_proba(self):
         return torch.exp(self.logits())
 
     @property
