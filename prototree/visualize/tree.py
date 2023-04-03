@@ -6,7 +6,7 @@ import os
 import numpy as np
 import pydot
 import torch
-from PIL import Image
+from PIL import Image, ImageOps
 
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, Leaf, Node
@@ -15,6 +15,9 @@ log = logging.getLogger(__name__)
 
 FONT = "Helvetica"
 EDGE_ATTRS = dict(fontsize=10, tailport="s", headport="n", fontname=FONT)
+
+INTERNAL_NODE_IMG_SIZE = (100, 100)
+INTERNAL_NODE_IMG_GAP = 4
 
 
 @torch.no_grad()
@@ -161,36 +164,25 @@ def _gen_leaf_img(node: Leaf):
 def _gen_internal_node_img(node: InternalNode, patches_path: os.PathLike):
     internal_node_id = node.index
     # TODO: move hardcoded strings to config
-    patch_img = Image.open(
+    patch_img_orig = Image.open(
         os.path.join(patches_path, f"{internal_node_id}_closest_patch.png")
     )
-    bb_img = Image.open(
+    bb_img_orig = Image.open(
         os.path.join(
             patches_path, f"{internal_node_id}_bounding_box_closest_patch.png"
         )
     )
-    w, h = patch_img.size
+
+    bb_img = ImageOps.contain(bb_img_orig, INTERNAL_NODE_IMG_SIZE)
+    patch_img = ImageOps.contain(patch_img_orig, INTERNAL_NODE_IMG_SIZE)
     wbb, hbb = bb_img.size
+    w, h = patch_img.size
 
-    # TODO: duplication
-    if wbb > 100 or hbb > 100:
-        cs = 100 / wbb, 100 / hbb
-        min_cs = min(cs)
-        bb_img = bb_img.resize(size=(int(min_cs * wbb), int(min_cs * hbb)))
-        wbb, hbb = bb_img.size
-
-    if w > 100 or h > 100:
-        cs = 100 / w, 100 / h
-        min_cs = min(cs)
-        patch_img = patch_img.resize(size=(int(min_cs * w), int(min_cs * h)))
-        w, h = patch_img.size
-
-    between = 4
-    total_w = w + wbb + between
+    total_w = w + wbb + INTERNAL_NODE_IMG_GAP
     total_h = max(h, hbb)
 
     together = Image.new(patch_img.mode, (total_w, total_h), color=(255, 255, 255))
     together.paste(patch_img, (0, 0))
-    together.paste(bb_img, (w + between, 0))
+    together.paste(bb_img, (w + INTERNAL_NODE_IMG_GAP, 0))
 
     return together
