@@ -16,48 +16,53 @@ log = logging.getLogger(__name__)
 
 @torch.no_grad()
 def save_tree_visualization(
-    tree: ProtoTree,
-    patches_path: os.PathLike,
-    save_path: os.PathLike,
-    class_names: tuple,
+        tree: ProtoTree,
+        patches_path: os.PathLike,
+        save_path: os.PathLike,
+        class_names: tuple,
 ):
     """
     Saves visualization as a dotfile (and as pdf, if supported)
-
-    :param tree:
-    :param patches_path:
-    :param save_path:
-    :param class_names:
-    :return:
     """
     node_vis_path = save_path / "node_vis"
     node_vis_path.mkdir(parents=True, exist_ok=True)
 
-    pydot_tree = pydot.Dot("prototree", graph_type="digraph", bgcolor="white", margin=0.0, ranksep=0.03, nodesep=0.05,
-                           splines=False)
-    pydot_tree.add_node(pydot.Node("root", shape="rect", label=""))
-
-    pydot_nodes = _gen_pydot_nodes(tree.tree_root, patches_path, node_vis_path, class_names)
-    pydot_edges = _gen_pydot_edges(tree.tree_root)
-    for pydot_node in pydot_nodes:
-        pydot_tree.add_node(pydot_node)
-    for pydot_edge in pydot_edges:
-        pydot_tree.add_edge(pydot_edge)
+    pydot_tree = _gen_pydot_tree(tree.tree_root, patches_path, node_vis_path, class_names)
 
     dot_file = save_path / "tree.dot"
-    log.info(f"Saving tree dot to {dot_file}, this is just for debugging/further processing, and is not used in "
-             f"image output generation.")
+    log.info(f"Saving tree dot to {dot_file}, this file is just for debugging/further processing, and is not directly "
+             f"used in image output generation.")
 
     png_file = save_path / "treevis.png"
     log.info(f"Saving rendered tree to {png_file}")
     pydot_tree.write_png(png_file)
 
 
+def _gen_pydot_tree(
+        root: Node,
+        patches_path: os.PathLike,
+        node_vis_path: os.PathLike,
+        class_names: tuple,
+) -> pydot.Dot:
+    pydot_tree = pydot.Dot("prototree", graph_type="digraph", bgcolor="white", margin=0.0, ranksep=0.03, nodesep=0.05,
+                           splines=False)
+    pydot_tree.add_node(pydot.Node("root", shape="rect", label=""))
+
+    pydot_nodes = _gen_pydot_nodes(root, patches_path, node_vis_path, class_names)
+    pydot_edges = _gen_pydot_edges(root)
+    for pydot_node in pydot_nodes:
+        pydot_tree.add_node(pydot_node)
+    for pydot_edge in pydot_edges:
+        pydot_tree.add_edge(pydot_edge)
+
+    return pydot_tree
+
+
 def _gen_pydot_nodes(
-    subtree_root: Node,
-    patches_path: os.PathLike,
-    node_vis_path: os.PathLike,
-    class_names: tuple,
+        subtree_root: Node,
+        patches_path: os.PathLike,
+        node_vis_path: os.PathLike,
+        class_names: tuple,
 ) -> list[pydot.Node]:
     img = _gen_node_rgb(subtree_root, patches_path)
     # TODO: Perhaps we should extract some pure functions here.
