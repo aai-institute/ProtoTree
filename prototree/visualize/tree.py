@@ -13,6 +13,9 @@ from prototree.node import InternalNode, Leaf, Node
 
 log = logging.getLogger(__name__)
 
+FONT = "Helvetica"
+EDGE_ATTRS = dict(fontsize=10, tailport="s", headport="n", fontname=FONT)
+
 
 @torch.no_grad()
 def save_tree_visualization(
@@ -46,7 +49,6 @@ def _gen_pydot_tree(
 ) -> pydot.Dot:
     pydot_tree = pydot.Dot("prototree", graph_type="digraph", bgcolor="white", margin=0.0, ranksep=0.03, nodesep=0.05,
                            splines=False)
-    pydot_tree.add_node(pydot.Node("root", shape="rect", label=""))
 
     pydot_nodes = _gen_pydot_nodes(root, patches_path, node_vis_path, class_names)
     pydot_edges = _gen_pydot_edges(root)
@@ -83,10 +85,10 @@ def _gen_pydot_nodes(
         predicted_classes = predicted_classes.replace("_", " ")
 
         pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', label=predicted_classes, imagepos="tc",
-                                imagescale="height", labelloc="b", fontsize=10, penwidth=0, fontname="Helvetica")
+                                imagescale="height", labelloc="b", fontsize=10, penwidth=0, fontname=FONT)
     else:
         pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', xlabel=f'"{subtree_root.index}"', fontsize=6,
-                                labelfontcolor="gray50", fontname="Helvetica")
+                                labelfontcolor="gray50", fontname=FONT, shape="box")
 
     if isinstance(subtree_root, InternalNode):
         l_descendants = _gen_pydot_nodes(subtree_root.left, patches_path, node_vis_path, class_names)
@@ -101,12 +103,11 @@ def _gen_pydot_nodes(
 
 
 def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
-    edge_kwargs = dict(fontsize=10, tailport="s", headport="n", fontname="Helvetica")
     if isinstance(subtree_root, InternalNode):
         l_descendants = _gen_pydot_edges(subtree_root.left)
         r_descendants = _gen_pydot_edges(subtree_root.right)
-        l_edge = pydot.Edge(subtree_root.index, subtree_root.left.index, label="Absent", **edge_kwargs)
-        r_edge = pydot.Edge(subtree_root.index, subtree_root.right.index, label="Present", **edge_kwargs)
+        l_edge = pydot.Edge(subtree_root.index, subtree_root.left.index, label="Absent", **EDGE_ATTRS)
+        r_edge = pydot.Edge(subtree_root.index, subtree_root.right.index, label="Present", **EDGE_ATTRS)
         return [l_edge, r_edge] + l_descendants + r_descendants
     if isinstance(subtree_root, Leaf):
         return []
