@@ -45,13 +45,8 @@ def save_tree_visualization(
         pydot_tree.add_edge(pydot_edge)
 
     dot_file = save_path / "tree.dot"
-    log.info(f"Saving tree dot to {dot_file}")
-    s = pydot_tree.to_string()
-    pydot_tree.write_dot(dot_file)  # Just for debugging assistance and/or further processing.
-
-    svg_file = save_path / "treevis.svg"
-    log.info(f"Saving rendered tree to {svg_file}")
-    pydot_tree.write_svg(svg_file)
+    log.info(f"Saving tree dot to {dot_file}, this is just for debugging/further processing, and is not used in "
+             f"image output generation.")
 
     png_file = save_path / "treevis.png"
     log.info(f"Saving rendered tree to {png_file}")
@@ -66,8 +61,8 @@ def _gen_pydot_nodes(
 ) -> list[pydot.Node]:
     img = _gen_node_rgb(subtree_root, patches_path)
     # TODO: Perhaps we should extract some pure functions here.
-    fname = node_vis_path / f"node_{subtree_root.index}_vis.jpg"
-    img.save(fname)
+    img_file = os.path.abspath(node_vis_path / f"node_{subtree_root.index}_vis.jpg")
+    img.save(img_file)
 
     if isinstance(subtree_root, Leaf):
         ws = copy.deepcopy(torch.exp(subtree_root.logits()).detach().numpy())
@@ -77,15 +72,15 @@ def _gen_pydot_nodes(
         for i in range(len(targets)):
             t = targets[i]
             class_targets[i] = class_names[t]
-        str_targets = (
+        predicted_classes = (
             ",".join(str(t) for t in class_targets) if len(class_targets) > 0 else ""
         )
-        str_targets = str_targets.replace("_", " ")
+        predicted_classes = predicted_classes.replace("_", " ")
 
-        pydot_node = pydot.Node(subtree_root.index, image=f'"{fname}"', label=str_targets, imagepos="tc",
+        pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', label=predicted_classes, imagepos="tc",
                                 imagescale="height", labelloc="b", fontsize=10, penwidth=0, fontname="Helvetica")
     else:
-        pydot_node = pydot.Node(subtree_root.index, image=f'"{fname}"', xlabel=subtree_root.index, fontsize=6,
+        pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', xlabel=f'"{subtree_root.index}"', fontsize=6,
                                 labelfontcolor="gray50", fontname="Helvetica")
 
     if isinstance(subtree_root, InternalNode):
@@ -100,13 +95,13 @@ def _gen_pydot_nodes(
     return subtree_pydot_nodes
 
 
-def _gen_pydot_edges(subtree_root: Node):
+def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
     edge_kwargs = dict(fontsize=10, tailport="s", headport="n", fontname="Helvetica")
     if isinstance(subtree_root, InternalNode):
         l_descendants = _gen_pydot_edges(subtree_root.left)
         r_descendants = _gen_pydot_edges(subtree_root.right)
         l_edge = pydot.Edge(subtree_root.index, subtree_root.left.index, label="Absent", **edge_kwargs)
-        r_edge = pydot.Edge(subtree_root.index, subtree_root.left.index, label="Present", **edge_kwargs)
+        r_edge = pydot.Edge(subtree_root.index, subtree_root.right.index, label="Present", **edge_kwargs)
         return [l_edge, r_edge] + l_descendants + r_descendants
     if isinstance(subtree_root, Leaf):
         return []
