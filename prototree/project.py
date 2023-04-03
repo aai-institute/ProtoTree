@@ -37,7 +37,7 @@ def replace_prototypes_by_projections(
 
     def process_sample(
         node: InternalNode,
-        image_latent: torch.Tensor,
+        transformed_image: torch.Tensor,
         true_label: int,
         sample_patches_distances: torch.Tensor,
         sample_patches: torch.Tensor,
@@ -53,7 +53,7 @@ def replace_prototypes_by_projections(
         ):
             node_to_patch_info[node] = ProjectionPatchInfo(
                 node=node,
-                transformed_image=image_latent,
+                transformed_image=transformed_image,
                 true_label=true_label,
                 closest_patch=closest_patch,
                 closest_patch_distance=closest_patch_distance,
