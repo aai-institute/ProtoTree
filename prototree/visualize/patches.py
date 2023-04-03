@@ -35,7 +35,7 @@ def save_patch_visualizations(
             latent_img, (img_size[1], img_size[0]), interpolation=cv2.INTER_CUBIC
         )
 
-    def save(img: np.ndarray, fname: os.PathLike):
+    def save(img: np.ndarray, fname: str):
         path = save_path / fname
         path.parent.mkdir(parents=True, exist_ok=True)
         plt.imsave(
