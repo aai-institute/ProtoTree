@@ -13,9 +13,9 @@ from prototree.node import InternalNode, Leaf, Node
 
 log = logging.getLogger(__name__)
 
+# TODO: Less hardcoding (particularly of numbers).
 FONT = "Helvetica"
 EDGE_ATTRS = dict(fontsize=10, tailport="s", headport="n", fontname=FONT)
-
 INTERNAL_NODE_IMG_SIZE = (100, 100)
 INTERNAL_NODE_IMG_GAP = 4
 
@@ -178,7 +178,7 @@ def _gen_internal_node_img(node: InternalNode, patches_path: os.PathLike):
     wbb, hbb = bb_img.size
     w, h = patch_img.size
 
-    total_w = w + wbb + INTERNAL_NODE_IMG_GAP
+    total_w = w + INTERNAL_NODE_IMG_GAP + wbb
     total_h = max(h, hbb)
 
     together = Image.new(patch_img.mode, (total_w, total_h), color=(255, 255, 255))
