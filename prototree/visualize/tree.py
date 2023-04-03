@@ -13,9 +13,10 @@ from prototree.node import InternalNode, Leaf, Node
 
 log = logging.getLogger(__name__)
 
-# TODO: See if there's a non-clunky way to do single dispatch on `Node`s in this file.
+# TODO: See if there's a non-clunky (i.e. without defining for the base class) way to do single dispatch on `Node`s in
+#  this file.
 
-# TODO: Less hardcoding (particularly of numbers).
+# TODO: Less hardcoding (particularly of numbers), both here and elsewhere in the file.
 FONT = "Helvetica"
 EDGE_ATTRS = dict(fontsize=10, tailport="s", headport="n", fontname=FONT)
 INTERNAL_NODE_IMG_SIZE = (100, 100)
@@ -30,7 +31,7 @@ def save_tree_visualization(
         class_names: tuple,
 ):
     """
-    Saves visualization as a dotfile (and as pdf, if supported)
+    Saves visualization as a DOT file and png.
     """
     node_vis_path = save_path / "node_vis"
     node_vis_path.mkdir(parents=True, exist_ok=True)
@@ -38,8 +39,9 @@ def save_tree_visualization(
     pydot_tree = _gen_pydot_tree(tree.tree_root, patches_path, node_vis_path, class_names)
 
     dot_file = save_path / "tree.dot"
-    log.info(f"Saving tree dot to {dot_file}, this file is just for debugging/further processing, and is not directly "
+    log.info(f"Saving tree DOT to {dot_file}, this file is just for debugging/further processing, and is not directly "
              f"used in image output generation.")
+    pydot_tree.write_dot(dot_file)
 
     png_file = save_path / "treevis.png"
     log.info(f"Saving rendered tree to {png_file}")
@@ -76,35 +78,22 @@ def _gen_pydot_nodes(
     img_file = os.path.abspath(node_vis_path / f"node_{subtree_root.index}_vis.jpg")
     img.save(img_file)
 
+    if isinstance(subtree_root, InternalNode):
+        pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', xlabel=f'"{subtree_root.index}"', fontsize=6,
+                                labelfontcolor="gray50", fontname=FONT, shape="box")
+        l_descendants = _gen_pydot_nodes(subtree_root.left, patches_path, node_vis_path, class_names)
+        r_descendants = _gen_pydot_nodes(subtree_root.right, patches_path, node_vis_path, class_names)
+        return [pydot_node] + l_descendants + r_descendants
     if isinstance(subtree_root, Leaf):
-        ws = copy.deepcopy(torch.exp(subtree_root.logits()).detach().numpy())
-        argmax = np.argmax(ws)
-        targets = [argmax] if argmax.shape == () else argmax.tolist()
-        class_targets = copy.deepcopy(targets)
-        for i in range(len(targets)):
-            t = targets[i]
-            class_targets[i] = class_names[t]
-        predicted_classes = (
-            ",".join(str(t) for t in class_targets) if len(class_targets) > 0 else ""
-        )
-        predicted_classes = predicted_classes.replace("_", " ")
+        leaf_probs = copy.deepcopy(torch.exp(subtree_root.logits()).detach().numpy())
+        max_prob_inds = np.argmax(leaf_probs, keepdims=True)
+        predicted_classes = ",".join([class_names[i].replace("_", " ") for i in max_prob_inds])
 
         pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', label=predicted_classes, imagepos="tc",
                                 imagescale="height", labelloc="b", fontsize=10, penwidth=0, fontname=FONT)
-    else:
-        pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', xlabel=f'"{subtree_root.index}"', fontsize=6,
-                                labelfontcolor="gray50", fontname=FONT, shape="box")
+        return [pydot_node]
 
-    if isinstance(subtree_root, InternalNode):
-        l_descendants = _gen_pydot_nodes(subtree_root.left, patches_path, node_vis_path, class_names)
-        r_descendants = _gen_pydot_nodes(subtree_root.right, patches_path, node_vis_path, class_names)
-        subtree_pydot_nodes = [pydot_node] + l_descendants + r_descendants
-    elif isinstance(subtree_root, Leaf):
-        subtree_pydot_nodes = [pydot_node]
-    else:
-        raise ValueError(f"Unknown node {subtree_root}.")
-
-    return subtree_pydot_nodes
+    raise ValueError(f"Unknown node {subtree_root}.")
 
 
 def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
@@ -116,6 +105,8 @@ def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
         return [l_edge, r_edge] + l_descendants + r_descendants
     if isinstance(subtree_root, Leaf):
         return []
+
+    raise ValueError(f"Unknown node {subtree_root}.")
 
 
 def _gen_node_rgb(node: Node, patches_path: os.PathLike):
