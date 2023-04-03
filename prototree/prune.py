@@ -30,7 +30,7 @@ def prune_unconfident_leaves(root: InternalNode, leaf_pruning_threshold: float):
 #            return False
 
         for leaf in n.leaves:
-            if torch.any(leaf.y_proba() > leaf_pruning_threshold):
+            if torch.any(leaf.probs() > leaf_pruning_threshold):
                 return False
         return True
 

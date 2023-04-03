@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 # TODO: Less hardcoding (particularly of numbers), both here and elsewhere in the file.
 FONT = "Helvetica"
 EDGE_ATTRS = dict(fontsize=10, tailport="s", headport="n", fontname=FONT)
-INTERNAL_NODE_IMG_SIZE = (100, 100)
+SINGLE_NODE_IMG_SIZE = (100, 100)
 INTERNAL_NODE_IMG_GAP = 4
 
 
@@ -87,7 +87,7 @@ def _gen_pydot_nodes(
     if isinstance(subtree_root, Leaf):
         leaf_probs = copy.deepcopy(torch.exp(subtree_root.logits()).detach().numpy())
         max_prob_inds = np.argmax(leaf_probs, keepdims=True)
-        predicted_classes = ",".join([class_names[i].replace("_", " ") for i in max_prob_inds])
+        predicted_classes = ",".join([class_names[i] for i in max_prob_inds])
 
         pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', label=predicted_classes, imagepos="tc",
                                 imagescale="height", labelloc="b", fontsize=10, penwidth=0, fontname=FONT)
@@ -124,15 +124,14 @@ def _gen_leaf_img(node: Leaf) -> Image:
     pixel_depth = 255
     height = 24
     footer_height = 10
-    max_width = 100
 
-    distribution = copy.deepcopy(node.y_proba().detach().numpy())
-    distribution = (np.ones(distribution.shape) - distribution) * pixel_depth
+    node_probs = node.probs().detach().numpy()
+    distribution = (np.ones(node_probs.shape) - node_probs) * pixel_depth
     num_classes = len(distribution)
 
     width = min(36, num_classes)
+    # Correcting potential off-by-one errors.
     scaler = math.ceil(width / num_classes)
-    # correcting potential off-by-one errors
     width = scaler * num_classes
 
     img = Image.new("F", (width, height))
@@ -146,12 +145,10 @@ def _gen_leaf_img(node: Leaf) -> Image:
         # separate footer by black line
         pixels[i, height - footer_height] = 0
         for j in range(height - footer_height - 1, height):
-            # set bottom part of node white such that class label is readable
+            # Set the bottom part of the node white so that the class label is readable.
             pixels[i, j] = pixel_depth
 
-    if width > max_width:
-        img = img.resize((max_width, height))
-    return img
+    return ImageOps.contain(img, (SINGLE_NODE_IMG_SIZE[0], height))
 
 
 def _gen_internal_node_img(node: InternalNode, patches_path: os.PathLike) -> Image:
@@ -162,8 +159,8 @@ def _gen_internal_node_img(node: InternalNode, patches_path: os.PathLike) -> Ima
     patch_img_orig = Image.open(patch_path)
     bb_img_orig = Image.open(bb_path)
 
-    bb_img = ImageOps.contain(bb_img_orig, INTERNAL_NODE_IMG_SIZE)
-    patch_img = ImageOps.contain(patch_img_orig, INTERNAL_NODE_IMG_SIZE)
+    bb_img = ImageOps.contain(bb_img_orig, SINGLE_NODE_IMG_SIZE)
+    patch_img = ImageOps.contain(patch_img_orig, SINGLE_NODE_IMG_SIZE)
     wbb, hbb = bb_img.size
     w, h = patch_img.size
 
