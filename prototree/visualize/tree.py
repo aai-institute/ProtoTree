@@ -2,9 +2,9 @@ import copy
 import logging
 import math
 import os
-from subprocess import check_call
 
 import numpy as np
+import pydot
 import torch
 from PIL import Image
 
@@ -14,7 +14,6 @@ from prototree.node import InternalNode, Leaf, Node
 log = logging.getLogger(__name__)
 
 
-# TODO: use pydot
 @torch.no_grad()
 def save_tree_visualization(
     tree: ProtoTree,
@@ -34,39 +33,44 @@ def save_tree_visualization(
     node_vis_path = save_path / "node_vis"
     node_vis_path.mkdir(parents=True, exist_ok=True)
 
-    s = 'digraph T {margin=0;ranksep=".03";nodesep="0.05";splines="false";\n'
-    s += 'node [shape=rect, label=""];\n'
-    s += _gen_dot_nodes(tree.tree_root, patches_path, node_vis_path, class_names)
-    s += _gen_dot_edges(tree.tree_root, class_names)[0]
-    s += "}\n"
+    pydot_tree = pydot.Dot("prototree", graph_type="digraph", bgcolor="white", margin=0.0, ranksep=0.03, nodesep=0.05,
+                           splines=False)
+    pydot_tree.add_node(pydot.Node("root", shape="rect", label=""))
+
+    pydot_nodes = _gen_pydot_nodes(tree.tree_root, patches_path, node_vis_path, class_names)
+    pydot_edges = _gen_pydot_edges(tree.tree_root)
+    for pydot_node in pydot_nodes:
+        pydot_tree.add_node(pydot_node)
+    for pydot_edge in pydot_edges:
+        pydot_tree.add_edge(pydot_edge)
 
     dot_file = save_path / "tree.dot"
-    log.info(f"Saving tree visualization to {dot_file}")
-    with open(dot_file, "w") as f:
-        f.write(s)
+    log.info(f"Saving tree dot to {dot_file}")
+    s = pydot_tree.to_string()
+    pydot_tree.write_dot(dot_file)  # Just for debugging assistance and/or further processing.
 
-    # Save as pdf using graphviz
-    try:
-        pdf_file = save_path / "treevis.pdf"
-        check_call(["dot", "-Tpdf", "-Gmargin=0", dot_file, "-o", pdf_file])
-        log.info(f"Saved tree visualization as pdf to {pdf_file}")
-    except FileNotFoundError:
-        log.error(
-            f"Could not find graphviz, skipping generation of pdf. "
-            f"Please install it and make sure it is available on the PATH to generate pdfs. "
-            f"See https://graphviz.org/ for instructions.."
-        )
+    svg_file = save_path / "treevis.svg"
+    log.info(f"Saving rendered tree to {svg_file}")
+    pydot_tree.write_svg(svg_file)
+
+    png_file = save_path / "treevis.png"
+    log.info(f"Saving rendered tree to {png_file}")
+    pydot_tree.write_png(png_file)
 
 
-def _gen_dot_nodes(
-    node: Node,
+def _gen_pydot_nodes(
+    subtree_root: Node,
     patches_path: os.PathLike,
     node_vis_path: os.PathLike,
     class_names: tuple,
-):
-    img = _gen_node_rgb(node, patches_path)
-    if isinstance(node, Leaf):
-        ws = copy.deepcopy(torch.exp(node.logits()).detach().numpy())
+) -> list[pydot.Node]:
+    img = _gen_node_rgb(subtree_root, patches_path)
+    # TODO: Perhaps we should extract some pure functions here.
+    fname = node_vis_path / f"node_{subtree_root.index}_vis.jpg"
+    img.save(fname)
+
+    if isinstance(subtree_root, Leaf):
+        ws = copy.deepcopy(torch.exp(subtree_root.logits()).detach().numpy())
         argmax = np.argmax(ws)
         targets = [argmax] if argmax.shape == () else argmax.tolist()
         class_targets = copy.deepcopy(targets)
@@ -78,49 +82,34 @@ def _gen_dot_nodes(
         )
         str_targets = str_targets.replace("_", " ")
 
-    # TODO: Perhaps we should extract some pure functions here.
-    fname = node_vis_path / f"node_{node.index}_vis.jpg"
-    img.save(fname)
-
-    if isinstance(node, Leaf):
-        s = (
-            f'{node.index}[imagepos="tc" imagescale=height image="{fname}" '
-            f'label="{str_targets}" labelloc=b fontsize=10 penwidth=0 fontname=Helvetica];\n'
-        )
+        pydot_node = pydot.Node(subtree_root.index, image=f'"{fname}"', label=str_targets, imagepos="tc",
+                                imagescale="height", labelloc="b", fontsize=10, penwidth=0, fontname="Helvetica")
     else:
-        s = (
-            f'{node.index}[image="{fname}" xlabel="{node.index}" '
-            f"fontsize=6 labelfontcolor=gray50 fontname=Helvetica];\n"
-        )
-    if isinstance(node, InternalNode):
-        return (
-            s
-            + _gen_dot_nodes(node.left, patches_path, node_vis_path, class_names)
-            + _gen_dot_nodes(node.right, patches_path, node_vis_path, class_names)
-        )
-    if isinstance(node, Leaf):
-        return s
+        pydot_node = pydot.Node(subtree_root.index, image=f'"{fname}"', xlabel=subtree_root.index, fontsize=6,
+                                labelfontcolor="gray50", fontname="Helvetica")
+
+    if isinstance(subtree_root, InternalNode):
+        l_descendants = _gen_pydot_nodes(subtree_root.left, patches_path, node_vis_path, class_names)
+        r_descendants = _gen_pydot_nodes(subtree_root.right, patches_path, node_vis_path, class_names)
+        subtree_pydot_nodes = [pydot_node] + l_descendants + r_descendants
+    elif isinstance(subtree_root, Leaf):
+        subtree_pydot_nodes = [pydot_node]
+    else:
+        raise ValueError(f"Unknown node {subtree_root}.")
+
+    return subtree_pydot_nodes
 
 
-def _gen_dot_edges(node: Node, class_names: tuple):
-    if isinstance(node, InternalNode):
-        edge_l, targets_l = _gen_dot_edges(node.left, class_names)
-        edge_r, targets_r = _gen_dot_edges(node.right, class_names)
-        s = (
-            f'{node.index} -> {node.left.index} [label="Absent" fontsize=10 tailport="s" headport="n" '
-            f"fontname=Helvetica];\n {node.index} -> "
-            f'{node.right.index} [label="Present" fontsize=10 tailport="s" headport="n" fontname=Helvetica];\n'
-        )
-        return s + edge_l + edge_r, sorted(list(set(targets_l + targets_r)))
-    if isinstance(node, Leaf):
-        ws = copy.deepcopy(torch.exp(node.logits()).detach().numpy())
-        argmax = np.argmax(ws)
-        targets = [argmax] if argmax.shape == () else argmax.tolist()
-        class_targets = copy.deepcopy(targets)
-        for i in range(len(targets)):
-            t = targets[i]
-            class_targets[i] = class_names[t]
-        return "", class_targets
+def _gen_pydot_edges(subtree_root: Node):
+    edge_kwargs = dict(fontsize=10, tailport="s", headport="n", fontname="Helvetica")
+    if isinstance(subtree_root, InternalNode):
+        l_descendants = _gen_pydot_edges(subtree_root.left)
+        r_descendants = _gen_pydot_edges(subtree_root.right)
+        l_edge = pydot.Edge(subtree_root.index, subtree_root.left.index, label="Absent", **edge_kwargs)
+        r_edge = pydot.Edge(subtree_root.index, subtree_root.left.index, label="Present", **edge_kwargs)
+        return [l_edge, r_edge] + l_descendants + r_descendants
+    if isinstance(subtree_root, Leaf):
+        return []
 
 
 def _gen_node_rgb(node: Node, patches_path: os.PathLike):
