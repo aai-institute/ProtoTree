@@ -51,7 +51,6 @@ def save_patch_visualizations(
 
         # a single pixel is selected
         # TODO: there is probably a better way to get this mask
-        # TODO: What if there's multiple maxima, won't the bounding box be wrong?
         closest_patch_latent_mask = np.uint8(similarity_map == similarity_map.max())
         closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
         h_low, h_high, w_low, w_high = covering_rectangle_indices(closest_patch_pixel_mask)
@@ -79,6 +78,7 @@ def covering_rectangle_indices(mask: np.ndarray):
     """
     Assuming that mask contains a single connected component with ones, find the indices of the
     smallest rectangle that covers the component.
+    TODO: Handle the case of multiple maxima.
     :param mask: 2D array of ones and zeros
     :return: indices of the smallest rectangle that covers the component
     """

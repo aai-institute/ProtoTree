@@ -153,6 +153,7 @@ def _gen_leaf_img(node: Leaf):
     # TODO: using img.load is discouraged, improve
     pixels = img.load()
 
+    # TODO: Vectorize if this turns out to be a performance bottleneck.
     for i in range(width):
         for j in range(height - footer_height):
             pixels[i, j] = distribution[int(i / scaler)]
