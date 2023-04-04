@@ -267,7 +267,7 @@ class ProtoTree(PrototypeBase):
 
         node_to_probs = self.get_node_to_probs(x)
 
-        match self.training, sampling_strategy:  # TODO: Find a better approach to sampling strategy selection.
+        match self.training, sampling_strategy:  # TODO: Find a better approach for this branching logic.
             case _, "distributed":
                 predicting_leaves = None
                 logits = self.tree_root.forward(node_to_probs)
@@ -278,8 +278,12 @@ class ProtoTree(PrototypeBase):
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
 
-                ancestors = [predicting_leaf.ancestors for predicting_leaf in predicting_leaves]
-                x = 5
+                leaves_ancestors = [predicting_leaf.ancestors for predicting_leaf in predicting_leaves]
+                for leaf_ancestors in leaves_ancestors:
+                    for leaf_ancestor in leaf_ancestors:
+                        node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
+                        prototype = self.prototype_layer.prototype_tensors.data[node_proto_idx]
+
             case _:
                 raise ValueError(
                     f"Invalid train/test and sampling strategy combination: {self.training=}, {sampling_strategy=}"

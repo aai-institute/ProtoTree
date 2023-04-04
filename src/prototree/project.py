@@ -20,7 +20,7 @@ def replace_prototypes_by_projections(
     The goal is to find the latent patch that minimizes the L2 distance to each prototype.
     This is done by iterating through a dataset (typically the train dataset) and
     replacing each prototype by the closest latent patch.
-    **Important**: This modifies the prototype weights in-place!
+    **Important**: This modifies the prototype weights in-place! TODO: Split into pure and impure functions.
 
     :param tree:
     :param project_loader:
@@ -81,12 +81,10 @@ def replace_prototypes_by_projections(
                     continue
                 process_sample(internal_node, x_i, y_i, distances_i, patches_i)
 
-    def replace_proto_by_patch(proto_idx: int, patch: torch.Tensor):
-        tree.prototype_layer.prototype_tensors.data[proto_idx] = patch.data
-
     for internal_node, patch_info in node_to_patch_info.items():
         node_proto_idx = tree.node_to_proto_idx[internal_node]
-        replace_proto_by_patch(node_proto_idx, patch_info.closest_patch)
+        tree.prototype_layer.prototype_tensors.data[node_proto_idx] = patch_info.closest_patch.data
+
     return node_to_patch_info
 
 

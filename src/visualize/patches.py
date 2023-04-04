@@ -50,6 +50,7 @@ def save_patch_visualizations(
 
         # a single pixel is selected
         # TODO: there is probably a better way to get this mask
+        # Max because the this similarity measure is higher for more similar patches.
         closest_patch_latent_mask = np.uint8(similarity_map == similarity_map.max())
         closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
         h_low, h_high, w_low, w_high = covering_rectangle_indices(
