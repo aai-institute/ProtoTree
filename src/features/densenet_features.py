@@ -16,7 +16,6 @@ model_dir = "./pretrained_models"
 
 
 class _DenseLayer(nn.Sequential):
-
     num_layers = 2
 
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate):
@@ -90,7 +89,6 @@ class _DenseBlock(nn.Sequential):
 
 
 class _Transition(nn.Sequential):
-
     num_layers = 1
 
     def __init__(self, num_input_features, num_output_features):
@@ -138,7 +136,6 @@ class DenseNet_features(nn.Module):
         drop_rate=0,
         num_classes=1000,
     ):
-
         super(DenseNet_features, self).__init__()
         self.kernel_sizes = []
         self.strides = []
@@ -399,7 +396,6 @@ def densenet161_features(pretrained=False, **kwargs):
 
 
 if __name__ == "__main__":
-
     d161 = densenet161_features(True)
     print(d161)
 

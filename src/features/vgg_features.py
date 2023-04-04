@@ -96,7 +96,6 @@ class VGG_features(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def _make_layers(self, cfg, batch_norm):
-
         self.n_layers = 0
 
         layers = []
@@ -309,7 +308,6 @@ def vgg19_bn_features(pretrained=False, **kwargs):
 
 
 if __name__ == "__main__":
-
     vgg11_f = vgg11_features(pretrained=True)
     print(vgg11_f)
 

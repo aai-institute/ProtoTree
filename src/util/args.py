@@ -11,7 +11,6 @@ from src.prototree.models import ProtoTree
 
 
 def get_args() -> argparse.Namespace:
-
     parser = argparse.ArgumentParser("Train a ProtoTree")
     parser.add_argument(
         "--dataset",
@@ -63,7 +62,7 @@ def get_args() -> argparse.Namespace:
         type=float,
         default=0.001,
         help="The optimizer learning rate for training the 1x1 conv layer and last conv layer of the underlying "
-             "neural network (applicable to resnet50 and densenet121)",
+        "neural network (applicable to resnet50 and densenet121)",
     )
     parser.add_argument(
         "--lr_net",
@@ -135,7 +134,7 @@ def get_args() -> argparse.Namespace:
         type=str,
         default="",
         help="The directory containing a state dict (checkpoint) with a pretrained ProtoTree. Note that training "
-             "further from a checkpoint does not seem to work correctly. Evaluating a trained ProtoTree does work.",
+        "further from a checkpoint does not seem to work correctly. Evaluating a trained ProtoTree does work.",
     )
     parser.add_argument(
         "--freeze_epochs",
@@ -168,8 +167,8 @@ def get_args() -> argparse.Namespace:
         type=float,
         default=11.0,  # This value was chosen empirically.
         help="An internal node will be pruned when the maximum class probability in the distributions of all leaves "
-             "below the node are lower than some threshold. This multiplier is used in calculating the exact threshold,"
-             " please look at the code using this argument to see how the threshold is calculated.",
+        "below the node are lower than some threshold. This multiplier is used in calculating the exact threshold,"
+        " please look at the code using this argument to see how the threshold is calculated.",
     )
     parser.add_argument(
         "--nr_trees_ensemble",
@@ -178,14 +177,16 @@ def get_args() -> argparse.Namespace:
         help="Number of ProtoTrees to train and (optionally) use in an ensemble. Used in main_ensemble.py",
     )
     args = parser.parse_args()
-    args.milestones_list = get_milestones_list(args.milestones)  # TODO Seems a bit hacky to put this in args.
+    args.milestones_list = get_milestones_list(
+        args.milestones
+    )  # TODO Seems a bit hacky to put this in args.
     return args
 
 
 def get_milestones_list(milestones_str: str):
     """
-        Parse the milestones argument to get a list
-        :param milestones_str: The milestones as a comma separated string, e.g. "23,34,45"
+    Parse the milestones argument to get a list
+    :param milestones_str: The milestones as a comma separated string, e.g. "23,34,45"
     """
     return list(map(int, milestones_str.split(","))) if milestones_str else []
 

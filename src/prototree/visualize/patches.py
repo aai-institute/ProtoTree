@@ -52,7 +52,9 @@ def save_patch_visualizations(
         # TODO: there is probably a better way to get this mask
         closest_patch_latent_mask = np.uint8(similarity_map == similarity_map.max())
         closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
-        h_low, h_high, w_low, w_high = covering_rectangle_indices(closest_patch_pixel_mask)
+        h_low, h_high, w_low, w_high = covering_rectangle_indices(
+            closest_patch_pixel_mask
+        )
 
         original_image_unscaled = inverse_transform(patch_info.transformed_image)
         original_image = np.array(original_image_unscaled, dtype=np.float32) / 255
@@ -118,5 +120,7 @@ def _to_rgb_map(arr: np.ndarray):
     arr = np.uint8(255 * arr)
     arr = cv2.applyColorMap(arr, cv2.COLORMAP_JET)
     arr = np.float32(arr) / 255
-    arr = arr[:, :, ::-1]  # Reverse channels, for similarity data we want red (best matches) for the smallest values.
+    arr = arr[
+        :, :, ::-1
+    ]  # Reverse channels, for similarity data we want red (best matches) for the smallest values.
     return arr

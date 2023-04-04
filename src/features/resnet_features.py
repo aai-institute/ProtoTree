@@ -351,7 +351,6 @@ def resnet152_features(pretrained=False, **kwargs):
 
 
 if __name__ == "__main__":
-
     r18_features = resnet18_features(pretrained=True)
     print(r18_features)
 
