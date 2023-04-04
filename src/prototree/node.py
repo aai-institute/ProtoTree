@@ -139,6 +139,15 @@ class Node(ABC):
         return self.descendant_internal_nodes + self.leaves
 
     @property
+    def ancestors(self) -> list["Node"]:
+        cur_node = self
+        ancestors = []
+        while not cur_node.is_root:
+            cur_node = cur_node.parent
+            ancestors.append(cur_node)
+        return ancestors
+
+    @property
     @abstractmethod
     def leaves(self) -> list["Leaf"]:
         pass
