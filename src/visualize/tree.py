@@ -11,8 +11,6 @@ from prototree.node import InternalNode, Leaf, Node
 
 log = logging.getLogger(__name__)
 
-# TODO: See if there's a non-clunky (i.e. no base class def) way to do single dispatch on `Node`s in this file.
-
 # TODO: Less hardcoding (particularly of numbers), both here and elsewhere in the file.
 FONT = "Helvetica"
 EDGE_ATTRS = dict(fontsize=10, tailport="s", headport="n", fontname=FONT)
@@ -75,59 +73,73 @@ def _gen_pydot_nodes(
     node_imgs_dir: os.PathLike,
     class_names: tuple,
 ) -> list[pydot.Node]:
-    if isinstance(subtree_root, InternalNode):
-        img = _gen_internal_node_img(subtree_root, patches_dir)
-        # TODO: Perhaps we should extract some pure functions here.
-        img_file = os.path.abspath(node_imgs_dir / f"node_{subtree_root.index}_vis.jpg")
-        img.save(img_file)
+    match subtree_root:  # TODO: This function is quite big, should we use single dispatch instead?
+        case InternalNode():
+            img = _gen_internal_node_img(subtree_root, patches_dir)
+            # TODO: Perhaps we should extract some pure functions here.
+            img_file = os.path.abspath(
+                node_imgs_dir / f"node_{subtree_root.index}_vis.jpg"
+            )
+            img.save(img_file)
 
-        pydot_node = pydot.Node(
-            subtree_root.index,
-            image=f'"{img_file}"',
-            xlabel=f'"{subtree_root.index}"',
-            fontsize=6,
-            labelfontcolor="gray50",
-            fontname=FONT,
-            shape="box",
-        )
-        l_descendants = _gen_pydot_nodes(
-            subtree_root.left, patches_dir, node_imgs_dir, class_names
-        )
-        r_descendants = _gen_pydot_nodes(
-            subtree_root.right, patches_dir, node_imgs_dir, class_names
-        )
-        return [pydot_node] + l_descendants + r_descendants
-    if isinstance(subtree_root, Leaf):
-        leaf_probs = torch.exp(subtree_root.y_logits()).detach()
-        max_prob_inds = np.argmax(leaf_probs, keepdims=True)
-        max_prob = leaf_probs[max_prob_inds[0]]
-        top_classes = f"p = {max_prob:.5f}:\n" + ",\n".join(
-            [class_names[i] for i in max_prob_inds]
-        )
+            pydot_node = pydot.Node(
+                subtree_root.index,
+                image=f'"{img_file}"',
+                xlabel=f'"{subtree_root.index}"',
+                fontsize=6,
+                labelfontcolor="gray50",
+                fontname=FONT,
+                shape="box",
+            )
+            l_descendants = _gen_pydot_nodes(
+                subtree_root.left, patches_dir, node_imgs_dir, class_names
+            )
+            r_descendants = _gen_pydot_nodes(
+                subtree_root.right, patches_dir, node_imgs_dir, class_names
+            )
+            return [pydot_node] + l_descendants + r_descendants
+        case Leaf():
+            leaf_probs = torch.exp(subtree_root.logits()).detach()
+            max_prob_inds = np.argmax(leaf_probs, keepdims=True)
+            max_prob = leaf_probs[max_prob_inds[0]]
+            top_classes = f"p = {max_prob:.5f}:\n" + ",\n".join(
+                [class_names[i] for i in max_prob_inds]
+            )
 
-        pydot_node = pydot.Node(
-            subtree_root.index,
-            label=top_classes,
-            labelfontcolor="gray50",
-            fontname=FONT,
-            shape="box",
-        )
-        return [pydot_node]
+            pydot_node = pydot.Node(
+                subtree_root.index,
+                label=top_classes,
+                labelfontcolor="gray50",
+                fontname=FONT,
+                shape="box",
+            )
+            return [pydot_node]
+        case other:
+            raise ValueError(f"Unrecognized node {other}.")
 
 
 def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
-    if isinstance(subtree_root, InternalNode):
-        l_descendants = _gen_pydot_edges(subtree_root.left)
-        r_descendants = _gen_pydot_edges(subtree_root.right)
-        l_edge = pydot.Edge(
-            subtree_root.index, subtree_root.left.index, label="Absent", **EDGE_ATTRS
-        )
-        r_edge = pydot.Edge(
-            subtree_root.index, subtree_root.right.index, label="Present", **EDGE_ATTRS
-        )
-        return [l_edge, r_edge] + l_descendants + r_descendants
-    if isinstance(subtree_root, Leaf):
-        return []
+    match subtree_root:
+        case InternalNode():
+            l_descendants = _gen_pydot_edges(subtree_root.left)
+            r_descendants = _gen_pydot_edges(subtree_root.right)
+            l_edge = pydot.Edge(
+                subtree_root.index,
+                subtree_root.left.index,
+                label="Absent",
+                **EDGE_ATTRS,
+            )
+            r_edge = pydot.Edge(
+                subtree_root.index,
+                subtree_root.right.index,
+                label="Present",
+                **EDGE_ATTRS,
+            )
+            return [l_edge, r_edge] + l_descendants + r_descendants
+        case Leaf():
+            return []
+        case other:
+            raise ValueError(f"Unrecognized node {other}.")
 
 
 def _gen_internal_node_img(node: InternalNode, patches_dir: os.PathLike) -> Image:
