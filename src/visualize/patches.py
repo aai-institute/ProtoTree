@@ -122,5 +122,5 @@ def _to_rgb_map(arr: np.ndarray):
     arr = np.float32(arr) / 255
     arr = arr[
         :, :, ::-1
-    ]  # Reverse channels, for similarity data we want red (best matches) for the smallest values.
+    ]  # Reverse channels, so red covers the most similar patches (the highest similarity values).
     return arr
