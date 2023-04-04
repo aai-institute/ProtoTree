@@ -7,10 +7,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from src.prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
-from src.prototree.types import SamplingStrategy
-from src.util.l2conv import L2Conv2D
-from src.util.net import default_add_on_layers
+from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
+from prototree.types import SamplingStrategy
+from util.l2conv import L2Conv2D
+from util.net import default_add_on_layers
 
 
 class PrototypeBase(nn.Module):

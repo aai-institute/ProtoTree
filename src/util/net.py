@@ -1,6 +1,6 @@
-from src.features.densenet_features import *
-from src.features.resnet_features import *
-from src.features.vgg_features import *
+from features.densenet_features import *
+from features.resnet_features import *
+from features.vgg_features import *
 
 BASE_ARCHITECTURE_TO_FEATURES = {
     "resnet18": resnet18_features,

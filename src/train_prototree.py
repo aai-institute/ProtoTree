@@ -7,17 +7,17 @@ from typing import Literal
 import torch
 from torch.utils.data import DataLoader
 
-from src.prototree.eval import eval_fidelity, eval_tree
-from src.prototree.models import ProtoTree
-from src.prototree.node import InternalNode, log_leaves_properties
-from src.prototree.project import replace_prototypes_by_projections
-from src.prototree.prune import prune_unconfident_leaves
-from src.prototree.train import train_epoch
-from src.prototree.visualize.patches import save_patch_visualizations
-from src.util.args import get_args, get_optimizer
-from src.util.data import get_dataloaders
-from src.util.net import BASE_ARCHITECTURE_TO_FEATURES
-from src.prototree.visualize.tree import save_tree_visualization
+from prototree.eval import eval_fidelity, eval_tree
+from prototree.models import ProtoTree
+from prototree.node import InternalNode, log_leaves_properties
+from prototree.project import replace_prototypes_by_projections
+from prototree.prune import prune_unconfident_leaves
+from prototree.train import train_epoch
+from visualize import save_patch_visualizations
+from util.args import get_args, get_optimizer
+from util.data import get_dataloaders
+from util.net import BASE_ARCHITECTURE_TO_FEATURES
+from visualize import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
