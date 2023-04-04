@@ -59,7 +59,7 @@ def _gen_pydot_tree(
 def _gen_pydot_nodes(
         subtree_root: Node, patches_dir: os.PathLike, node_imgs_dir: os.PathLike, class_names: tuple
 ) -> list[pydot.Node]:
-    match subtree_root:  # TODO: This function is quite big, should we use single dispatch instead???
+    match subtree_root:  # TODO: This function is quite big, should we use single dispatch instead?
         case InternalNode():
             img = _gen_internal_node_img(subtree_root, patches_dir)
             # TODO: Perhaps we should extract some pure functions here.
