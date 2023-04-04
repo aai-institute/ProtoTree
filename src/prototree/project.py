@@ -71,21 +71,21 @@ def replace_prototypes_by_projections(
         # Shape: (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto)
         patches = features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
 
-        for node in tree.internal_nodes:
-            proto_idx = tree.node_to_proto_idx[node]
+        for internal_node in tree.internal_nodes:
+            proto_idx = tree.node_to_proto_idx[internal_node]
 
             for x_i, y_i, distances_i, patches_i in zip(
                 x, y, distances[:, proto_idx, :, :], patches
             ):
-                if constrain_on_classes and y_i.item() not in get_leaf_labels(node):
+                if constrain_on_classes and y_i.item() not in get_leaf_labels(internal_node):
                     continue
-                process_sample(node, x_i, y_i, distances_i, patches_i)
+                process_sample(internal_node, x_i, y_i, distances_i, patches_i)
 
     def replace_proto_by_patch(proto_idx: int, patch: torch.Tensor):
         tree.prototype_layer.prototype_tensors.data[proto_idx] = patch.data
 
-    for node, patch_info in node_to_patch_info.items():
-        proto_idx = tree.node_to_proto_idx[node]
+    for internal_node, patch_info in node_to_patch_info.items():
+        proto_idx = tree.node_to_proto_idx[internal_node]
         replace_proto_by_patch(proto_idx, patch_info.closest_patch)
     return node_to_patch_info
 

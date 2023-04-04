@@ -270,27 +270,27 @@ class Leaf(Node):
         return self
 
     def predicted_label(self) -> int:
-        return self.logits().argmax().item()
+        return self.y_logits().argmax().item()
 
     def conf_predicted_label(self) -> float:
-        return self.y_proba().max().item()
+        return self.y_probs().max().item()
 
     # Note: this doesn't compute anything, it just returns the stored distribution copied batch_size times.
     def forward(
         self, node_to_probs: dict[Union["InternalNode", "Leaf"], "NodeProbabilities"]
     ) -> torch.Tensor:
-        return self.logits_batch(node_to_probs[self].batch_size)
+        return self.y_logits_batch(node_to_probs[self].batch_size)
 
-    def logits_batch(self, batch_size: int) -> torch.Tensor:
-        logits = self.logits()
+    def y_logits_batch(self, batch_size: int) -> torch.Tensor:
+        logits = self.y_logits()
         logits_batch_list = [logits.unsqueeze(0)] * batch_size
         return torch.cat(logits_batch_list, dim=0)
 
-    def logits(self) -> torch.Tensor:
+    def y_logits(self) -> torch.Tensor:
         return F.log_softmax(self.dist_params, dim=0)
 
-    def y_proba(self):
-        return torch.exp(self.logits())
+    def y_probs(self):
+        return torch.exp(self.y_logits())
 
     @property
     def leaves(self) -> list["Leaf"]:

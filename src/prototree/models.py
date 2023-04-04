@@ -278,7 +278,7 @@ class ProtoTree(PrototypeBase):
             predicting_leaves = get_predicting_leaves(
                 self.tree_root, node_to_probs, sampling_strategy
             )
-            logits = [leaf.logits().unsqueeze(0) for leaf in predicting_leaves]
+            logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
             logits = torch.cat(logits, dim=0)
         return logits, node_to_probs, predicting_leaves
 

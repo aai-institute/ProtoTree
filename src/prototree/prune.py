@@ -27,7 +27,7 @@ def prune_unconfident_leaves(root: InternalNode, leaf_pruning_threshold: float):
         the entire subtree can be pruned.
         """
         for leaf in n.leaves:
-            if torch.any(leaf.y_proba() > leaf_pruning_threshold):
+            if torch.any(leaf.y_probs() > leaf_pruning_threshold):
                 return False
         return True
 

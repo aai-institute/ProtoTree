@@ -98,7 +98,7 @@ def _gen_pydot_nodes(
         )
         return [pydot_node] + l_descendants + r_descendants
     if isinstance(subtree_root, Leaf):
-        leaf_probs = torch.exp(subtree_root.logits()).detach()
+        leaf_probs = torch.exp(subtree_root.y_logits()).detach()
         max_prob_inds = np.argmax(leaf_probs, keepdims=True)
         max_prob = leaf_probs[max_prob_inds[0]]
         top_classes = f"p = {max_prob:.5f}:\n" + ",\n".join(
