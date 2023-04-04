@@ -103,7 +103,7 @@ class ProjectionPatchInfo:
         return torch.exp(-self.all_patch_distances)
 
 
-def _get_closest_patch(sample_distances: torch.Tensor, sample_patches: torch.Tensor):
+def _get_closest_patch(sample_distances: torch.Tensor, sample_patches: torch.Tensor) -> torch.Tensor:
     """
     Get the closest latent patch based on the distances to the prototype. This is just a helper
     function for dealing with multidimensional indices.
