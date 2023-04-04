@@ -13,11 +13,11 @@ from prototree.node import InternalNode, log_leaves_properties
 from prototree.project import replace_prototypes_by_projections
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from visualize import save_patch_visualizations
+from visualize.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
-from visualize import save_tree_visualization
+from visualize.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
