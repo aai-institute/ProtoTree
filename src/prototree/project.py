@@ -99,7 +99,9 @@ class ProjectionPatchInfo:
 
     def get_similarities_latent(self) -> torch.Tensor:
         """
-        The largest values in the result are the most similar.
+        The entries in the result are the similarity measure evaluated for each patch, i.e. the probabilities of being
+        routed to the right node for each patch.
+        Therefore, the largest values in the result correspond to the patches which most closely match the prototype.
         """
         return torch.exp(-self.all_patch_distances)
 
