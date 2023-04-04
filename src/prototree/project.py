@@ -72,10 +72,10 @@ def replace_prototypes_by_projections(
         patches = features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
 
         for internal_node in tree.internal_nodes:
-            proto_idx = tree.node_to_proto_idx[internal_node]
+            node_proto_idx = tree.node_to_proto_idx[internal_node]
 
             for x_i, y_i, distances_i, patches_i in zip(
-                x, y, distances[:, proto_idx, :, :], patches
+                x, y, distances[:, node_proto_idx, :, :], patches
             ):
                 if constrain_on_classes and y_i.item() not in get_leaf_labels(internal_node):
                     continue
@@ -85,8 +85,8 @@ def replace_prototypes_by_projections(
         tree.prototype_layer.prototype_tensors.data[proto_idx] = patch.data
 
     for internal_node, patch_info in node_to_patch_info.items():
-        proto_idx = tree.node_to_proto_idx[internal_node]
-        replace_proto_by_patch(proto_idx, patch_info.closest_patch)
+        node_proto_idx = tree.node_to_proto_idx[internal_node]
+        replace_proto_by_patch(node_proto_idx, patch_info.closest_patch)
     return node_to_patch_info
 
 
