@@ -2,7 +2,7 @@ import logging
 
 import torch
 
-from prototree.node import (
+from src.prototree.node import (
     InternalNode,
     Node,
     get_max_height_nodes,

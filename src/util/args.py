@@ -5,7 +5,7 @@ import torch
 import torch.optim
 from torch.nn import Parameter
 
-from prototree.models import ProtoTree
+from src.prototree.models import ProtoTree
 
 # Utility functions for handling parsed arguments
 

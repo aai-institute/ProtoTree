@@ -7,8 +7,8 @@ import torch.optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.models import ProtoTree
-from prototree.types import SamplingStrategy
+from src.prototree.models import ProtoTree
+from src.prototree.types import SamplingStrategy
 
 log = logging.getLogger(__name__)
 

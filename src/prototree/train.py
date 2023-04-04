@@ -7,8 +7,8 @@ import torch.utils.data
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.models import ProtoTree
-from prototree.node import Leaf, Node, NodeProbabilities
+from src.prototree.models import ProtoTree
+from src.prototree.node import Leaf, Node, NodeProbabilities
 
 log = logging.getLogger(__name__)
 

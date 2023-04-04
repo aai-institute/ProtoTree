@@ -298,7 +298,7 @@ def resnet50_features_inat(pretrained=False, **kwargs):
         # https://openaccess.thecvf.com/content_CVPR_2020/papers/Zhou_BBN_Bilateral-Branch_Network_With_Cumulative_Learning_for_Long-Tailed_Visual_Recognition_CVPR_2020_paper.pdf
         model_dict = torch.load(
             os.path.join(
-                os.path.join("features", "state_dicts"),
+                os.path.join("src", "features", "state_dicts"),
                 "BBN.iNaturalist2017.res50.180epoch.best_model.pth",
             )
         )

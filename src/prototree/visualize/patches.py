@@ -1,15 +1,14 @@
 import os
 from pathlib import Path
-from typing import Union
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from prototree.node import InternalNode
-from prototree.project import ProjectionPatchInfo
-from util.data import get_inverse_base_transform
+from src.prototree.node import InternalNode
+from src.prototree.project import ProjectionPatchInfo
+from src.util.data import get_inverse_base_transform
 
 
 # Adapted from ProtoPNet

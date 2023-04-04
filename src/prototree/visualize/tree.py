@@ -6,8 +6,8 @@ import pydot
 import torch
 from PIL import Image, ImageOps
 
-from prototree.models import ProtoTree
-from prototree.node import InternalNode, Leaf, Node
+from src.prototree.models import ProtoTree
+from src.prototree.node import InternalNode, Leaf, Node
 
 log = logging.getLogger(__name__)
 
