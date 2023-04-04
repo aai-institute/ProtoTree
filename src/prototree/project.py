@@ -98,6 +98,9 @@ class ProjectionPatchInfo:
     all_patch_distances: torch.Tensor = None
 
     def get_similarities_latent(self) -> torch.Tensor:
+        """
+        The largest values in the result are the most similar.
+        """
         return torch.exp(-self.all_patch_distances)
 
 
