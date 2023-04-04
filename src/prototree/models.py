@@ -267,7 +267,7 @@ class ProtoTree(PrototypeBase):
 
         node_to_probs = self.get_node_to_probs(x)
 
-        match self.training, sampling_strategy:  # TODO: There's probably a better way to handle train vs test sampling.
+        match self.training, sampling_strategy:  # TODO: Find a better approach to sampling strategy selection.
             case _, "distributed":
                 predicting_leaves = None
                 logits = self.tree_root.forward(node_to_probs)
