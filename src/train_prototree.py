@@ -190,7 +190,7 @@ def train_prototree(args: Namespace):
 
     # EVALUATE AND ANALYSE TRAINED TREE
     tree = tree.eval()
-    perform_final_evaluation(
+    perform_single_leaf_evaluation(
         tree, train_loader, eval_name="Sampling strategies on train data"
     )
 
@@ -211,7 +211,7 @@ def train_prototree(args: Namespace):
     test_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
 
-    perform_final_evaluation(tree, test_loader)
+    perform_single_leaf_evaluation(tree, test_loader)
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
@@ -241,7 +241,7 @@ def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
     log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")
 
 
-def perform_final_evaluation(
+def perform_single_leaf_evaluation(
     projected_pruned_tree: ProtoTree,
     test_loader: DataLoader,
     eval_name="Final evaluation",
