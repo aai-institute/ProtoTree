@@ -52,7 +52,7 @@ def save_patch_visualizations(
             im_original,
             im_with_bbox,
             im_with_heatmap,
-        ) = get_closest_patch_imgs(
+        ) = closest_patch_imgs(
             image_proto_similarity, inverse_transform, latent_to_pixel
         )
         save(im_closest_patch, f"{node.index}_closest_patch.png")
@@ -61,7 +61,7 @@ def save_patch_visualizations(
 
 
 # TODO: Use the patch receptive fields instead of upsampling.
-def get_closest_patch_imgs(
+def closest_patch_imgs(
     image_proto_similarity: ImageProtoSimilarity,
     inverse_transform: Callable[[torch.Tensor], Image],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
@@ -87,7 +87,7 @@ def get_closest_patch_imgs(
         :,
     ]
 
-    im_with_bbox = get_im_with_bbox(im_original, h_low, h_high, w_low, w_high)
+    im_with_bbox = im_with_bbox(im_original, h_low, h_high, w_low, w_high)
 
     pixel_heatmap = latent_to_pixel(patch_similarities)
     colored_heatmap = _to_rgb_map(pixel_heatmap)
@@ -110,7 +110,7 @@ def covering_rectangle_indices(mask: np.ndarray) -> (int, int, int, int):
     return lower[0], upper[0] + 1, lower[1], upper[1] + 1
 
 
-def get_im_with_bbox(
+def im_with_bbox(
     img: np.ndarray,
     h_low: int,
     h_high: int,

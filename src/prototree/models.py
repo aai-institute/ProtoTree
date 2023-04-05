@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from prototree.img_similarity import calc_proto_similarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
 from prototree.types import SamplingStrategy
 from util.l2conv import L2Conv2D
@@ -58,7 +59,16 @@ class PrototypeBase(nn.Module):
         x = self.add_on(x)
         return x
 
-    def prototype_distances_per_patch(self, x: torch.Tensor) -> torch.Tensor:
+    def patches(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Get the patches for a given input tensor. This is the same as extract_features, except the output is reshaped to
+        be (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto).
+        """
+        w_proto, h_proto = self.prototype_shape[:2]
+        features = self.extract_features(x)
+        return features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
+
+    def distances(self, x: torch.Tensor) -> torch.Tensor:
         """
         Computes the minimal distances between the prototypes and the input.
         The output has the shape (batch_size, num_prototypes, n_patches_w, n_patches_h)
@@ -72,7 +82,7 @@ class PrototypeBase(nn.Module):
         The input has the shape (batch_size, num_channels, H, W).
         The output has the shape (batch_size, num_prototypes).
         """
-        x = self.prototype_distances_per_patch(x)
+        x = self.distances(x)
         return torch.amin(x, dim=(2, 3))
 
     @property
@@ -285,9 +295,8 @@ class ProtoTree(PrototypeBase):
                 for leaf_ancestors in leaves_ancestors:
                     for leaf_ancestor in leaf_ancestors:
                         node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
-                        prototype = self.prototype_layer.prototype_tensors.data[
-                            node_proto_idx
-                        ]
+                        # TODO: True label???
+                        sim = calc_proto_similarity(node_proto_idx, -123, )
 
             case _:
                 raise ValueError(

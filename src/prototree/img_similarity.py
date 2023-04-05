@@ -83,13 +83,9 @@ def calc_image_proto_similarities(
     Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
     the given tree and dataloader. A generator is used to avoid OOMing on larger datasets.
     """
-    w_proto, h_proto = tree.prototype_shape[:2]
     for x, y in tqdm(loader, desc="Data loader", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
-        features = tree.extract_features(x)
-        distances = tree.prototype_layer(features)
-        # Shape: (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto)
-        patches = features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
+        patches, distances = tree.patches(x), tree.distances(x)
 
         for internal_node in tree.internal_nodes:
             node_proto_idx = tree.node_to_proto_idx[internal_node]
