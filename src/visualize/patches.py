@@ -46,12 +46,12 @@ def save_patch_visualizations(
 
     # TODO: maybe this can be vectorized
     for node, patch_info in node_to_patch_info.items():
-        similarity_map = patch_info.all_patch_similarities().cpu().numpy()
+        patch_similarities = patch_info.all_patch_similarities().cpu().numpy()
 
         # a single pixel is selected
         # TODO: there is probably a better way to get this mask
         # Max because the this similarity measure is higher for more similar patches.
-        closest_patch_latent_mask = np.uint8(similarity_map == similarity_map.max())
+        closest_patch_latent_mask = np.uint8(patch_similarities == patch_similarities.max())
         closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
         h_low, h_high, w_low, w_high = covering_rectangle_indices(
             closest_patch_pixel_mask
@@ -70,7 +70,7 @@ def save_patch_visualizations(
         im_with_bbox = get_im_with_bbox(original_image, h_low, h_high, w_low, w_high)
         save(im_with_bbox, f"{node.index}_bounding_box_closest_patch.png")
 
-        pixel_heatmap = latent_to_pixel(similarity_map)
+        pixel_heatmap = latent_to_pixel(patch_similarities)
         colored_heatmap = _to_rgb_map(pixel_heatmap)
         overlaid_original_img = 0.5 * original_image + 0.2 * colored_heatmap
         save(overlaid_original_img, f"{node.index}_heatmap_original_image.png")
