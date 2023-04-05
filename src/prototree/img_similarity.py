@@ -46,11 +46,11 @@ def calc_node_patch_matches(
     :param tree:
     :param loader: The dataset.
     :param constrain_on_classes: If True, only consider patches from classes that are contained in
-        the prototype's leaves' predictions
+        the prototype's leaves' predictions.
     :return The map of nodes to best matches.
     """
 
-    # TODO: Should this be a method on the node? If this isn't an inner function, we'd need to beware of caching
+    # TODO: Should this be a method on the node? If this wasn't an inner function, we'd need to beware of caching
     #  incorrect results when the leaf logits change.
     @lru_cache(maxsize=10000)
     def get_leaf_labels(internal_node: InternalNode):
