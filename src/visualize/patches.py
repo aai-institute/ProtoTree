@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from prototree.node import InternalNode
-from prototree.project import ProjectionPatchInfo
+from prototree.img_similarity import ImageProtoSimilarity
 from util.data import get_inverse_base_transform
 
 
@@ -15,12 +15,12 @@ from util.data import get_inverse_base_transform
 # TODO: refactor, use the feature pixels visual field instead of upsampling to some size
 @torch.no_grad()
 def save_patch_visualizations(
-    node_to_patch_info: dict[InternalNode, ProjectionPatchInfo],
+    node_to_patch_matches: dict[InternalNode, ImageProtoSimilarity],
     save_dir: os.PathLike,
     img_size=(224, 224),
 ):
     """
-    :param node_to_patch_info:
+    :param node_to_patch_matches:
     :param save_dir:
     :param img_size: size of images that were used to train the model, i.e. the input to `resize` in the transforms.
         Will be used to create the inverse transform.
@@ -45,12 +45,13 @@ def save_patch_visualizations(
         )
 
     # TODO: maybe this can be vectorized
-    for node, patch_info in node_to_patch_info.items():
-        similarity_map = patch_info.get_similarities_latent().cpu().numpy()
+    for node, patch_info in node_to_patch_matches.items():
+        patch_similarities = patch_info.all_patch_similarities().cpu().numpy()
 
         # a single pixel is selected
         # TODO: there is probably a better way to get this mask
-        closest_patch_latent_mask = np.uint8(similarity_map == similarity_map.max())
+        # Max because the this similarity measure is higher for more similar patches.
+        closest_patch_latent_mask = np.uint8(patch_similarities == patch_similarities.max())
         closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
         h_low, h_high, w_low, w_high = covering_rectangle_indices(
             closest_patch_pixel_mask
@@ -69,7 +70,7 @@ def save_patch_visualizations(
         im_with_bbox = get_im_with_bbox(original_image, h_low, h_high, w_low, w_high)
         save(im_with_bbox, f"{node.index}_bounding_box_closest_patch.png")
 
-        pixel_heatmap = latent_to_pixel(similarity_map)
+        pixel_heatmap = latent_to_pixel(patch_similarities)
         colored_heatmap = _to_rgb_map(pixel_heatmap)
         overlaid_original_img = 0.5 * original_image + 0.2 * colored_heatmap
         save(overlaid_original_img, f"{node.index}_heatmap_original_image.png")

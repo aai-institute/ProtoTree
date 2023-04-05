@@ -267,19 +267,22 @@ class ProtoTree(PrototypeBase):
 
         node_to_probs = self.get_node_to_probs(x)
 
-        if sampling_strategy == "distributed":
-            predicting_leaves = None
-            logits = self.tree_root.forward(node_to_probs)
-        else:
-            if self.training:
-                raise ValueError(
-                    f"Only distributed sampling_strategy is supported during training but got: {sampling_strategy=}"
+        match self.training, sampling_strategy:  # TODO: Find a better approach for this branching logic.
+            case _, "distributed":
+                predicting_leaves = None
+                logits = self.tree_root.forward(node_to_probs)
+            case False, "sample_max" | "greedy":
+                predicting_leaves = get_predicting_leaves(
+                    self.tree_root, node_to_probs, sampling_strategy
                 )
-            predicting_leaves = get_predicting_leaves(
-                self.tree_root, node_to_probs, sampling_strategy
-            )
-            logits = [leaf.logits().unsqueeze(0) for leaf in predicting_leaves]
-            logits = torch.cat(logits, dim=0)
+                logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
+                logits = torch.cat(logits, dim=0)
+
+            case _:
+                raise ValueError(
+                    f"Invalid train/test and sampling strategy combination: {self.training=}, {sampling_strategy=}"
+                )
+
         return logits, node_to_probs, predicting_leaves
 
     def predict(
@@ -323,17 +326,25 @@ def get_predicting_leaves(
     root: InternalNode,
     node_to_probs: dict[Node, NodeProbabilities],
     sampling_strategy: Literal["sample_max", "greedy"],
-):
-    if sampling_strategy == "sample_max":
-        return _get_max_p_arrival_leaves(root.leaves, node_to_probs)
-    if sampling_strategy == "greedy":
-        return _get_predicting_leaves_greedily(root, node_to_probs)
-    raise ValueError(f"Unknown {sampling_strategy=}")
+) -> List[Leaf]:
+    """
+    Selects one leaf for each entry of the batch covered in node_to_probs.
+    """
+    match sampling_strategy:
+        case "sample_max":
+            return _get_max_p_arrival_leaves(root.leaves, node_to_probs)
+        case "greedy":
+            return _get_predicting_leaves_greedily(root, node_to_probs)
+        case other:
+            raise ValueError(f"Unknown sampling strategy {other}")
 
 
 def _get_predicting_leaves_greedily(
     root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
 ) -> List[Leaf]:
+    """
+    Selects one leaf for each entry of the batch covered in node_to_probs.
+    """
     neg_log_2 = -np.log(2)
 
     def get_leaf_for_sample(sample_idx: int):

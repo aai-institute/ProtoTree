@@ -10,7 +10,8 @@ from torch.utils.data import DataLoader
 from prototree.eval import eval_fidelity, eval_tree
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
-from prototree.project import replace_prototypes_by_projections
+from prototree.img_similarity import calc_node_patch_matches
+from prototree.projection import replace_prototypes_with_patches
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
 from visualize.patches import save_patch_visualizations
@@ -190,7 +191,7 @@ def train_prototree(args: Namespace):
 
     # EVALUATE AND ANALYSE TRAINED TREE
     tree = tree.eval()
-    perform_final_evaluation(
+    perform_single_leaf_evaluation(
         tree, train_loader, eval_name="Sampling strategies on train data"
     )
 
@@ -206,12 +207,15 @@ def train_prototree(args: Namespace):
     log.info(
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
-    node_to_patch_info = replace_prototypes_by_projections(tree, project_loader)
+    node_to_patch_matches = calc_node_patch_matches(tree, project_loader)
+    replace_prototypes_with_patches(
+        tree, node_to_patch_matches
+    )  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
     test_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
 
-    perform_final_evaluation(tree, test_loader)
+    perform_single_leaf_evaluation(tree, test_loader)
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
@@ -219,7 +223,7 @@ def train_prototree(args: Namespace):
     vis_dir.mkdir(exist_ok=True, parents=True)
     log.info(f"Saving prototype visualizations to {vis_dir}.")
     patches_dir = vis_dir / "patches"
-    save_patch_visualizations(node_to_patch_info, patches_dir)
+    save_patch_visualizations(node_to_patch_matches, patches_dir)
     save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
 
     return tree
@@ -241,7 +245,7 @@ def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
     log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")
 
 
-def perform_final_evaluation(
+def perform_single_leaf_evaluation(
     projected_pruned_tree: ProtoTree,
     test_loader: DataLoader,
     eval_name="Final evaluation",

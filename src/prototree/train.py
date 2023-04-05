@@ -108,7 +108,7 @@ def update_leaf(
     # shape (batch_size, 1)
     log_p_arrival = node_to_prob[leaf].log_p_arrival.unsqueeze(1)
     # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
-    leaf_logits = leaf.logits()
+    leaf_logits = leaf.y_logits()
 
     # TODO: y_true_logits is mostly -Inf terms (the rest being 0s) that won't contribute to the total, and we are also
     #  summing together tensors of different shapes. We should be able to express this more clearly and efficiently by
