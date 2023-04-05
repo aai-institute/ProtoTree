@@ -52,7 +52,7 @@ def save_patch_visualizations(
             im_original,
             im_with_bbox,
             im_with_heatmap,
-        ) = get_closest_patch_pixels(
+        ) = get_closest_patch_imgs(
             image_proto_similarity, inverse_transform, latent_to_pixel
         )
         save(im_closest_patch, f"{node.index}_closest_patch.png")
@@ -60,11 +60,11 @@ def save_patch_visualizations(
         save(im_with_heatmap, f"{node.index}_heatmap_original_image.png")
 
 
-def get_closest_patch_pixels(
+def get_closest_patch_imgs(
     image_proto_similarity: ImageProtoSimilarity, inverse_transform, latent_to_pixel
 ) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     """
-    Gets the pixels for the closest patch from an ImageProtoSimilarity.
+    Gets the pixels for images illustrating the closest patch from an ImageProtoSimilarity.
     Returns: Pixels for: (closest patch, original image, original image with bounding box, original image with heatmap)
     """
     patch_similarities = image_proto_similarity.all_patch_similarities().cpu().numpy()
