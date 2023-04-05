@@ -9,18 +9,33 @@ from prototree.models import ProtoTree
 from prototree.node import InternalNode, Node
 
 
+# TODO: This dataclass seems to be coupling several different things.
+@dataclass
+class ProjectionPatchInfo:
+    transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
+    true_label: int
+    closest_patch: torch.Tensor
+    closest_patch_distance: float
+    all_patch_distances: torch.Tensor = None
+
+    def get_similarities_latent(self) -> torch.Tensor:
+        """
+        The entries in the result are the similarity measure evaluated for each patch, i.e. the probabilities of being
+        routed to the right node for each patch.
+        Therefore, the largest values in the result correspond to the patches which most closely match the prototype.
+        """
+        return torch.exp(-self.all_patch_distances)
+
+
 # TODO: generalize to ProtoBase
 @torch.no_grad()
-def replace_prototypes_by_projections(
+def calc_node_patch_info(
     tree: ProtoTree,
     project_loader: DataLoader,
     constrain_on_classes=True,
 ):
     """
-    The goal is to find the latent patch that minimizes the L2 distance to each prototype.
-    This is done by iterating through a dataset (typically the train dataset) and
-    replacing each prototype by the closest latent patch.
-    **Important**: This modifies the prototype weights in-place! TODO: Split into pure and impure functions.
+    Produces a map containing information about the similarity between prototypes and the patches.
 
     :param tree:
     :param project_loader:
@@ -52,7 +67,6 @@ def replace_prototypes_by_projections(
             or closest_patch_distance < prev_patch_info.closest_patch_distance
         ):
             node_to_patch_info[node] = ProjectionPatchInfo(
-                node=node,
                 transformed_image=transformed_image,
                 true_label=true_label,
                 closest_patch=closest_patch,
@@ -81,29 +95,17 @@ def replace_prototypes_by_projections(
                     continue
                 process_sample(internal_node, x_i, y_i, distances_i, patches_i)
 
-    for internal_node, patch_info in node_to_patch_info.items():
-        node_proto_idx = tree.node_to_proto_idx[internal_node]
-        tree.prototype_layer.prototype_tensors.data[node_proto_idx] = patch_info.closest_patch.data
-
     return node_to_patch_info
 
 
-@dataclass
-class ProjectionPatchInfo:
-    transformed_image: torch.Tensor
-    true_label: int
-    closest_patch: torch.Tensor
-    closest_patch_distance: float
-    node: InternalNode
-    all_patch_distances: torch.Tensor = None
-
-    def get_similarities_latent(self) -> torch.Tensor:
-        """
-        The entries in the result are the similarity measure evaluated for each patch, i.e. the probabilities of being
-        routed to the right node for each patch.
-        Therefore, the largest values in the result correspond to the patches which most closely match the prototype.
-        """
-        return torch.exp(-self.all_patch_distances)
+@torch.no_grad()
+def replace_prototypes_with_patches(tree: ProtoTree, node_to_patch_info: dict[Node, ProjectionPatchInfo]):
+    """
+    Replaces each prototype with a given patch.
+    """
+    for internal_node, patch_info in node_to_patch_info.items():
+        node_proto_idx = tree.node_to_proto_idx[internal_node]
+        tree.prototype_layer.prototype_tensors.data[node_proto_idx] = patch_info.closest_patch.data
 
 
 def _get_closest_patch(sample_distances: torch.Tensor, sample_patches: torch.Tensor) -> torch.Tensor:
