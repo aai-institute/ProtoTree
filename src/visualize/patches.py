@@ -15,12 +15,12 @@ from util.data import get_inverse_base_transform
 # TODO: refactor, use the feature pixels visual field instead of upsampling to some size
 @torch.no_grad()
 def save_patch_visualizations(
-    node_to_patch_info: dict[InternalNode, ImageProtoSimilarity],
+    node_to_patch_matches: dict[InternalNode, ImageProtoSimilarity],
     save_dir: os.PathLike,
     img_size=(224, 224),
 ):
     """
-    :param node_to_patch_info:
+    :param node_to_patch_matches:
     :param save_dir:
     :param img_size: size of images that were used to train the model, i.e. the input to `resize` in the transforms.
         Will be used to create the inverse transform.
@@ -45,7 +45,7 @@ def save_patch_visualizations(
         )
 
     # TODO: maybe this can be vectorized
-    for node, patch_info in node_to_patch_info.items():
+    for node, patch_info in node_to_patch_matches.items():
         patch_similarities = patch_info.all_patch_similarities().cpu().numpy()
 
         # a single pixel is selected

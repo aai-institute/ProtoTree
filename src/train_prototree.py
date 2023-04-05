@@ -207,9 +207,9 @@ def train_prototree(args: Namespace):
     log.info(
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
-    node_to_patch_info = calc_node_patch_matches(tree, project_loader)
+    node_to_patch_matches = calc_node_patch_matches(tree, project_loader)
     replace_prototypes_with_patches(
-        tree, node_to_patch_info
+        tree, node_to_patch_matches
     )  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
     test_acc = eval_tree(tree, test_loader)
@@ -223,7 +223,7 @@ def train_prototree(args: Namespace):
     vis_dir.mkdir(exist_ok=True, parents=True)
     log.info(f"Saving prototype visualizations to {vis_dir}.")
     patches_dir = vis_dir / "patches"
-    save_patch_visualizations(node_to_patch_info, patches_dir)
+    save_patch_visualizations(node_to_patch_matches, patches_dir)
     save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
 
     return tree

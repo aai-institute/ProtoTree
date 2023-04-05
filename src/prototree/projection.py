@@ -7,7 +7,7 @@ from prototree.node import Node
 
 @torch.no_grad()
 def replace_prototypes_with_patches(
-    tree: ProtoTree, node_to_patch_info: dict[Node, ImageProtoSimilarity]
+    tree: ProtoTree, node_to_patch_matches: dict[Node, ImageProtoSimilarity]
 ):
     """
     Replaces each prototype with a given patch.
@@ -15,7 +15,7 @@ def replace_prototypes_with_patches(
     TODO: We should probably not be mutating the tree (via the prototypes), as this is making the code less flexible and
      harder to reason about.
     """
-    for internal_node, patch_info in node_to_patch_info.items():
+    for internal_node, patch_info in node_to_patch_matches.items():
         node_proto_idx = tree.node_to_proto_idx[internal_node]
         tree.prototype_layer.prototype_tensors.data[
             node_proto_idx
