@@ -9,14 +9,18 @@ from prototree.models import ProtoTree
 from prototree.node import InternalNode, Node
 
 
-# TODO: This dataclass seems to be coupling several different things.
 @dataclass
-class ProjectionPatchInfo:
+class ImagePrototypeSimilarity:
+    """
+    Stores the similarities between each patch of an image and a prototype.
+    TODO: This stores the data in a partly denormalized manner since it holds the image, label, and patch. We should
+     probably make it fully normalized.
+    """
     transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
     true_label: int
     closest_patch: torch.Tensor
     closest_patch_distance: float
-    all_patch_distances: torch.Tensor = None
+    all_patch_distances: torch.Tensor
 
     def get_similarities_latent(self) -> torch.Tensor:
         """
@@ -25,6 +29,24 @@ class ProjectionPatchInfo:
         Therefore, the largest values in the result correspond to the patches which most closely match the prototype.
         """
         return torch.exp(-self.all_patch_distances)
+
+
+def calc_proto_similarity(
+    transformed_image: torch.Tensor,
+    true_label: int,
+    sample_patches_distances: torch.Tensor,
+    sample_patches: torch.Tensor,
+) -> ImagePrototypeSimilarity:
+    closest_patch = _get_closest_patch(sample_patches_distances, sample_patches)
+    closest_patch_distance = sample_patches_distances.min().item()
+
+    return ImagePrototypeSimilarity(
+            transformed_image=transformed_image,
+            true_label=true_label,
+            closest_patch=closest_patch,
+            closest_patch_distance=closest_patch_distance,
+            all_patch_distances=sample_patches_distances,
+        )
 
 
 # TODO: generalize to ProtoBase
@@ -44,11 +66,12 @@ def calc_node_patch_info(
     :return: a dictionary mapping nodes to an object holding information about the selected
         latent patch
     """
-    node_to_patch_info: dict[Node, ProjectionPatchInfo] = {}
+    node_to_patch_info: dict[Node, ImagePrototypeSimilarity] = {}
 
     @lru_cache(maxsize=1)
     def get_leaf_labels(node: InternalNode):
         return {leaf.predicted_label() for leaf in node.leaves}
+
 
     def process_sample(
         node: InternalNode,
@@ -66,7 +89,7 @@ def calc_node_patch_info(
             not prev_patch_info
             or closest_patch_distance < prev_patch_info.closest_patch_distance
         ):
-            node_to_patch_info[node] = ProjectionPatchInfo(
+            node_to_patch_info[node] = ImagePrototypeSimilarity(
                 transformed_image=transformed_image,
                 true_label=true_label,
                 closest_patch=closest_patch,
@@ -99,7 +122,7 @@ def calc_node_patch_info(
 
 
 @torch.no_grad()
-def replace_prototypes_with_patches(tree: ProtoTree, node_to_patch_info: dict[Node, ProjectionPatchInfo]):
+def replace_prototypes_with_patches(tree: ProtoTree, node_to_patch_info: dict[Node, ImagePrototypeSimilarity]):
     """
     Replaces each prototype with a given patch.
     """

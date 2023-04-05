@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from prototree.node import InternalNode
-from prototree.project import ProjectionPatchInfo
+from prototree.project import ImagePrototypeSimilarity
 from util.data import get_inverse_base_transform
 
 
@@ -15,7 +15,7 @@ from util.data import get_inverse_base_transform
 # TODO: refactor, use the feature pixels visual field instead of upsampling to some size
 @torch.no_grad()
 def save_patch_visualizations(
-    node_to_patch_info: dict[InternalNode, ProjectionPatchInfo],
+    node_to_patch_info: dict[InternalNode, ImagePrototypeSimilarity],
     save_dir: os.PathLike,
     img_size=(224, 224),
 ):
