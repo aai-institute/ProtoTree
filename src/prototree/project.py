@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Iterator
 
 import torch
 from torch.utils.data import DataLoader
@@ -120,6 +121,27 @@ def calc_node_patch_info(
 
     return node_to_patch_info
 
+
+@torch.no_grad()
+def calc_image_proto_similarities(tree: ProtoTree, loader: DataLoader) -> Iterator[ImageProtoSimilarity]:
+    # TODO: is this the most efficient way of doing this? Maybe reverse loops or vectorize
+    # The logic is: loop over batches -> loop over nodes ->
+    # loop over samples in batch to find closest patch for current node
+    w_proto, h_proto = tree.prototype_shape[:2]
+    for x, y in tqdm(loader, desc="Data loader", ncols=0):
+        x, y = x.to(tree.device), y.to(tree.device)
+        features = tree.extract_features(x)
+        distances = tree.prototype_layer(features)
+        # Shape: (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto)
+        patches = features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
+
+        for internal_node in tree.internal_nodes:
+            node_proto_idx = tree.node_to_proto_idx[internal_node]
+
+            for x_i, y_i, distances_i, patches_i in zip(
+                x, y, distances[:, node_proto_idx, :, :], patches
+            ):
+                yield calc_proto_similarity(x_i, y_i, distances_i, patches_i)
 
 @torch.no_grad()
 def replace_prototypes_with_patches(tree: ProtoTree, node_to_patch_info: dict[Node, ImageProtoSimilarity]):
