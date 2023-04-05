@@ -27,6 +27,7 @@ def save_patch_visualizations(
     :return:
     """
     save_dir = Path(save_dir)
+
     inverse_transform = get_inverse_base_transform(img_size=img_size)
 
     def latent_to_pixel(latent_img: np.ndarray):
@@ -46,37 +47,54 @@ def save_patch_visualizations(
 
     # TODO: maybe this can be vectorized
     for node, image_proto_similarity in node_to_patch_matches.items():
-        patch_similarities = image_proto_similarity.all_patch_similarities().cpu().numpy()
-
-        # a single pixel is selected
-        # TODO: there is probably a better way to get this mask
-        # Max because the this similarity measure is higher for more similar patches.
-        closest_patch_latent_mask = np.uint8(patch_similarities == patch_similarities.max())
-        closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
-        h_low, h_high, w_low, w_high = covering_rectangle_indices(
-            closest_patch_pixel_mask
+        (
+            im_closest_patch,
+            im_original,
+            im_with_bbox,
+            im_with_heatmap,
+        ) = get_closest_patch_pixels(
+            image_proto_similarity, inverse_transform, latent_to_pixel
         )
-
-        original_image_unscaled = inverse_transform(image_proto_similarity.transformed_image)
-        original_image = np.array(original_image_unscaled, dtype=np.float32) / 255
-
-        closest_patch_pixels = original_image[
-            h_low:h_high,
-            w_low:w_high,
-            :,
-        ]
-        save(closest_patch_pixels, f"{node.index}_closest_patch.png")
-
-        im_with_bbox = get_im_with_bbox(original_image, h_low, h_high, w_low, w_high)
+        save(im_closest_patch, f"{node.index}_closest_patch.png")
         save(im_with_bbox, f"{node.index}_bounding_box_closest_patch.png")
-
-        pixel_heatmap = latent_to_pixel(patch_similarities)
-        colored_heatmap = _to_rgb_map(pixel_heatmap)
-        overlaid_original_img = 0.5 * original_image + 0.2 * colored_heatmap
-        save(overlaid_original_img, f"{node.index}_heatmap_original_image.png")
+        save(im_with_heatmap, f"{node.index}_heatmap_original_image.png")
 
 
-def covering_rectangle_indices(mask: np.ndarray):
+def get_closest_patch_pixels(
+    image_proto_similarity: ImageProtoSimilarity, inverse_transform, latent_to_pixel
+) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+    """
+    Gets the pixels for the closest patch from an ImageProtoSimilarity.
+    Returns: Pixels for: (closest patch, original image, original image with bounding box, original image with heatmap)
+    """
+    patch_similarities = image_proto_similarity.all_patch_similarities().cpu().numpy()
+
+    # a single pixel is selected
+    # TODO: there is probably a better way to get this mask
+    # Max because the this similarity measure is higher for more similar patches.
+    closest_patch_latent_mask = np.uint8(patch_similarities == patch_similarities.max())
+    closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
+    h_low, h_high, w_low, w_high = covering_rectangle_indices(closest_patch_pixel_mask)
+
+    im_original_unscaled = inverse_transform(image_proto_similarity.transformed_image)
+    im_original = np.array(im_original_unscaled, dtype=np.float32) / 255
+
+    im_closest_patch = im_original[
+        h_low:h_high,
+        w_low:w_high,
+        :,
+    ]
+
+    im_with_bbox = get_im_with_bbox(im_original, h_low, h_high, w_low, w_high)
+
+    pixel_heatmap = latent_to_pixel(patch_similarities)
+    colored_heatmap = _to_rgb_map(pixel_heatmap)
+    im_with_heatmap = 0.5 * im_original + 0.2 * colored_heatmap
+
+    return im_closest_patch, im_original, im_with_bbox, im_with_heatmap
+
+
+def covering_rectangle_indices(mask: np.ndarray) -> (int, int, int, int):
     """
     Assuming that mask contains a single connected component with ones, find the indices of the
     smallest rectangle that covers the component.
@@ -97,7 +115,7 @@ def get_im_with_bbox(
     w_low: int,
     w_high: int,
     bbox_color=(0, 255, 255),
-):
+) -> np.ndarray:
     """
     Takes a 3D float array of shape (H, W, 3), range [0, 1], and RGB format, and superimposes a bounding box.
     """
@@ -113,7 +131,7 @@ def get_im_with_bbox(
     return img
 
 
-def _to_rgb_map(arr: np.ndarray):
+def _to_rgb_map(arr: np.ndarray) -> np.ndarray:
     """
     Turns a single-channel heatmap into an RGB heatmap.
     """

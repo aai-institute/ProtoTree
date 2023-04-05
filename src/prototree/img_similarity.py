@@ -16,6 +16,7 @@ class ImageProtoSimilarity:
     Stores the similarities between each patch of an image and a node's prototype.
     TODO: Lots of data is denormalized into this. Perhaps it should be normalized.
     """
+
     internal_node: InternalNode
     transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
     true_label: int
