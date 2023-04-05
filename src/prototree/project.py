@@ -17,6 +17,7 @@ class ImageProtoSimilarity:
     TODO: This stores the data in a denormalized manner since it holds the node, image, label, and patch. Perhaps it
      should be normalized.
     """
+
     internal_node: ["InternalNode"]
     transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
     true_label: int
@@ -44,13 +45,13 @@ def calc_proto_similarity(
     closest_patch_distance = sample_patches_distances.min().item()
 
     return ImageProtoSimilarity(
-            internal_node=internal_node,
-            transformed_image=transformed_image,
-            true_label=true_label,
-            closest_patch=closest_patch,
-            closest_patch_distance=closest_patch_distance,
-            all_patch_distances=sample_patches_distances,
-        )
+        internal_node=internal_node,
+        transformed_image=transformed_image,
+        true_label=true_label,
+        closest_patch=closest_patch,
+        closest_patch_distance=closest_patch_distance,
+        all_patch_distances=sample_patches_distances,
+    )
 
 
 # TODO: generalize to ProtoBase
@@ -73,20 +74,30 @@ def calc_node_patch_matches(
 
     # TODO: Should this be a method on the node?
     @lru_cache(maxsize=10000)
-    def get_leaf_labels(node: InternalNode):
-        return {leaf.predicted_label() for leaf in node.leaves}
+    def get_leaf_labels(internal_node: InternalNode):
+        return {leaf.predicted_label() for leaf in internal_node.leaves}
 
     node_to_patch_matches: dict[["InternalNode"], ImageProtoSimilarity] = {}
     for proto_similarity in calc_image_proto_similarities(tree, loader):
-        if (not constrain_on_classes) or proto_similarity.true_label in get_leaf_labels(proto_similarity.internal_node):
-            if (proto_similarity.internal_node not in node_to_patch_matches) or proto_similarity.closest_patch_distance < node_to_patch_matches[proto_similarity.internal_node].closest_patch_distance:
-                node_to_patch_matches[proto_similarity.internal_node] = proto_similarity
+        if (not constrain_on_classes) or proto_similarity.true_label in get_leaf_labels(
+            proto_similarity.internal_node
+        ):
+            node = proto_similarity.internal_node
+            cur_closest = node_to_patch_matches[node]
+            if (
+                (node not in node_to_patch_matches)
+                or proto_similarity.closest_patch_distance
+                < cur_closest.closest_patch_distance
+            ):
+                node_to_patch_matches[node] = proto_similarity
 
     return node_to_patch_matches
 
 
 @torch.no_grad()
-def calc_image_proto_similarities(tree: ProtoTree, loader: DataLoader) -> Iterator[ImageProtoSimilarity]:
+def calc_image_proto_similarities(
+    tree: ProtoTree, loader: DataLoader
+) -> Iterator[ImageProtoSimilarity]:
     # TODO: is this the most efficient way of doing this? Maybe reverse loops or vectorize
     # The logic is: loop over batches -> loop over nodes ->
     # loop over samples in batch to find closest patch for current node
@@ -104,11 +115,15 @@ def calc_image_proto_similarities(tree: ProtoTree, loader: DataLoader) -> Iterat
             for x_i, y_i, distances_i, patches_i in zip(
                 x, y, distances[:, node_proto_idx, :, :], patches
             ):
-                yield calc_proto_similarity(internal_node, x_i, y_i, distances_i, patches_i)
+                yield calc_proto_similarity(
+                    internal_node, x_i, y_i, distances_i, patches_i
+                )
 
 
 @torch.no_grad()
-def replace_prototypes_with_patches(tree: ProtoTree, node_to_patch_info: dict[Node, ImageProtoSimilarity]):
+def replace_prototypes_with_patches(
+    tree: ProtoTree, node_to_patch_info: dict[Node, ImageProtoSimilarity]
+):
     """
     Replaces each prototype with a given patch.
     Note: This mutates the prototype tensors.
@@ -117,10 +132,14 @@ def replace_prototypes_with_patches(tree: ProtoTree, node_to_patch_info: dict[No
     """
     for internal_node, patch_info in node_to_patch_info.items():
         node_proto_idx = tree.node_to_proto_idx[internal_node]
-        tree.prototype_layer.prototype_tensors.data[node_proto_idx] = patch_info.closest_patch.data
+        tree.prototype_layer.prototype_tensors.data[
+            node_proto_idx
+        ] = patch_info.closest_patch.data
 
 
-def _get_closest_patch(sample_distances: torch.Tensor, sample_patches: torch.Tensor) -> torch.Tensor:
+def _get_closest_patch(
+    sample_distances: torch.Tensor, sample_patches: torch.Tensor
+) -> torch.Tensor:
     """
     Get the closest latent patch based on the distances to the prototype. This is just a helper
     function for dealing with multidimensional indices.

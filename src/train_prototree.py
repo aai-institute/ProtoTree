@@ -97,7 +97,7 @@ def train_prototree(args: Namespace):
         batch_size=batch_size,
     )
 
-    #class_names = train_loader.dataset.classes
+    # class_names = train_loader.dataset.classes
     num_classes = len(class_names)
     log.info(f"Num classes: {num_classes}")
 
@@ -207,7 +207,9 @@ def train_prototree(args: Namespace):
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
     node_to_patch_info = calc_node_patch_matches(tree, project_loader)
-    replace_prototypes_with_patches(tree, node_to_patch_info)  # TODO: Assess the impact of this.
+    replace_prototypes_with_patches(
+        tree, node_to_patch_info
+    )  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
     test_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
