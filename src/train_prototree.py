@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from prototree.eval import eval_fidelity, eval_tree
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
-from prototree.project import calc_node_patch_info, replace_prototypes_with_patches
+from prototree.project import calc_node_patch_matches, replace_prototypes_with_patches
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
 from visualize.patches import save_patch_visualizations
@@ -206,7 +206,7 @@ def train_prototree(args: Namespace):
     log.info(
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
-    node_to_patch_info = calc_node_patch_info(tree, project_loader)
+    node_to_patch_info = calc_node_patch_matches(tree, project_loader)
     replace_prototypes_with_patches(tree, node_to_patch_info)  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
     test_acc = eval_tree(tree, test_loader)
