@@ -32,7 +32,7 @@ class ImageProtoSimilarity:
         return torch.exp(-self.all_patch_distances)
 
 
-# TODO: generalize to ProtoBase
+# TODO: Generalize to ProtoBase
 @torch.no_grad()
 def calc_node_patch_matches(
     tree: ProtoTree,
