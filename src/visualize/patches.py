@@ -47,7 +47,6 @@ def save_patch_visualizations(
             vmax=1.0,
         )
 
-    # TODO: maybe this can be vectorized
     for node, image_proto_similarity in node_to_patch_matches.items():
         (
             im_closest_patch,
