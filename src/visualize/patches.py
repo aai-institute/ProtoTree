@@ -14,7 +14,6 @@ from util.data import get_inverse_base_transform
 
 
 # Adapted from ProtoPNet
-# TODO: refactor, use the feature pixels visual field instead of upsampling to some size
 @torch.no_grad()
 def save_patch_visualizations(
     node_to_patch_matches: dict[InternalNode, ImageProtoSimilarity],
@@ -61,6 +60,7 @@ def save_patch_visualizations(
         save(im_with_heatmap, f"{node.index}_heatmap_original_image.png")
 
 
+# TODO: Use the patch receptive fields instead of upsampling.
 def get_closest_patch_imgs(
     image_proto_similarity: ImageProtoSimilarity,
     inverse_transform: Callable[[torch.Tensor], Image],
@@ -72,9 +72,8 @@ def get_closest_patch_imgs(
     """
     patch_similarities = image_proto_similarity.all_patch_similarities().cpu().numpy()
 
-    # a single pixel is selected
-    # TODO: there is probably a better way to get this mask
-    # Max because the this similarity measure is higher for more similar patches.
+    # A single pixel is selected.
+    # Max because this similarity measure is higher for more similar patches.
     closest_patch_latent_mask = np.uint8(patch_similarities == patch_similarities.max())
     closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
     h_low, h_high, w_low, w_high = covering_rectangle_indices(closest_patch_pixel_mask)
