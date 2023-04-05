@@ -46,7 +46,7 @@ def save_patch_visualizations(
 
     # TODO: maybe this can be vectorized
     for node, patch_info in node_to_patch_info.items():
-        similarity_map = patch_info.get_similarities_latent().cpu().numpy()
+        similarity_map = patch_info.all_patch_similarities().cpu().numpy()
 
         # a single pixel is selected
         # TODO: there is probably a better way to get this mask
