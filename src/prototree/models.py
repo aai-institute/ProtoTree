@@ -278,16 +278,6 @@ class ProtoTree(PrototypeBase):
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
 
-                leaves_ancestors = [
-                    predicting_leaf.ancestors for predicting_leaf in predicting_leaves
-                ]
-                for leaf_ancestors in leaves_ancestors:
-                    for leaf_ancestor in leaf_ancestors:
-                        node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
-                        prototype = self.prototype_layer.prototype_tensors.data[
-                            node_proto_idx
-                        ]
-
             case _:
                 raise ValueError(
                     f"Invalid train/test and sampling strategy combination: {self.training=}, {sampling_strategy=}"
