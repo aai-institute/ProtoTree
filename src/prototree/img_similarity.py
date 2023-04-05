@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from prototree.models import ProtoTree
-from prototree.node import InternalNode, Node
+from prototree.node import InternalNode
 
 
 @dataclass
@@ -31,52 +31,6 @@ class ImageProtoSimilarity:
         Therefore, the largest values in the result correspond to the patches which most closely match the prototype.
         """
         return torch.exp(-self.all_patch_distances)
-
-
-def calc_proto_similarity(
-    internal_node: ["InternalNode"],
-    transformed_image: torch.Tensor,
-    true_label: int,
-    sample_patches_distances: torch.Tensor,
-    sample_patches: torch.Tensor,
-) -> ImageProtoSimilarity:
-    closest_patch = _get_closest_patch(sample_patches_distances, sample_patches)
-    closest_patch_distance = sample_patches_distances.min().item()
-
-    return ImageProtoSimilarity(
-        internal_node=internal_node,
-        transformed_image=transformed_image,
-        true_label=true_label,
-        closest_patch=closest_patch,
-        closest_patch_distance=closest_patch_distance,
-        all_patch_distances=sample_patches_distances,
-    )
-
-
-@torch.no_grad()
-def calc_image_proto_similarities(
-    tree: ProtoTree, loader: DataLoader
-) -> Iterator[ImageProtoSimilarity]:
-    # TODO: is this the most efficient way of doing this? Maybe reverse loops or vectorize
-    # The logic is: loop over batches -> loop over nodes ->
-    # loop over samples in batch to find closest patch for current node
-    w_proto, h_proto = tree.prototype_shape[:2]
-    for x, y in tqdm(loader, desc="Data loader", ncols=0):
-        x, y = x.to(tree.device), y.to(tree.device)
-        features = tree.extract_features(x)
-        distances = tree.prototype_layer(features)
-        # Shape: (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto)
-        patches = features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
-
-        for internal_node in tree.internal_nodes:
-            node_proto_idx = tree.node_to_proto_idx[internal_node]
-
-            for x_i, y_i, distances_i, patches_i in zip(
-                x, y, distances[:, node_proto_idx, :, :], patches
-            ):
-                yield calc_proto_similarity(
-                    internal_node, x_i, y_i, distances_i, patches_i
-                )
 
 
 # TODO: generalize to ProtoBase
@@ -120,20 +74,49 @@ def calc_node_patch_matches(
 
 
 @torch.no_grad()
-def replace_prototypes_with_patches(
-    tree: ProtoTree, node_to_patch_info: dict[Node, ImageProtoSimilarity]
-):
-    """
-    Replaces each prototype with a given patch.
-    Note: This mutates the prototype tensors.
-    TODO: We should probably not be mutating the tree (via the prototypes), as this is making the code less flexible and
-     harder to reason about.
-    """
-    for internal_node, patch_info in node_to_patch_info.items():
-        node_proto_idx = tree.node_to_proto_idx[internal_node]
-        tree.prototype_layer.prototype_tensors.data[
-            node_proto_idx
-        ] = patch_info.closest_patch.data
+def calc_image_proto_similarities(
+    tree: ProtoTree, loader: DataLoader
+) -> Iterator[ImageProtoSimilarity]:
+    # TODO: is this the most efficient way of doing this? Maybe reverse loops or vectorize
+    # The logic is: loop over batches -> loop over nodes ->
+    # loop over samples in batch to find closest patch for current node
+    w_proto, h_proto = tree.prototype_shape[:2]
+    for x, y in tqdm(loader, desc="Data loader", ncols=0):
+        x, y = x.to(tree.device), y.to(tree.device)
+        features = tree.extract_features(x)
+        distances = tree.prototype_layer(features)
+        # Shape: (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto)
+        patches = features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
+
+        for internal_node in tree.internal_nodes:
+            node_proto_idx = tree.node_to_proto_idx[internal_node]
+
+            for x_i, y_i, distances_i, patches_i in zip(
+                x, y, distances[:, node_proto_idx, :, :], patches
+            ):
+                yield calc_proto_similarity(
+                    internal_node, x_i, y_i, distances_i, patches_i
+                )
+
+
+def calc_proto_similarity(
+    internal_node: ["InternalNode"],
+    transformed_image: torch.Tensor,
+    true_label: int,
+    sample_patches_distances: torch.Tensor,
+    sample_patches: torch.Tensor,
+) -> ImageProtoSimilarity:
+    closest_patch = _get_closest_patch(sample_patches_distances, sample_patches)
+    closest_patch_distance = sample_patches_distances.min().item()
+
+    return ImageProtoSimilarity(
+        internal_node=internal_node,
+        transformed_image=transformed_image,
+        true_label=true_label,
+        closest_patch=closest_patch,
+        closest_patch_distance=closest_patch_distance,
+        all_patch_distances=sample_patches_distances,
+    )
 
 
 def _get_closest_patch(

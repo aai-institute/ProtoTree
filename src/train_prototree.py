@@ -10,7 +10,8 @@ from torch.utils.data import DataLoader
 from prototree.eval import eval_fidelity, eval_tree
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
-from prototree.project import calc_node_patch_matches, replace_prototypes_with_patches
+from prototree.img_similarity import calc_node_patch_matches
+from prototree.projection import replace_prototypes_with_patches
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
 from visualize.patches import save_patch_visualizations

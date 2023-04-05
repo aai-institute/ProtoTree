@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from prototree.node import InternalNode
-from prototree.project import ImageProtoSimilarity
+from prototree.img_similarity import ImageProtoSimilarity
 from util.data import get_inverse_base_transform
 
 
