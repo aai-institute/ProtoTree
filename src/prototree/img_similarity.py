@@ -14,8 +14,7 @@ from prototree.node import InternalNode
 class ImageProtoSimilarity:
     """
     Stores the similarities between each patch of an image and a node's prototype.
-    TODO: This stores the data in a denormalized manner since it holds the node, image, label, and patch. Perhaps it
-     should be normalized.
+    TODO: Lots of data is denormalized into this. Perhaps it should be normalized.
     """
     internal_node: ["InternalNode"]
     transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
@@ -48,7 +47,7 @@ def calc_node_patch_matches(
     :param loader: The dataset.
     :param constrain_on_classes: If True, only consider patches from classes that are contained in
         the prototype's leaves' predictions
-    :return TODO: ...
+    :return The map of nodes to best matches.
     """
 
     # TODO: Should this be a method on the node? If this isn't an inner function we'd need to beware of caching
