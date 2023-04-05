@@ -291,16 +291,16 @@ class Leaf(Node):
         return torch.exp(self.logits())
 
     @property
-    def leaves(self) -> set:
-        return {self}
+    def leaves(self) -> list["Leaf"]:
+        return [self]
 
     @property
-    def child_nodes(self) -> list["Node"]:
+    def child_nodes(self) -> list[Union["InternalNode", "Leaf"]]:
         return []
 
     @property
-    def descendant_internal_nodes(self) -> set:
-        return set()
+    def descendant_internal_nodes(self) -> list["InternalNode"]:
+        return []
 
     @property
     def num_internal_nodes(self) -> int:

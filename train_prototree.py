@@ -1,5 +1,6 @@
 from argparse import Namespace
 from pathlib import Path
+from random import randint
 import logging
 from typing import Literal
 
@@ -12,10 +13,11 @@ from prototree.node import InternalNode, log_leaves_properties
 from prototree.project import replace_prototypes_by_projections
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from prototree.visualization import save_prototype_visualizations
+from prototree.visualize.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
+from prototree.visualize.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -51,7 +53,7 @@ def save_tree(
 def train_prototree(args: Namespace):
     # data and paths
     dataset = args.dataset
-    log_dir = args.log_dir
+    output_dir = Path(args.output_dir)
 
     # training hardware
     milestones = args.milestones_list
@@ -94,7 +96,9 @@ def train_prototree(args: Namespace):
         pin_memory=pin_memory,
         batch_size=batch_size,
     )
-    num_classes = len(test_loader.dataset.classes)
+
+    class_names = train_loader.dataset.classes
+    num_classes = len(class_names)
     log.info(f"Num classes: {num_classes}")
 
     # PREPARE MODEL
@@ -209,13 +213,12 @@ def train_prototree(args: Namespace):
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
-    viz_path = Path("data") / "visualizations"
-    viz_path.mkdir(exist_ok=True, parents=True)
-    log.info(f"Saving prototype visualizations to {viz_path}.")
-    save_prototype_visualizations(
-        node_to_patch_info,
-        viz_path,
-    )
+    vis_dir = output_dir / "visualizations"
+    vis_dir.mkdir(exist_ok=True, parents=True)
+    log.info(f"Saving prototype visualizations to {vis_dir}.")
+    patches_dir = vis_dir / "patches"
+    save_patch_visualizations(node_to_patch_info, patches_dir)
+    save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
 
     return tree
 
@@ -295,7 +298,8 @@ def create_proto_tree(
 
 def get_device(disable_cuda=False):
     if not disable_cuda and torch.cuda.is_available():
-        device_str = f"cuda:2"  # TODO: Spread this out to allow for more processes on multi-GPU machines.
+        num_cudas = torch.cuda.device_count()
+        device_str = f"cuda:{randint(0, num_cudas - 1)}"  # TODO: Do this properly.
     else:
         device_str = "cpu"
     return torch.device(device_str)
