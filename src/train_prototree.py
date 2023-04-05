@@ -13,11 +13,11 @@ from prototree.node import InternalNode, log_leaves_properties
 from prototree.project import replace_prototypes_by_projections
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from prototree.visualize.patches import save_patch_visualizations
+from visualize.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
-from prototree.visualize.tree import save_tree_visualization
+from visualize.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -203,7 +203,9 @@ def train_prototree(args: Namespace):
     log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
 
     # PROJECT
-    log.info("Projecting prototypes to nearest training patch (with class restrictions).")
+    log.info(
+        "Projecting prototypes to nearest training patch (with class restrictions)."
+    )
     node_to_patch_info = replace_prototypes_by_projections(tree, project_loader)
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
     test_acc = eval_tree(tree, test_loader)
@@ -257,9 +259,7 @@ def perform_final_evaluation(
     strat2fidelity = eval_fidelity(projected_pruned_tree, test_loader)
     for strategy in test_sampling_strategies:
         log.info(f"Accuracy of {strategy} routing: {strat2acc[strategy]:.3f}")
-        log.info(
-            f"Fidelity of {strategy} routing: {strat2fidelity[strategy]:.3f}"
-        )
+        log.info(f"Fidelity of {strategy} routing: {strat2fidelity[strategy]:.3f}")
 
 
 def create_proto_tree(
@@ -310,6 +310,7 @@ if __name__ == "__main__":
     if DEBUG:
         try:
             import lovely_tensors
+
             lovely_tensors.monkey_patch()
         except ImportError:
             log.warning(

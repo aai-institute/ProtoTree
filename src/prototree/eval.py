@@ -48,7 +48,9 @@ def eval_tree(
         if predicting_leaves:
             leaf_depths.extend([leaf.depth() for leaf in set(predicting_leaves)])
 
-        if batch_num == n_batches - 1:  # TODO: Hack due to https://github.com/tqdm/tqdm/issues/1369
+        if (
+            batch_num == n_batches - 1
+        ):  # TODO: Hack due to https://github.com/tqdm/tqdm/issues/1369
             avg_acc = total_acc / n_batches
             tqdm_loader.set_postfix_str(f"average: acc={avg_acc:.5f}")
 
@@ -70,7 +72,6 @@ def eval_fidelity(
     test_sampling_strategies: tuple[SamplingStrategy] = ("sample_max", "greedy"),
     ref_sampling_strategy: SamplingStrategy = "distributed",
 ) -> dict[SamplingStrategy, float]:
-
     n_batches = len(data_loader)
     tree.eval()
     result_dict = defaultdict(float)

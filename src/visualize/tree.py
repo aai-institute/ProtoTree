@@ -20,7 +20,7 @@ INTERNAL_NODE_IMG_GAP = 4
 
 @torch.no_grad()
 def save_tree_visualization(
-        tree: ProtoTree, patches_dir: os.PathLike, save_dir: os.PathLike, class_names: tuple
+    tree: ProtoTree, patches_dir: os.PathLike, save_dir: os.PathLike, class_names: tuple
 ):
     """
     Saves visualization as a DOT file and png.
@@ -28,11 +28,15 @@ def save_tree_visualization(
     node_imgs_dir = save_dir / "node_imgs"
     node_imgs_dir.mkdir(parents=True, exist_ok=True)
 
-    pydot_tree = _gen_pydot_tree(tree.tree_root, patches_dir, node_imgs_dir, class_names)
+    pydot_tree = _gen_pydot_tree(
+        tree.tree_root, patches_dir, node_imgs_dir, class_names
+    )
 
     dot_file = save_dir / "tree.dot"
-    log.info(f"Saving tree DOT to {dot_file}, this file is just for debugging/further processing, and is not directly "
-             f"used in image output generation.")
+    log.info(
+        f"Saving tree DOT to {dot_file}, this file is just for debugging/further processing, and is not directly "
+        f"used in image output generation."
+    )
     pydot_tree.write_dot(dot_file)
 
     png_file = save_dir / "treevis.png"
@@ -41,10 +45,17 @@ def save_tree_visualization(
 
 
 def _gen_pydot_tree(
-        root: Node, patches_dir: os.PathLike, node_imgs_dir: os.PathLike, class_names: tuple
+    root: Node, patches_dir: os.PathLike, node_imgs_dir: os.PathLike, class_names: tuple
 ) -> pydot.Dot:
-    pydot_tree = pydot.Dot("prototree", graph_type="digraph", bgcolor="white", margin=0.0, ranksep=0.03, nodesep=0.05,
-                           splines=False)
+    pydot_tree = pydot.Dot(
+        "prototree",
+        graph_type="digraph",
+        bgcolor="white",
+        margin=0.0,
+        ranksep=0.03,
+        nodesep=0.05,
+        splines=False,
+    )
 
     pydot_nodes = _gen_pydot_nodes(root, patches_dir, node_imgs_dir, class_names)
     pydot_edges = _gen_pydot_edges(root)
@@ -57,28 +68,51 @@ def _gen_pydot_tree(
 
 
 def _gen_pydot_nodes(
-        subtree_root: Node, patches_dir: os.PathLike, node_imgs_dir: os.PathLike, class_names: tuple
+    subtree_root: Node,
+    patches_dir: os.PathLike,
+    node_imgs_dir: os.PathLike,
+    class_names: tuple,
 ) -> list[pydot.Node]:
     match subtree_root:  # TODO: This function is quite big, should we use single dispatch instead?
         case InternalNode():
             img = _gen_internal_node_img(subtree_root, patches_dir)
             # TODO: Perhaps we should extract some pure functions here.
-            img_file = os.path.abspath(node_imgs_dir / f"node_{subtree_root.index}_vis.jpg")
+            img_file = os.path.abspath(
+                node_imgs_dir / f"node_{subtree_root.index}_vis.jpg"
+            )
             img.save(img_file)
 
-            pydot_node = pydot.Node(subtree_root.index, image=f'"{img_file}"', xlabel=f'"{subtree_root.index}"',
-                                    fontsize=6, labelfontcolor="gray50", fontname=FONT, shape="box")
-            l_descendants = _gen_pydot_nodes(subtree_root.left, patches_dir, node_imgs_dir, class_names)
-            r_descendants = _gen_pydot_nodes(subtree_root.right, patches_dir, node_imgs_dir, class_names)
+            pydot_node = pydot.Node(
+                subtree_root.index,
+                image=f'"{img_file}"',
+                xlabel=f'"{subtree_root.index}"',
+                fontsize=6,
+                labelfontcolor="gray50",
+                fontname=FONT,
+                shape="box",
+            )
+            l_descendants = _gen_pydot_nodes(
+                subtree_root.left, patches_dir, node_imgs_dir, class_names
+            )
+            r_descendants = _gen_pydot_nodes(
+                subtree_root.right, patches_dir, node_imgs_dir, class_names
+            )
             return [pydot_node] + l_descendants + r_descendants
         case Leaf():
             leaf_probs = torch.exp(subtree_root.logits()).detach()
             max_prob_inds = np.argmax(leaf_probs, keepdims=True)
             max_prob = leaf_probs[max_prob_inds[0]]
-            top_classes = f"p = {max_prob:.5f}:\n" + ",\n".join([class_names[i] for i in max_prob_inds])
+            top_classes = f"p = {max_prob:.5f}:\n" + ",\n".join(
+                [class_names[i] for i in max_prob_inds]
+            )
 
-            pydot_node = pydot.Node(subtree_root.index, label=top_classes, labelfontcolor="gray50", fontname=FONT,
-                                    shape="box")
+            pydot_node = pydot.Node(
+                subtree_root.index,
+                label=top_classes,
+                labelfontcolor="gray50",
+                fontname=FONT,
+                shape="box",
+            )
             return [pydot_node]
         case other:
             raise ValueError(f"Unrecognized node {other}.")
@@ -89,8 +123,18 @@ def _gen_pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
         case InternalNode():
             l_descendants = _gen_pydot_edges(subtree_root.left)
             r_descendants = _gen_pydot_edges(subtree_root.right)
-            l_edge = pydot.Edge(subtree_root.index, subtree_root.left.index, label="Absent", **EDGE_ATTRS)
-            r_edge = pydot.Edge(subtree_root.index, subtree_root.right.index, label="Present", **EDGE_ATTRS)
+            l_edge = pydot.Edge(
+                subtree_root.index,
+                subtree_root.left.index,
+                label="Absent",
+                **EDGE_ATTRS,
+            )
+            r_edge = pydot.Edge(
+                subtree_root.index,
+                subtree_root.right.index,
+                label="Present",
+                **EDGE_ATTRS,
+            )
             return [l_edge, r_edge] + l_descendants + r_descendants
         case Leaf():
             return []
@@ -102,7 +146,9 @@ def _gen_internal_node_img(node: InternalNode, patches_dir: os.PathLike) -> Imag
     internal_node_id = node.index
     # TODO: move hardcoded strings to config
     patch_path = os.path.join(patches_dir, f"{internal_node_id}_closest_patch.png")
-    bb_path = os.path.join(patches_dir, f"{internal_node_id}_bounding_box_closest_patch.png")
+    bb_path = os.path.join(
+        patches_dir, f"{internal_node_id}_bounding_box_closest_patch.png"
+    )
     patch_img_orig = Image.open(patch_path)
     bb_img_orig = Image.open(bb_path)
 
@@ -112,7 +158,9 @@ def _gen_internal_node_img(node: InternalNode, patches_dir: os.PathLike) -> Imag
     w, h = patch_img.size
 
     together_w, together_h = w + INTERNAL_NODE_IMG_GAP + wbb, max(h, hbb)
-    together = Image.new(patch_img.mode, (together_w, together_h), color=(255, 255, 255))
+    together = Image.new(
+        patch_img.mode, (together_w, together_h), color=(255, 255, 255)
+    )
     together.paste(patch_img, (0, 0))
     together.paste(bb_img, (w + INTERNAL_NODE_IMG_GAP, 0))
     return together.convert("RGB")

@@ -334,7 +334,6 @@ def get_predicting_leaves(
 def _get_predicting_leaves_greedily(
     root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
 ) -> List[Leaf]:
-
     neg_log_2 = -np.log(2)
 
     def get_leaf_for_sample(sample_idx: int):
