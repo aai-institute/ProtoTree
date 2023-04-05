@@ -10,7 +10,7 @@ from prototree.node import InternalNode, Node
 
 
 @dataclass
-class ImagePrototypeSimilarity:
+class ImageProtoSimilarity:
     """
     Stores the similarities between each patch of an image and a prototype.
     TODO: This stores the data in a partly denormalized manner since it holds the image, label, and patch. We should
@@ -36,11 +36,11 @@ def calc_proto_similarity(
     true_label: int,
     sample_patches_distances: torch.Tensor,
     sample_patches: torch.Tensor,
-) -> ImagePrototypeSimilarity:
+) -> ImageProtoSimilarity:
     closest_patch = _get_closest_patch(sample_patches_distances, sample_patches)
     closest_patch_distance = sample_patches_distances.min().item()
 
-    return ImagePrototypeSimilarity(
+    return ImageProtoSimilarity(
             transformed_image=transformed_image,
             true_label=true_label,
             closest_patch=closest_patch,
@@ -66,7 +66,7 @@ def calc_node_patch_info(
     :return: a dictionary mapping nodes to an object holding information about the selected
         latent patch
     """
-    node_to_patch_info: dict[Node, ImagePrototypeSimilarity] = {}
+    node_to_patch_info: dict[Node, ImageProtoSimilarity] = {}
 
     @lru_cache(maxsize=1)
     def get_leaf_labels(node: InternalNode):
@@ -89,7 +89,7 @@ def calc_node_patch_info(
             not prev_patch_info
             or closest_patch_distance < prev_patch_info.closest_patch_distance
         ):
-            node_to_patch_info[node] = ImagePrototypeSimilarity(
+            node_to_patch_info[node] = ImageProtoSimilarity(
                 transformed_image=transformed_image,
                 true_label=true_label,
                 closest_patch=closest_patch,
@@ -122,9 +122,12 @@ def calc_node_patch_info(
 
 
 @torch.no_grad()
-def replace_prototypes_with_patches(tree: ProtoTree, node_to_patch_info: dict[Node, ImagePrototypeSimilarity]):
+def replace_prototypes_with_patches(tree: ProtoTree, node_to_patch_info: dict[Node, ImageProtoSimilarity]):
     """
     Replaces each prototype with a given patch.
+    Note: This mutates the prototype tensors.
+    TODO: We should probably not be mutating the tree (via the prototypes), as this is making the code less flexible and
+     harder to reason about.
     """
     for internal_node, patch_info in node_to_patch_info.items():
         node_proto_idx = tree.node_to_proto_idx[internal_node]
