@@ -51,11 +51,13 @@ def calc_node_patch_matches(
     :return TODO: ...
     """
 
-    # TODO: Should this be a method on the node?
+    # TODO: Should this be a method on the node? If this isn't an inner function we'd need to beware of caching
+    #  incorrect results during training.
     @lru_cache(maxsize=10000)
     def get_leaf_labels(internal_node: InternalNode):
         return {leaf.predicted_label() for leaf in internal_node.leaves}
 
+    # TODO: Is there a more functional way of doing this?
     node_to_patch_matches: dict[["InternalNode"], ImageProtoSimilarity] = {}
     for proto_similarity in calc_image_proto_similarities(tree, loader):
         if (not constrain_on_classes) or proto_similarity.true_label in get_leaf_labels(
