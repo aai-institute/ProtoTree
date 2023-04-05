@@ -70,14 +70,17 @@ def calc_node_patch_matches(
         the prototype's leaves' predictions
     :return TODO: ...
     """
-    @lru_cache(maxsize=1)
+
+    # TODO: Should this be a method on the node?
+    @lru_cache(maxsize=10000)
     def get_leaf_labels(node: InternalNode):
         return {leaf.predicted_label() for leaf in node.leaves}
 
-    node_to_patch_matches: dict[Node, ImageProtoSimilarity] = {}
+    node_to_patch_matches: dict[["InternalNode"], ImageProtoSimilarity] = {}
     for proto_similarity in calc_image_proto_similarities(tree, loader):
         if (not constrain_on_classes) or proto_similarity.true_label in get_leaf_labels(proto_similarity.internal_node):
-            closest_patch_distance < prev_patch_info.closest_patch_distance
+            if (proto_similarity.internal_node not in node_to_patch_matches) or proto_similarity.closest_patch_distance < node_to_patch_matches[proto_similarity.internal_node].closest_patch_distance:
+                node_to_patch_matches[proto_similarity.internal_node] = proto_similarity
 
     return node_to_patch_matches
 
