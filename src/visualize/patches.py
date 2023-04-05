@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
+from typing import Callable
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from PIL.Image import Image
 
 from prototree.node import InternalNode
 from prototree.img_similarity import ImageProtoSimilarity
@@ -61,7 +63,9 @@ def save_patch_visualizations(
 
 
 def get_closest_patch_imgs(
-    image_proto_similarity: ImageProtoSimilarity, inverse_transform, latent_to_pixel
+    image_proto_similarity: ImageProtoSimilarity,
+    inverse_transform: Callable[[torch.Tensor], Image],
+    latent_to_pixel: Callable[[np.ndarray], np.ndarray],
 ) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     """
     Gets the pixels for images illustrating the closest patch from an ImageProtoSimilarity.
