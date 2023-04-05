@@ -50,8 +50,8 @@ def calc_node_patch_matches(
     :return The map of nodes to best matches.
     """
 
-    # TODO: Should this be a method on the node? If this isn't an inner function we'd need to beware of caching
-    #  incorrect results during training.
+    # TODO: Should this be a method on the node? If this isn't an inner function, we'd need to beware of caching
+    #  incorrect results when the leaf logits change.
     @lru_cache(maxsize=10000)
     def get_leaf_labels(internal_node: InternalNode):
         return {leaf.predicted_label() for leaf in internal_node.leaves}
@@ -78,9 +78,10 @@ def calc_node_patch_matches(
 def calc_image_proto_similarities(
     tree: ProtoTree, loader: DataLoader
 ) -> Iterator[ImageProtoSimilarity]:
-    # TODO: is this the most efficient way of doing this? Maybe reverse loops or vectorize
-    # The logic is: loop over batches -> loop over nodes ->
-    # loop over samples in batch to find closest patch for current node
+    """
+    Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
+    the given tree and dataloader. A generator is used to avoid OOMing on larger datasets.
+    """
     w_proto, h_proto = tree.prototype_shape[:2]
     for x, y in tqdm(loader, desc="Data loader", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
@@ -107,6 +108,9 @@ def calc_proto_similarity(
     sample_patches_distances: torch.Tensor,
     sample_patches: torch.Tensor,
 ) -> ImageProtoSimilarity:
+    """
+    Calculates [node prototype]-[image] similarity (ImageProtoSimilarity) for a single (node, image) pair.
+    """
     closest_patch = _get_closest_patch(sample_patches_distances, sample_patches)
     closest_patch_distance = sample_patches_distances.min().item()
 
