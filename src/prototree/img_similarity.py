@@ -101,6 +101,7 @@ def calc_image_proto_similarities(
                 )
 
 
+@torch.no_grad()
 def calc_proto_similarity(
     internal_node: InternalNode,
     transformed_image: torch.Tensor,

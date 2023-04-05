@@ -45,8 +45,8 @@ def save_patch_visualizations(
         )
 
     # TODO: maybe this can be vectorized
-    for node, patch_info in node_to_patch_matches.items():
-        patch_similarities = patch_info.all_patch_similarities().cpu().numpy()
+    for node, image_proto_similarity in node_to_patch_matches.items():
+        patch_similarities = image_proto_similarity.all_patch_similarities().cpu().numpy()
 
         # a single pixel is selected
         # TODO: there is probably a better way to get this mask
@@ -57,7 +57,7 @@ def save_patch_visualizations(
             closest_patch_pixel_mask
         )
 
-        original_image_unscaled = inverse_transform(patch_info.transformed_image)
+        original_image_unscaled = inverse_transform(image_proto_similarity.transformed_image)
         original_image = np.array(original_image_unscaled, dtype=np.float32) / 255
 
         closest_patch_pixels = original_image[
