@@ -267,7 +267,8 @@ class ProtoTree(PrototypeBase):
 
         node_to_probs = self.get_node_to_probs(x)
 
-        match self.training, sampling_strategy:  # TODO: Find a better approach for this branching logic.
+        # TODO: Find a better approach for this branching logic. (link Fowler)
+        match self.training, sampling_strategy:
             case _, "distributed":
                 predicting_leaves = None
                 logits = self.tree_root.forward(node_to_probs)
