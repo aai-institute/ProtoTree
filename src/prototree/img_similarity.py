@@ -19,7 +19,6 @@ class ImageProtoSimilarity:
 
     internal_node: InternalNode
     transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
-    true_label: int
     closest_patch: torch.Tensor
     closest_patch_distance: float
     all_patch_distances: torch.Tensor
@@ -59,8 +58,8 @@ def calc_node_patch_matches(
 
     # TODO: Is there a more functional way of doing this?
     node_to_patch_matches: dict[["InternalNode"], ImageProtoSimilarity] = {}
-    for proto_similarity in calc_image_proto_similarities(tree, loader):
-        if (not constrain_on_classes) or proto_similarity.true_label in get_leaf_labels(
+    for proto_similarity, label in tree_similarities(tree, loader):
+        if (not constrain_on_classes) or label in get_leaf_labels(
             proto_similarity.internal_node
         ):
             node = proto_similarity.internal_node
@@ -76,16 +75,18 @@ def calc_node_patch_matches(
 
 
 @torch.no_grad()
-def calc_image_proto_similarities(
+def tree_similarities(
     tree: ProtoTree, loader: DataLoader
-) -> Iterator[ImageProtoSimilarity]:
+) -> Iterator[(ImageProtoSimilarity, int)]:
     """
     Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
-    the given tree and dataloader. A generator is used to avoid OOMing on larger datasets.
+    the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
+
+    Returns: Iterator of (similarity, label)
     """
     for x, y in tqdm(loader, desc="Data loader", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
-        patches, distances = tree.patches(x), tree.distances(x)
+        patches, distances = tree.patches(x), tree.distances(x)  # Could be optimized if necessary.
 
         for internal_node in tree.internal_nodes:
             node_proto_idx = tree.node_to_proto_idx[internal_node]
@@ -93,16 +94,16 @@ def calc_image_proto_similarities(
             for x_i, y_i, distances_i, patches_i in zip(
                 x, y, distances[:, node_proto_idx, :, :], patches
             ):
-                yield calc_proto_similarity(
-                    internal_node, x_i, y_i, distances_i, patches_i
+                similarity = img_proto_similarity(
+                    internal_node, x_i, distances_i, patches_i
                 )
+                yield similarity, y_i
 
 
 @torch.no_grad()
-def calc_proto_similarity(
+def img_proto_similarity(
     internal_node: InternalNode,
     transformed_image: torch.Tensor,
-    true_label: int,
     sample_patches_distances: torch.Tensor,
     sample_patches: torch.Tensor,
 ) -> ImageProtoSimilarity:
@@ -115,7 +116,6 @@ def calc_proto_similarity(
     return ImageProtoSimilarity(
         internal_node=internal_node,
         transformed_image=transformed_image,
-        true_label=true_label,
         closest_patch=closest_patch,
         closest_patch_distance=closest_patch_distance,
         all_patch_distances=sample_patches_distances,

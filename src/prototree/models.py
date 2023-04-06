@@ -1,4 +1,5 @@
 import pickle
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import List, Literal, Optional, Union
@@ -7,11 +8,17 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from prototree.img_similarity import calc_proto_similarity
+from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
 from prototree.types import SamplingStrategy
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers
+
+
+@dataclass
+class LeafJustification:
+    ancestor_similarities: list[ImageProtoSimilarity]
+    label: int
 
 
 class PrototypeBase(nn.Module):
@@ -277,7 +284,7 @@ class ProtoTree(PrototypeBase):
 
         node_to_probs = self.get_node_to_probs(x)
 
-        # TODO: Find a better approach for this branching logic. (link Fowler)
+        # TODO: Find a better approach for this branching logic (https://martinfowler.com/bliki/FlagArgument.html).
         match self.training, sampling_strategy:
             case _, "distributed":
                 predicting_leaves = None
@@ -288,22 +295,39 @@ class ProtoTree(PrototypeBase):
                 )
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
-
-                leaves_ancestors = [
-                    predicting_leaf.ancestors for predicting_leaf in predicting_leaves
-                ]
-                for leaf_ancestors in leaves_ancestors:
-                    for leaf_ancestor in leaf_ancestors:
-                        node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
-                        # TODO: True label???
-                        sim = calc_proto_similarity(node_proto_idx, -123, )
-
             case _:
                 raise ValueError(
                     f"Invalid train/test and sampling strategy combination: {self.training=}, {sampling_strategy=}"
                 )
 
         return logits, node_to_probs, predicting_leaves
+
+    @torch.no_grad
+    def justify(
+        self,
+        x: torch.Tensor,
+        predicting_leaves: list[Leaf]
+    ) -> list[LeafJustification]:
+        patches, distances = self.patches(x), self.distances(x)  # Could be optimized if necessary.
+
+        leaves_justifications: list[LeafJustification] = []
+        for predicting_leaf in predicting_leaves:
+            leaf_ancestors = predicting_leaf.ancestors
+            ancestor_similarities: list[ImageProtoSimilarity] = []
+            for leaf_ancestor in leaf_ancestors:
+                node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
+
+                # TODO: True label???
+                for x_i, distances_i, patches_i in zip(
+                        x, distances[:, node_proto_idx, :, :], patches
+                ):
+                    similarity = img_proto_similarity(
+                        leaf_ancestor, x_i, distances_i, patches_i
+                    )
+                    ancestor_similarities.append(similarity)
+            leaves_justifications.append(LeafJustification(ancestor_similarities, predicting_leaf.predicted_label()))
+
+        return leaves_justifications
 
     def predict(
         self,

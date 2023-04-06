@@ -87,7 +87,7 @@ def closest_patch_imgs(
         :,
     ]
 
-    im_with_bbox = im_with_bbox(im_original, h_low, h_high, w_low, w_high)
+    im_with_bbox = superimpose_bb(im_original, h_low, h_high, w_low, w_high)
 
     pixel_heatmap = latent_to_pixel(patch_similarities)
     colored_heatmap = _to_rgb_map(pixel_heatmap)
@@ -110,7 +110,7 @@ def covering_rectangle_indices(mask: np.ndarray) -> (int, int, int, int):
     return lower[0], upper[0] + 1, lower[1], upper[1] + 1
 
 
-def im_with_bbox(
+def superimpose_bb(
     img: np.ndarray,
     h_low: int,
     h_high: int,
