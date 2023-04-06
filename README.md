@@ -16,6 +16,7 @@ This will probably be turned into a Python package and moved to a new repository
 3. (Optional, but recommended) Download a [ResNet50 pretrained on iNaturalist2017](https://drive.google.com/drive/folders/1yHme1iFQy-Lz_11yZJPlNd9bO_YPKlEU) (filename on Google Drive: `BBN.iNaturalist2017.res50.180epoch.best_model.pth`) and place it in the folder `src/features/state_dicts`.
 
 ### For development
+Currently, all these steps must be done manually on a development machine. We should set up a pipeline that does these things automatically and reproducibly.
 1. Install requirements from `requirements-dev.txt`.
 2. You can run tests with the command `pytest`.
 3. You can lint the code with `black src` and `black tests`.
