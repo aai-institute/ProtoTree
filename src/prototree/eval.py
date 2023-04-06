@@ -69,22 +69,21 @@ def eval_tree(
 def eval_fidelity(
     tree: ProtoTree,
     data_loader: DataLoader,
-    test_sampling_strategies: tuple[SamplingStrat] = ("sample_max", "greedy"),
+    test_sampling_strategy: SamplingStrat,
     ref_sampling_strategy: SamplingStrat = "distributed",
-) -> dict[SamplingStrat, float]:
+) -> float:
     n_batches = len(data_loader)
     tree.eval()
-    result_dict = defaultdict(float)
+    avg_fidelity = 0.0
     for x, y in tqdm(data_loader, desc="Evaluating fidelity", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
 
         y_pred_reference = tree.predict(x, sampling_strategy=ref_sampling_strategy)
-        for sampling_strategy in test_sampling_strategies:
-            y_pred_test = tree.predict(x, sampling_strategy=sampling_strategy)
-            batch_fidelity = torch.sum(y_pred_reference == y_pred_test)
-            result_dict[sampling_strategy] += batch_fidelity / (len(y) * n_batches)
+        y_pred_test = tree.predict(x, sampling_strategy=test_sampling_strategy)
+        batch_fidelity = torch.sum(y_pred_reference == y_pred_test)
+        avg_fidelity += batch_fidelity / (len(y) * n_batches)
 
-    return result_dict
+    return avg_fidelity
 
 
 # TODO: use some inbuilt of torch or sklearn

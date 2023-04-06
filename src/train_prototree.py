@@ -193,7 +193,7 @@ def train_prototree(args: Namespace):
     # EVALUATE AND ANALYSE TRAINED TREE
     tree = tree.eval()
     perform_single_leaf_evaluation(
-        tree, train_loader, eval_name="Sampling strategies on train data"
+        tree, train_loader, "Sampling strategies on train data"
     )
 
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
@@ -216,7 +216,7 @@ def train_prototree(args: Namespace):
     test_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
 
-    perform_single_leaf_evaluation(tree, test_loader)
+    perform_single_leaf_evaluation(tree, test_loader, "Final evaluation")
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
@@ -249,22 +249,20 @@ def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
 def perform_single_leaf_evaluation(
     projected_pruned_tree: ProtoTree,
     test_loader: DataLoader,
-    eval_name="Final evaluation",
+    eval_name: str,
 ):
     test_sampling_strategies: list[SingleLeafStrat] = ["sample_max"]
-    strat_to_acc: dict[SingleLeafStrat, float] = {}
-    for sampling_strategy in test_sampling_strategies:
+    for strategy in test_sampling_strategies:
         acc = eval_tree(
             projected_pruned_tree,
             test_loader,
-            sampling_strategy=sampling_strategy,
+            sampling_strategy=strategy,
             desc=eval_name,
         )
-        strat_to_acc[sampling_strategy] = acc
-    strat_to_fidelity = eval_fidelity(projected_pruned_tree, test_loader)
-    for strategy in test_sampling_strategies:
-        log.info(f"Accuracy of {strategy} routing: {strat_to_acc[strategy]:.3f}")
-        log.info(f"Fidelity of {strategy} routing: {strat_to_fidelity[strategy]:.3f}")
+        fidelity = eval_fidelity(projected_pruned_tree, test_loader, strategy)
+
+        log.info(f"Accuracy of {strategy} routing: {acc:.3f}")
+        log.info(f"Fidelity of {strategy} routing: {fidelity:.3f}")
 
 
 def create_proto_tree(
