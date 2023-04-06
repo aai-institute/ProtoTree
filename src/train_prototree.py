@@ -2,19 +2,16 @@ from argparse import Namespace
 from pathlib import Path
 from random import randint
 import logging
-from typing import Literal
 
 import torch
-from torch.utils.data import DataLoader
 
-from prototree.eval import eval_fidelity, eval_tree
+from prototree.eval import eval_tree, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
 from prototree.img_similarity import calc_node_patch_matches
 from prototree.projection import replace_prototypes_with_patches
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from prototree.types import SingleLeafStrat
 from visualize.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
@@ -213,7 +210,7 @@ def train_prototree(args: Namespace):
 
     pruned_and_proj_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
-    perform_single_leaf_evaluation(tree, test_loader, "Pruned and projected")
+    single_leaf_eval(tree, test_loader, "Pruned and projected")
 
     tree.tree_root.print_tree()
 
@@ -242,25 +239,6 @@ def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
         f"After pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
     log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")
-
-
-def perform_single_leaf_evaluation(
-    projected_pruned_tree: ProtoTree,
-    test_loader: DataLoader,
-    eval_name: str,
-):
-    test_sampling_strategies: list[SingleLeafStrat] = ["sample_max"]
-    for strategy in test_sampling_strategies:
-        acc = eval_tree(
-            projected_pruned_tree,
-            test_loader,
-            sampling_strategy=strategy,
-            desc=eval_name,
-        )
-        fidelity = eval_fidelity(projected_pruned_tree, test_loader, strategy)
-
-        log.info(f"Accuracy of {strategy} routing: {acc:.3f}")
-        log.info(f"Fidelity of {strategy} routing: {fidelity:.3f}")
 
 
 def create_proto_tree(

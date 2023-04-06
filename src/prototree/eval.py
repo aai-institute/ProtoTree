@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from prototree.models import ProtoTree
-from prototree.types import SamplingStrat
+from prototree.types import SamplingStrat, SingleLeafStrat
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +62,25 @@ def eval_tree(
             f"Longest path has length {leaf_depths.max()}, shortest path has length {leaf_depths.min()}"
         )
     return avg_acc
+
+
+def single_leaf_eval(
+    projected_pruned_tree: ProtoTree,
+    test_loader: DataLoader,
+    eval_name: str,
+):
+    test_sampling_strategies: list[SingleLeafStrat] = ["sample_max"]
+    for strategy in test_sampling_strategies:
+        acc = eval_tree(
+            projected_pruned_tree,
+            test_loader,
+            sampling_strategy=strategy,
+            desc=eval_name,
+        )
+        fidelity = eval_fidelity(projected_pruned_tree, test_loader, strategy)
+
+        log.info(f"Accuracy of {strategy} routing: {acc:.3f}")
+        log.info(f"Fidelity of {strategy} routing: {fidelity:.3f}")
 
 
 @torch.no_grad()
