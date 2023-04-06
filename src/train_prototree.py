@@ -203,9 +203,7 @@ def train_prototree(args: Namespace):
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
     node_to_patch_matches = node_patch_matches(tree, project_loader)
-    project_prototypes(
-        tree, node_to_patch_matches
-    )  # TODO: Assess the impact of this.
+    project_prototypes(tree, node_to_patch_matches)  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
 
     pruned_and_proj_acc = eval_tree(tree, test_loader)

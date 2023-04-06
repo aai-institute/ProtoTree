@@ -65,15 +65,15 @@ def patch_match_candidates(
     """
     for x, y in tqdm(loader, desc="Data loader", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
-        patches, distances = tree.patches(x), tree.distances(
+        patches, dists = tree.patches(x), tree.distances(
             x
         )  # Common subexpression elimination possible, if necessary.
 
-        for x_i, y_i, distances_i, patches_i in zip(x, y, distances, patches):
+        for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
             for internal_node in tree.internal_nodes:
                 node_proto_idx = tree.node_to_proto_idx[internal_node]
 
-                node_distances = distances_i[node_proto_idx, :, :]
+                node_distances = dists_i[node_proto_idx, :, :]
                 similarity = img_proto_similarity(
                     internal_node, x_i, node_distances, patches_i
                 )

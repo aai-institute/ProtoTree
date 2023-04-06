@@ -307,7 +307,12 @@ class ProtoTree(PrototypeBase):
         self,
         x: torch.Tensor,
         sampling_strategy: SingleLeafStrat = "sample_max",
-    ) -> tuple[Tensor, dict[Node, NodeProbabilities], Optional[list[Leaf]], list[LeafRationalization]]:
+    ) -> tuple[
+        Tensor,
+        dict[Node, NodeProbabilities],
+        Optional[list[Leaf]],
+        list[LeafRationalization],
+    ]:
         logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy)
         leaf_rationalizations = self.rationalize(x, predicting_leaves)
         return logits, node_to_probs, predicting_leaves, leaf_rationalizations
@@ -317,20 +322,20 @@ class ProtoTree(PrototypeBase):
     def rationalize(
         self, x: torch.Tensor, predicting_leaves: list[Leaf]
     ) -> list[LeafRationalization]:
-        patches, distances = self.patches(x), self.distances(
+        patches, dists = self.patches(x), self.distances(
             x
         )  # Common subexpression elimination possible, if necessary.
 
         rationalizations = []
-        for x_i, predicting_leaf, distances_i, patches_i in zip(
-            x, predicting_leaves, distances, patches
+        for x_i, predicting_leaf, dists_i, patches_i in zip(
+            x, predicting_leaves, dists, patches
         ):
             leaf_ancestors = predicting_leaf.ancestors
             ancestor_similarities: list[ImageProtoSimilarity] = []
             for leaf_ancestor in leaf_ancestors:
                 node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
 
-                node_distances = distances_i[node_proto_idx, :, :]
+                node_distances = dists_i[node_proto_idx, :, :]
                 similarity = img_proto_similarity(
                     leaf_ancestor, x_i, node_distances, patches_i
                 )
