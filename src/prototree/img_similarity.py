@@ -91,9 +91,7 @@ def patch_match_candidates(
             x
         )  # Could be optimized if necessary.
 
-        for x_i, y_i, distances_i, patches_i in zip(
-                x, y, distances, patches
-        ):
+        for x_i, y_i, distances_i, patches_i in zip(x, y, distances, patches):
             for internal_node in tree.internal_nodes:
                 node_proto_idx = tree.node_to_proto_idx[internal_node]
 
