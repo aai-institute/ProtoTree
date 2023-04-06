@@ -89,7 +89,7 @@ def patch_match_candidates(
         x, y = x.to(tree.device), y.to(tree.device)
         patches, distances = tree.patches(x), tree.distances(
             x
-        )  # Could be optimized if necessary.
+        )  # Common subexpression elimination possible, if necessary.
 
         for x_i, y_i, distances_i, patches_i in zip(x, y, distances, patches):
             for internal_node in tree.internal_nodes:

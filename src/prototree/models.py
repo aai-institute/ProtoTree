@@ -309,7 +309,7 @@ class ProtoTree(PrototypeBase):
     ) -> Iterator[LeafRationalization]:
         patches, distances = self.patches(x), self.distances(
             x
-        )  # Could be optimized if necessary.
+        )  # Common subexpression elimination possible, if necessary.
 
         for x_i, predicting_leaf, distances_i, patches_i in zip(
             x, predicting_leaves, distances, patches
