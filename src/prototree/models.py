@@ -304,11 +304,11 @@ class ProtoTree(PrototypeBase):
 
     @torch.no_grad
     def justify(
-        self,
-        x: torch.Tensor,
-        predicting_leaves: list[Leaf]
+        self, x: torch.Tensor, predicting_leaves: list[Leaf]
     ) -> list[LeafJustification]:
-        patches, distances = self.patches(x), self.distances(x)  # Could be optimized if necessary.
+        patches, distances = self.patches(x), self.distances(
+            x
+        )  # Could be optimized if necessary.
 
         leaves_justifications: list[LeafJustification] = []
         for predicting_leaf in predicting_leaves:
@@ -317,15 +317,18 @@ class ProtoTree(PrototypeBase):
             for leaf_ancestor in leaf_ancestors:
                 node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
 
-                # TODO: True label???
                 for x_i, distances_i, patches_i in zip(
-                        x, distances[:, node_proto_idx, :, :], patches
+                    x, distances[:, node_proto_idx, :, :], patches
                 ):
                     similarity = img_proto_similarity(
                         leaf_ancestor, x_i, distances_i, patches_i
                     )
                     ancestor_similarities.append(similarity)
-            leaves_justifications.append(LeafJustification(ancestor_similarities, predicting_leaf.predicted_label()))
+            leaves_justifications.append(
+                LeafJustification(
+                    ancestor_similarities, predicting_leaf.predicted_label()
+                )
+            )
 
         return leaves_justifications
 

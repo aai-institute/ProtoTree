@@ -58,7 +58,7 @@ def calc_node_patch_matches(
 
     # TODO: Is there a more functional way of doing this?
     node_to_patch_matches: dict[["InternalNode"], ImageProtoSimilarity] = {}
-    for proto_similarity, label in tree_similarities(tree, loader):
+    for proto_similarity, label in patch_match_candidates(tree, loader):
         if (not constrain_on_classes) or label in get_leaf_labels(
             proto_similarity.internal_node
         ):
@@ -75,7 +75,7 @@ def calc_node_patch_matches(
 
 
 @torch.no_grad()
-def tree_similarities(
+def patch_match_candidates(
     tree: ProtoTree, loader: DataLoader
 ) -> Iterator[(ImageProtoSimilarity, int)]:
     """
@@ -86,7 +86,9 @@ def tree_similarities(
     """
     for x, y in tqdm(loader, desc="Data loader", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
-        patches, distances = tree.patches(x), tree.distances(x)  # Could be optimized if necessary.
+        patches, distances = tree.patches(x), tree.distances(
+            x
+        )  # Could be optimized if necessary.
 
         for internal_node in tree.internal_nodes:
             node_proto_idx = tree.node_to_proto_idx[internal_node]
