@@ -192,17 +192,14 @@ def train_prototree(args: Namespace):
 
     # EVALUATE AND ANALYSE TRAINED TREE
     tree = tree.eval()
-    perform_single_leaf_evaluation(
-        tree, train_loader, "Sampling strategies on train data"
-    )
 
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
 
     _prune_tree(tree.tree_root, leaf_pruning_threshold)
 
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
-    pruned_acc = eval_tree(tree, test_loader, desc="pruned")
-    log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
+    pruned_acc = eval_tree(tree, test_loader, desc="Pruned only")
+    log.info(f"\nTest acc. after pruning only: {pruned_acc:.3f}")
 
     # PROJECT
     log.info(
@@ -213,10 +210,11 @@ def train_prototree(args: Namespace):
         tree, node_to_patch_matches
     )  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
-    test_acc = eval_tree(tree, test_loader)
-    log.info(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
 
-    perform_single_leaf_evaluation(tree, test_loader, "Final evaluation")
+    pruned_and_proj_acc = eval_tree(tree, test_loader)
+    log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
+    perform_single_leaf_evaluation(tree, test_loader, "Pruned and projected")
+
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
