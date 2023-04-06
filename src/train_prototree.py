@@ -9,7 +9,7 @@ from prototree.eval import eval_tree, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
 from prototree.img_similarity import calc_node_patch_matches
-from prototree.projection import replace_prototypes_with_patches
+from prototree.projection import project_prototypes
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
 from visualize.patches import save_patch_visualizations
@@ -203,7 +203,7 @@ def train_prototree(args: Namespace):
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
     node_to_patch_matches = calc_node_patch_matches(tree, project_loader)
-    replace_prototypes_with_patches(
+    project_prototypes(
         tree, node_to_patch_matches
     )  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
