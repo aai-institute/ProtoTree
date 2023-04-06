@@ -14,6 +14,7 @@ from prototree.img_similarity import calc_node_patch_matches
 from prototree.projection import replace_prototypes_with_patches
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
+from prototree.types import SingleLeafStrat
 from visualize.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
@@ -250,8 +251,8 @@ def perform_single_leaf_evaluation(
     test_loader: DataLoader,
     eval_name="Final evaluation",
 ):
-    test_sampling_strategies: list[Literal] = ["sample_max", "greedy"]
-    strat2acc: dict[Literal, float] = {}
+    test_sampling_strategies: list[SingleLeafStrat] = ["sample_max"]
+    strat_to_acc: dict[SingleLeafStrat, float] = {}
     for sampling_strategy in test_sampling_strategies:
         acc = eval_tree(
             projected_pruned_tree,
@@ -259,11 +260,11 @@ def perform_single_leaf_evaluation(
             sampling_strategy=sampling_strategy,
             desc=eval_name,
         )
-        strat2acc[sampling_strategy] = acc
-    strat2fidelity = eval_fidelity(projected_pruned_tree, test_loader)
+        strat_to_acc[sampling_strategy] = acc
+    strat_to_fidelity = eval_fidelity(projected_pruned_tree, test_loader)
     for strategy in test_sampling_strategies:
-        log.info(f"Accuracy of {strategy} routing: {strat2acc[strategy]:.3f}")
-        log.info(f"Fidelity of {strategy} routing: {strat2fidelity[strategy]:.3f}")
+        log.info(f"Accuracy of {strategy} routing: {strat_to_acc[strategy]:.3f}")
+        log.info(f"Fidelity of {strategy} routing: {strat_to_fidelity[strategy]:.3f}")
 
 
 def create_proto_tree(

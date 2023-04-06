@@ -11,7 +11,7 @@ from torch import Tensor
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
-from prototree.types import SamplingStrat, PredictingLeafStrat
+from prototree.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers
 
@@ -306,7 +306,7 @@ class ProtoTree(PrototypeBase):
     def explain(
         self,
         x: torch.Tensor,
-        sampling_strategy: PredictingLeafStrat = "sample_max",
+        sampling_strategy: SingleLeafStrat = "sample_max",
     ) -> tuple[Tensor, dict[Node, NodeProbabilities], Optional[list[Leaf]], list[LeafRationalization]]:
         logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy)
         leaf_rationalizations = self.rationalize(x, predicting_leaves)
@@ -383,7 +383,7 @@ class ProtoTree(PrototypeBase):
 def get_predicting_leaves(
     root: InternalNode,
     node_to_probs: dict[Node, NodeProbabilities],
-    sampling_strategy: PredictingLeafStrat,
+    sampling_strategy: SingleLeafStrat,
 ) -> List[Leaf]:
     """
     Selects one leaf for each entry of the batch covered in node_to_probs.
