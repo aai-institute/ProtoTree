@@ -341,10 +341,10 @@ class ProtoTree(PrototypeBase):
                 )
                 ancestor_similarities.append(similarity)
 
-                rationalization = LeafRationalization(
-                    ancestor_similarities, predicting_leaf.predicted_label()
-                )
-                rationalizations.append(rationalization)
+            rationalization = LeafRationalization(
+                ancestor_similarities, predicting_leaf.predicted_label()
+            )
+            rationalizations.append(rationalization)
 
         return rationalizations
 
