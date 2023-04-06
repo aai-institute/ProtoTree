@@ -8,15 +8,15 @@ import torch
 from prototree.eval import eval_tree, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
-from prototree.img_similarity import calc_node_patch_matches
+from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from visualize.patches import save_patch_visualizations
+from visualize.render.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
-from visualize.tree import save_tree_visualization
+from visualize.render.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -202,7 +202,7 @@ def train_prototree(args: Namespace):
     log.info(
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
-    node_to_patch_matches = calc_node_patch_matches(tree, project_loader)
+    node_to_patch_matches = node_patch_matches(tree, project_loader)
     project_prototypes(
         tree, node_to_patch_matches
     )  # TODO: Assess the impact of this.

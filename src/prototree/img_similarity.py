@@ -1,22 +1,16 @@
 from dataclasses import dataclass
-from functools import lru_cache
-from typing import Iterator
 
 import torch
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
-from prototree.models import ProtoTree
 from prototree.node import InternalNode
 
 
 @dataclass
 class ImageProtoSimilarity:
+    # TODO: Lots of data is denormalized into this. Would it be better to normalize it?
     """
     Stores the similarities between each patch of an image and a node's prototype.
-    TODO: Lots of data is denormalized into this. Perhaps it should be normalized.
     """
-
     internal_node: InternalNode
     transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
     closest_patch: torch.Tensor
@@ -32,76 +26,6 @@ class ImageProtoSimilarity:
         return torch.exp(-self.all_patch_distances)
 
 
-# TODO: Generalize to ProtoBase
-@torch.no_grad()
-def calc_node_patch_matches(
-    tree: ProtoTree,
-    loader: DataLoader,
-    constrain_on_classes=True,
-):
-    """
-    Produces a map where each key is a node and the corresponding value is information about the patch (out of all
-    images in the dataset) that is most similar to node's prototype.
-
-    :param tree:
-    :param loader: The dataset.
-    :param constrain_on_classes: If True, only consider patches from classes that are contained in
-        the prototype's leaves' predictions.
-    :return The map of nodes to best matches.
-    """
-
-    # TODO: Should this be a method on the node? If this weren't an inner function, we'd need to beware of caching
-    #  incorrect results when the leaf logits change.
-    @lru_cache(maxsize=10000)
-    def get_leaf_labels(internal_node: InternalNode):
-        return {leaf.predicted_label() for leaf in internal_node.leaves}
-
-    # TODO: Is there a more functional way of doing this?
-    node_to_patch_matches: dict[["InternalNode"], ImageProtoSimilarity] = {}
-    for proto_similarity, label in patch_match_candidates(tree, loader):
-        if (not constrain_on_classes) or label in get_leaf_labels(
-            proto_similarity.internal_node
-        ):
-            node = proto_similarity.internal_node
-            cur_closest = node_to_patch_matches[node]
-            if (
-                (node not in node_to_patch_matches)
-                or proto_similarity.closest_patch_distance
-                < cur_closest.closest_patch_distance
-            ):
-                node_to_patch_matches[node] = proto_similarity
-
-    return node_to_patch_matches
-
-
-# TODO: Lots of overlap with Prototree.justify, but we need to beware of premature abstraction.
-@torch.no_grad()
-def patch_match_candidates(
-    tree: ProtoTree, loader: DataLoader
-) -> Iterator[(ImageProtoSimilarity, int)]:
-    """
-    Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
-    the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
-
-    Returns: Iterator of (similarity, label)
-    """
-    for x, y in tqdm(loader, desc="Data loader", ncols=0):
-        x, y = x.to(tree.device), y.to(tree.device)
-        patches, distances = tree.patches(x), tree.distances(
-            x
-        )  # Common subexpression elimination possible, if necessary.
-
-        for x_i, y_i, distances_i, patches_i in zip(x, y, distances, patches):
-            for internal_node in tree.internal_nodes:
-                node_proto_idx = tree.node_to_proto_idx[internal_node]
-
-                node_distances = distances_i[node_proto_idx, :, :]
-                similarity = img_proto_similarity(
-                    internal_node, x_i, node_distances, patches_i
-                )
-                yield similarity, y_i
-
-
 @torch.no_grad()
 def img_proto_similarity(
     internal_node: InternalNode,
@@ -109,6 +33,8 @@ def img_proto_similarity(
     sample_patches_distances: torch.Tensor,
     sample_patches: torch.Tensor,
 ) -> ImageProtoSimilarity:
+    # TODO: Doesn't the PrototypeBase kind of do this already? Why do we need to do further calculation here instead of
+    #  lightly modifying PrototypeBase?
     """
     Calculates [node prototype]-[image] similarity (ImageProtoSimilarity) for a single (node, image) pair.
     """
@@ -127,6 +53,8 @@ def img_proto_similarity(
 def _get_closest_patch(
     sample_distances: torch.Tensor, sample_patches: torch.Tensor
 ) -> torch.Tensor:
+    # TODO: Doesn't the PrototypeBase kind of do this already? Why do we need lots of extra code here instead of lightly
+    #  modifying PrototypeBase?
     """
     Get the closest latent patch based on the distances to the prototype. This is just a helper
     function for dealing with multidimensional indices.
