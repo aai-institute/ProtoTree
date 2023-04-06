@@ -303,7 +303,7 @@ class ProtoTree(PrototypeBase):
         return logits, node_to_probs, predicting_leaves
 
     # TODO: Lots of overlap with img_similarity.patch_match_candidates, but we need to beware of premature abstraction.
-    @torch.no_grad
+    @torch.no_grad()
     def justify(
         self, x: torch.Tensor, predicting_leaves: list[Leaf]
     ) -> list[LeafJustification]:
