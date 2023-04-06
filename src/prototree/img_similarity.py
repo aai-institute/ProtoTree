@@ -97,7 +97,7 @@ def patch_match_candidates(
 
                 node_distances = distances_i[node_proto_idx, :, :]
                 similarity = img_proto_similarity(
-                    internal_node, x_i, distances_i, patches_i
+                    internal_node, x_i, node_distances, patches_i
                 )
                 yield similarity, y_i
 
