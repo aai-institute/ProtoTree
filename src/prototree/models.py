@@ -302,6 +302,7 @@ class ProtoTree(PrototypeBase):
 
         return logits, node_to_probs, predicting_leaves
 
+    # TODO: Lots of overlap with img_similarity.patch_match_candidates, but we need to beware of premature abstraction.
     @torch.no_grad
     def justify(
         self, x: torch.Tensor, predicting_leaves: list[Leaf]
@@ -311,19 +312,20 @@ class ProtoTree(PrototypeBase):
         )  # Could be optimized if necessary.
 
         leaves_justifications: list[LeafJustification] = []
-        for predicting_leaf in predicting_leaves:
+        for x_i, predicting_leaf, distances_i, patches_i in zip(
+            x, predicting_leaves, distances, patches
+        ):
             leaf_ancestors = predicting_leaf.ancestors
             ancestor_similarities: list[ImageProtoSimilarity] = []
             for leaf_ancestor in leaf_ancestors:
                 node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
 
-                for x_i, distances_i, patches_i in zip(
-                    x, distances[:, node_proto_idx, :, :], patches
-                ):
-                    similarity = img_proto_similarity(
-                        leaf_ancestor, x_i, distances_i, patches_i
-                    )
-                    ancestor_similarities.append(similarity)
+                node_distances = distances_i[node_proto_idx, :, :]
+                similarity = img_proto_similarity(
+                    leaf_ancestor, x_i, node_distances, patches_i
+                )
+                ancestor_similarities.append(similarity)
+
             leaves_justifications.append(
                 LeafJustification(
                     ancestor_similarities, predicting_leaf.predicted_label()

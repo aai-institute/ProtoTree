@@ -74,6 +74,7 @@ def calc_node_patch_matches(
     return node_to_patch_matches
 
 
+# TODO: Lots of overlap with Prototree.justify, but we need to beware of premature abstraction.
 @torch.no_grad()
 def patch_match_candidates(
     tree: ProtoTree, loader: DataLoader
@@ -90,12 +91,13 @@ def patch_match_candidates(
             x
         )  # Could be optimized if necessary.
 
-        for internal_node in tree.internal_nodes:
-            node_proto_idx = tree.node_to_proto_idx[internal_node]
+        for x_i, y_i, distances_i, patches_i in zip(
+                x, y, distances, patches
+        ):
+            for internal_node in tree.internal_nodes:
+                node_proto_idx = tree.node_to_proto_idx[internal_node]
 
-            for x_i, y_i, distances_i, patches_i in zip(
-                x, y, distances[:, node_proto_idx, :, :], patches
-            ):
+                node_distances = distances_i[node_proto_idx, :, :]
                 similarity = img_proto_similarity(
                     internal_node, x_i, distances_i, patches_i
                 )
