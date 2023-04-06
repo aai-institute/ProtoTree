@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from prototree.models import ProtoTree
-from prototree.types import SamplingStrategy
+from prototree.types import SamplingStrat
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 def eval_tree(
     tree: ProtoTree,
     data_loader: DataLoader,
-    sampling_strategy: SamplingStrategy = "distributed",
+    sampling_strategy: SamplingStrat = "distributed",
     desc: str = "Evaluating",
 ) -> float:
     """
@@ -69,9 +69,9 @@ def eval_tree(
 def eval_fidelity(
     tree: ProtoTree,
     data_loader: DataLoader,
-    test_sampling_strategies: tuple[SamplingStrategy] = ("sample_max", "greedy"),
-    ref_sampling_strategy: SamplingStrategy = "distributed",
-) -> dict[SamplingStrategy, float]:
+    test_sampling_strategies: tuple[SamplingStrat] = ("sample_max", "greedy"),
+    ref_sampling_strategy: SamplingStrat = "distributed",
+) -> dict[SamplingStrat, float]:
     n_batches = len(data_loader)
     tree.eval()
     result_dict = defaultdict(float)

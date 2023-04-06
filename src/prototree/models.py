@@ -2,15 +2,16 @@ import pickle
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import List, Literal, Optional, Union, Iterator
+from typing import List, Literal, Optional, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
-from prototree.types import SamplingStrategy
+from prototree.types import SamplingStrat, PredictingLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers
 
@@ -267,7 +268,7 @@ class ProtoTree(PrototypeBase):
     def forward(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrategy = "distributed",
+        sampling_strategy: SamplingStrat = "distributed",
     ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
         If sampling_strategy is `distributed`, all leaves contribute to each prediction,
@@ -302,15 +303,25 @@ class ProtoTree(PrototypeBase):
 
         return logits, node_to_probs, predicting_leaves
 
+    def explain(
+        self,
+        x: torch.Tensor,
+        sampling_strategy: PredictingLeafStrat = "sample_max",
+    ) -> tuple[Tensor, dict[Node, NodeProbabilities], Optional[list[Leaf]], list[LeafRationalization]]:
+        logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy)
+        leaf_rationalizations = self.rationalize(x, predicting_leaves)
+        return logits, node_to_probs, predicting_leaves, leaf_rationalizations
+
     # TODO: Lots of overlap with img_similarity.patch_match_candidates, but we need to beware of premature abstraction.
     @torch.no_grad()
     def rationalize(
         self, x: torch.Tensor, predicting_leaves: list[Leaf]
-    ) -> Iterator[LeafRationalization]:
+    ) -> list[LeafRationalization]:
         patches, distances = self.patches(x), self.distances(
             x
         )  # Common subexpression elimination possible, if necessary.
 
+        rationalizations = []
         for x_i, predicting_leaf, distances_i, patches_i in zip(
             x, predicting_leaves, distances, patches
         ):
@@ -325,14 +336,17 @@ class ProtoTree(PrototypeBase):
                 )
                 ancestor_similarities.append(similarity)
 
-                yield LeafRationalization(
+                rationalization = LeafRationalization(
                     ancestor_similarities, predicting_leaf.predicted_label()
                 )
+                rationalizations.append(rationalization)
+
+        return rationalizations
 
     def predict(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrategy = "sample_max",
+        sampling_strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
         logits = self.forward(x, sampling_strategy)[0]
         return logits.argmax(dim=1)
@@ -340,7 +354,7 @@ class ProtoTree(PrototypeBase):
     def predict_proba(
         self,
         x: torch.Tensor,
-        strategy: SamplingStrategy = "sample_max",
+        strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
         logits = self.forward(x, strategy)[0]
         return logits.softmax(dim=1)
@@ -369,7 +383,7 @@ class ProtoTree(PrototypeBase):
 def get_predicting_leaves(
     root: InternalNode,
     node_to_probs: dict[Node, NodeProbabilities],
-    sampling_strategy: Literal["sample_max", "greedy"],
+    sampling_strategy: PredictingLeafStrat,
 ) -> List[Leaf]:
     """
     Selects one leaf for each entry of the batch covered in node_to_probs.
