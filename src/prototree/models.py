@@ -2,7 +2,7 @@ import pickle
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Iterator
 
 import numpy as np
 import torch
@@ -16,7 +16,7 @@ from util.net import default_add_on_layers
 
 
 @dataclass
-class LeafJustification:
+class LeafRationalization:
     ancestor_similarities: list[ImageProtoSimilarity]
     label: int
 
@@ -304,14 +304,13 @@ class ProtoTree(PrototypeBase):
 
     # TODO: Lots of overlap with img_similarity.patch_match_candidates, but we need to beware of premature abstraction.
     @torch.no_grad()
-    def justify(
+    def rationalize(
         self, x: torch.Tensor, predicting_leaves: list[Leaf]
-    ) -> list[LeafJustification]:
+    ) -> Iterator[LeafRationalization]:
         patches, distances = self.patches(x), self.distances(
             x
         )  # Could be optimized if necessary.
 
-        leaves_justifications: list[LeafJustification] = []
         for x_i, predicting_leaf, distances_i, patches_i in zip(
             x, predicting_leaves, distances, patches
         ):
@@ -326,13 +325,9 @@ class ProtoTree(PrototypeBase):
                 )
                 ancestor_similarities.append(similarity)
 
-            leaves_justifications.append(
-                LeafJustification(
+                yield LeafRationalization(
                     ancestor_similarities, predicting_leaf.predicted_label()
                 )
-            )
-
-        return leaves_justifications
 
     def predict(
         self,
