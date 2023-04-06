@@ -34,7 +34,7 @@ def node_patch_matches(
         #  incorrect results when the leaf logits change.
         return {leaf.predicted_label() for leaf in internal_node.leaves}
 
-    # TODO: Is there a more functional way of doing this?
+    # TODO: (Minor) Is there a more functional way of doing this?
     node_to_patch_matches: dict[InternalNode, ImageProtoSimilarity] = {}
     for proto_similarity, label in patch_match_candidates(tree, loader):
         if (not constrain_on_classes) or label in get_leaf_labels(
@@ -56,7 +56,7 @@ def node_patch_matches(
 def patch_match_candidates(
     tree: ProtoTree, loader: DataLoader
 ) -> Iterator[(ImageProtoSimilarity, int)]:
-    # TODO: Lots of overlap with Prototree.justify, but we need to beware of premature abstraction.
+    # TODO: Lots of overlap with Prototree.rationalize, but we need to beware of premature abstraction.
     """
     Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
     the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
