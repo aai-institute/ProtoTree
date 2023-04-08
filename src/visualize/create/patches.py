@@ -68,7 +68,7 @@ def closest_patch_imgs(
 ) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     """
     Gets the pixels for images illustrating the closest patch from an ImageProtoSimilarity.
-    Returns: Pixels for: (closest patch, original image, original image with bounding box, original image with heatmap)
+    :return: Pixels for: (closest patch, original image, original image with bounding box, original image with heatmap)
     """
     patch_similarities = image_proto_similarity.all_patch_similarities().cpu().numpy()
 

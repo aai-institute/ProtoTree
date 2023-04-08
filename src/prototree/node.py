@@ -141,7 +141,7 @@ class Node(ABC):
     @property
     def ancestors(self) -> list["InternalNode"]:
         """
-        Returns: The ancestors of the node, starting from the root.
+        :return: The ancestors of the node, starting from the root.
         """
         cur_node = self
         ancestors = []

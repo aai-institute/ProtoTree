@@ -25,7 +25,7 @@ def node_patch_matches(
     :param loader: The dataset.
     :param constrain_on_classes: If True, only consider patches from classes that are contained in
         the prototype's leaves' predictions.
-    :return The map of nodes to best matches.
+    :return: The map of nodes to best matches.
     """
 
     @lru_cache(maxsize=10000)
@@ -36,7 +36,7 @@ def node_patch_matches(
 
     # TODO: (Minor) Is there a more functional way of doing this?
     node_to_patch_matches: dict[InternalNode, ImageProtoSimilarity] = {}
-    for proto_similarity, label in patch_match_candidates(tree, loader):
+    for proto_similarity, label in _patch_match_candidates(tree, loader):
         if (not constrain_on_classes) or label in get_leaf_labels(
             proto_similarity.internal_node
         ):
@@ -53,7 +53,7 @@ def node_patch_matches(
 
 
 @torch.no_grad()
-def patch_match_candidates(
+def _patch_match_candidates(
     tree: ProtoTree, loader: DataLoader
 ) -> Iterator[(ImageProtoSimilarity, int)]:
     # TODO: Lots of overlap with Prototree.rationalize, but we need to beware of premature abstraction.
@@ -61,7 +61,7 @@ def patch_match_candidates(
     Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
     the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
 
-    Returns: Iterator of (similarity, label)
+    :return: Iterator of (similarity, label)
     """
     for x, y in tqdm(loader, desc="Data loader", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
