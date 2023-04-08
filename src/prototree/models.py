@@ -356,7 +356,7 @@ class ProtoTree(PrototypeBase):
         logits = self.forward(x, sampling_strategy)[0]
         return logits.argmax(dim=1)
 
-    def predict_proba(
+    def predict_probs(
         self,
         x: torch.Tensor,
         strategy: SamplingStrat = "sample_max",

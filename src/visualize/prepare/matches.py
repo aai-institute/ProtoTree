@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Iterator
+from typing import Iterator, Tuple
 
 import torch
 from torch.utils.data import DataLoader
@@ -55,7 +55,7 @@ def node_patch_matches(
 @torch.no_grad()
 def _patch_match_candidates(
     tree: ProtoTree, loader: DataLoader
-) -> Iterator[(ImageProtoSimilarity, int)]:
+) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
     # TODO: Lots of overlap with Prototree.rationalize, but we need to beware of premature abstraction.
     """
     Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
