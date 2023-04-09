@@ -1,3 +1,5 @@
+import os
+
 import pydot
 import torch
 from torch.utils.data import DataLoader
@@ -10,7 +12,9 @@ from prototree.models import ProtoTree, LeafRationalization
 def save_prediction_visualizations(
         tree: ProtoTree,
         loader: DataLoader,
-        class_names: tuple
+        class_names: tuple,
+        save_dir: os.PathLike,
+        img_size=(224, 224)
 ):
     tqdm_loader = tqdm(loader, desc="Data loader", ncols=0)
     prediction_counter = 0
@@ -19,16 +23,19 @@ def save_prediction_visualizations(
         logits, node_to_probs, predicting_leaves, leaf_rationalizations = tree.explain(x)
         for leaf_rationalization, true_label in zip(leaf_rationalizations, y):
             prediction_counter += 1
-            pydot_graph = _gen_pydot_dag(leaf_rationalization, true_label, class_names, prediction_counter)
+            pydot_graph = _decision_flow_pydot(leaf_rationalization, true_label, class_names, prediction_counter)
 
 
-def _gen_pydot_dag(
+def _decision_flow_pydot(
         leaf_rationalization: LeafRationalization,
         true_label: int,
         class_names: tuple,
         prediction_counter: int
 ) -> pydot.Dot:
-    pydot_dag = pydot.Dot(
-        "Prediction graph",
+    flow_dag = pydot.Dot(
+        "Decision flow for prediction of 1 image.",
         graph_type="digraph",
     )
+
+    for ancestor_similarity in leaf_rationalization.ancestor_similarities:
+        ancestor_similarity.transformed_image
