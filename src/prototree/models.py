@@ -23,9 +23,8 @@ class LeafRationalization:
 
 
 class PrototypeBase(nn.Module):
-    # TODO: https://en.wikipedia.org/wiki/Composition_over_inheritance probably applies here for the backbone and
-    #  prototypes. As added motivation, it looks like the way this is built right now violates
-    #  https://en.wikipedia.org/wiki/Liskov_substitution_principle
+    # TODO: "Composition over Inheritance" probably applies here for the backbone and prototypes. As added motivation,
+    #  it looks like the way this is built right now violates the Liskov substitution principle.
 
     def __init__(
         self,

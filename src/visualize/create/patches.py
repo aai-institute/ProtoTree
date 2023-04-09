@@ -13,13 +13,13 @@ from prototree.img_similarity import ImageProtoSimilarity
 from util.data import get_inverse_base_transform
 
 
-# Adapted from ProtoPNet
 @torch.no_grad()
 def save_patch_visualizations(
     node_to_patch_matches: dict[InternalNode, ImageProtoSimilarity],
     save_dir: os.PathLike,
     img_size=(224, 224),
 ):
+    # Adapted from ProtoPNet
     """
     :param node_to_patch_matches:
     :param save_dir:
@@ -60,12 +60,12 @@ def save_patch_visualizations(
         save(im_with_heatmap, f"{node.index}_heatmap_original_image.png")
 
 
-# TODO: Use the patch receptive fields instead of upsampling.
 def closest_patch_imgs(
     image_proto_similarity: ImageProtoSimilarity,
     inverse_transform: Callable[[torch.Tensor], Image],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
 ) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+    # TODO: Use the patch receptive fields instead of upsampling.
     """
     Gets the pixels for images illustrating the closest patch from an ImageProtoSimilarity.
     :return: Pixels for: (closest patch, original image, original image with bounding box, original image with heatmap)
