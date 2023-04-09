@@ -9,32 +9,19 @@ from pptree import print_tree
 from torch import nn as nn
 from torch.nn import functional as F
 
+from util.math import log1mexp
+
 # TODO: a lot of stuff here is very poorly optimized, multiple time exponential complexity calls, even in properties
 
 TNode = TypeVar("TNode", bound="Node")
 log = logging.getLogger(__name__)
 
 
-def log1mexp(log_p: torch.Tensor) -> torch.Tensor:
-    """
-    Compute `log(1-p) = log(1 - exp(log_p))` in a numerically stable way. Implementation inspired by `TensorFlow
-    log1mexp <https://github.com/tensorflow/probability/blob/v0.9.0/tensorflow_probability/python/math/generic.py
-    #L447-L471>`_ (but note that the TensorFlow function computes something slightly different).
-
-    :param log_p:
-    :return:
-    """
-    log_p = log_p - 1e-7
-    # noinspection PyTypeChecker
-    return torch.where(
-        log_p < -np.log(2),
-        torch.log(-torch.expm1(log_p)),
-        torch.log1p(-torch.exp(log_p)),
-    )
-
-
-# TODO: replace properties by methods, they are actually rather expensive to compute!
 class Node(ABC):
+    # TODO: Replace properties by methods, they are actually rather expensive to compute!
+    # TODO: There's large number of methods who depend on subclasses,
+    #  https://luzkan.github.io/smells/base-class-depends-on-subclass
+
     def __init__(self, index: int, parent: Optional["InternalNode"] = None):
         super().__init__()
         self.parent = parent
@@ -139,13 +126,16 @@ class Node(ABC):
         return self.descendant_internal_nodes + self.leaves
 
     @property
-    def ancestors(self) -> list["Node"]:
+    def ancestors(self) -> list["InternalNode"]:
+        """
+        :return: The ancestors of the node, starting from the root.
+        """
         cur_node = self
         ancestors = []
         while not cur_node.is_root:
             cur_node = cur_node.parent
             ancestors.append(cur_node)
-        return ancestors
+        return ancestors[::-1]
 
     @property
     @abstractmethod

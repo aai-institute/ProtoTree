@@ -1,4 +1,3 @@
-from collections import defaultdict
 import logging
 
 import numpy as np
@@ -8,7 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from prototree.models import ProtoTree
-from prototree.types import SamplingStrategy
+from prototree.types import SamplingStrat, SingleLeafStrat
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +16,7 @@ log = logging.getLogger(__name__)
 def eval_tree(
     tree: ProtoTree,
     data_loader: DataLoader,
-    sampling_strategy: SamplingStrategy = "distributed",
+    sampling_strategy: SamplingStrat = "distributed",
     desc: str = "Evaluating",
 ) -> float:
     """
@@ -65,26 +64,44 @@ def eval_tree(
     return avg_acc
 
 
+def single_leaf_eval(
+    projected_pruned_tree: ProtoTree,
+    test_loader: DataLoader,
+    eval_name: str,
+):
+    test_sampling_strategies: list[SingleLeafStrat] = ["sample_max"]
+    for strategy in test_sampling_strategies:
+        acc = eval_tree(
+            projected_pruned_tree,
+            test_loader,
+            sampling_strategy=strategy,
+            desc=eval_name,
+        )
+        fidelity = eval_fidelity(projected_pruned_tree, test_loader, strategy)
+
+        log.info(f"Accuracy of {strategy} routing: {acc:.3f}")
+        log.info(f"Fidelity of {strategy} routing: {fidelity:.3f}")
+
+
 @torch.no_grad()
 def eval_fidelity(
     tree: ProtoTree,
     data_loader: DataLoader,
-    test_sampling_strategies: tuple[SamplingStrategy] = ("sample_max", "greedy"),
-    ref_sampling_strategy: SamplingStrategy = "distributed",
-) -> dict[SamplingStrategy, float]:
+    test_sampling_strategy: SamplingStrat,
+    ref_sampling_strategy: SamplingStrat = "distributed",
+) -> float:
     n_batches = len(data_loader)
     tree.eval()
-    result_dict = defaultdict(float)
+    avg_fidelity = 0.0
     for x, y in tqdm(data_loader, desc="Evaluating fidelity", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
 
         y_pred_reference = tree.predict(x, sampling_strategy=ref_sampling_strategy)
-        for sampling_strategy in test_sampling_strategies:
-            y_pred_test = tree.predict(x, sampling_strategy=sampling_strategy)
-            batch_fidelity = torch.sum(y_pred_reference == y_pred_test)
-            result_dict[sampling_strategy] += batch_fidelity / (len(y) * n_batches)
+        y_pred_test = tree.predict(x, sampling_strategy=test_sampling_strategy)
+        batch_fidelity = torch.sum(y_pred_reference == y_pred_test)
+        avg_fidelity += batch_fidelity / (len(y) * n_batches)
 
-    return result_dict
+    return avg_fidelity
 
 
 # TODO: use some inbuilt of torch or sklearn

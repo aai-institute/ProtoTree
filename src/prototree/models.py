@@ -1,4 +1,5 @@
 import pickle
+from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import List, Literal, Optional, Union
@@ -6,14 +7,25 @@ from typing import List, Literal, Optional, Union
 import numpy as np
 import torch
 import torch.nn as nn
+from torch import Tensor
 
+from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
-from prototree.types import SamplingStrategy
+from prototree.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers
 
 
+@dataclass
+class LeafRationalization:
+    ancestor_similarities: list[ImageProtoSimilarity]
+    label: int
+
+
 class PrototypeBase(nn.Module):
+    # TODO: "Composition over Inheritance" probably applies here for the backbone and prototypes. As added motivation,
+    #  it looks like the way this is built right now violates the Liskov substitution principle.
+
     def __init__(
         self,
         num_prototypes: int,
@@ -22,7 +34,6 @@ class PrototypeBase(nn.Module):
         add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
     ):
         """
-
         :param prototype_shape: shape of the prototypes. (channels, height, width)
         :param feature_net: usually a pretrained network that extracts features from the input images
         :param add_on_layers: used to connect the feature net with the prototypes.
@@ -58,7 +69,16 @@ class PrototypeBase(nn.Module):
         x = self.add_on(x)
         return x
 
-    def prototype_distances_per_patch(self, x: torch.Tensor) -> torch.Tensor:
+    def patches(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Get the patches for a given input tensor. This is the same as extract_features, except the output is reshaped to
+        be (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto).
+        """
+        w_proto, h_proto = self.prototype_shape[:2]
+        features = self.extract_features(x)
+        return features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
+
+    def distances(self, x: torch.Tensor) -> torch.Tensor:
         """
         Computes the minimal distances between the prototypes and the input.
         The output has the shape (batch_size, num_prototypes, n_patches_w, n_patches_h)
@@ -72,7 +92,7 @@ class PrototypeBase(nn.Module):
         The input has the shape (batch_size, num_channels, H, W).
         The output has the shape (batch_size, num_prototypes).
         """
-        x = self.prototype_distances_per_patch(x)
+        x = self.distances(x)
         return torch.amin(x, dim=(2, 3))
 
     @property
@@ -250,24 +270,25 @@ class ProtoTree(PrototypeBase):
     def forward(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrategy = "distributed",
+        sampling_strategy: SamplingStrat = "distributed",
     ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
-        If sampling_strategy is `distributed`, all leaves contribute to each prediction,
-        and predicting_leaves is None.
-        For other sampling strategies, only one leaf is used per sample, which results in
-        an interpretable prediction. Then predicting_leaves is a list of leaves of length
-        `batch_size`.
+        Produces predictions for input images.
+
+        If sampling_strategy is `distributed`, all leaves contribute to each prediction, and predicting_leaves is None.
+        For other sampling strategies, only one leaf is used per sample, which results in an interpretable prediction;
+        in this case, predicting_leaves is a list of leaves of length `batch_size`.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
         :param sampling_strategy:
 
-        :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves.
+        :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves
         """
 
         node_to_probs = self.get_node_to_probs(x)
 
-        match self.training, sampling_strategy:  # TODO: Find a better approach for this branching logic.
+        # TODO: Find a better approach for this branching logic (https://martinfowler.com/bliki/FlagArgument.html).
+        match self.training, sampling_strategy:
             case _, "distributed":
                 predicting_leaves = None
                 logits = self.tree_root.forward(node_to_probs)
@@ -277,7 +298,6 @@ class ProtoTree(PrototypeBase):
                 )
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
-
             case _:
                 raise ValueError(
                     f"Invalid train/test and sampling strategy combination: {self.training=}, {sampling_strategy=}"
@@ -285,18 +305,94 @@ class ProtoTree(PrototypeBase):
 
         return logits, node_to_probs, predicting_leaves
 
+    def explain(
+        self,
+        x: torch.Tensor,
+        sampling_strategy: SingleLeafStrat = "sample_max",
+    ) -> tuple[
+        Tensor,
+        dict[Node, NodeProbabilities],
+        Optional[list[Leaf]],
+        list[LeafRationalization],
+    ]:
+        # TODO: This public method works by calling two other methods on the same class. This is perhaps a little bit
+        #  unusual and/or clunky, and could be making testing harder. However, it's not currently clear to me if this is
+        #  a serious problem, or what the right design for this would be.
+        """
+        Produces predictions for input images, and rationalizations for why the model made those predictions. This is
+        done by chaining self.forward and self.rationalize. See those methods for details regarding the predictions and
+        rationalizations.
+
+        :param x: tensor of shape (batch_size, n_channels, w, h)
+        :param sampling_strategy:
+
+        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_rationalizations
+        """
+        logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy=sampling_strategy)
+        leaf_rationalizations = self.rationalize(x, predicting_leaves)
+        return logits, node_to_probs, predicting_leaves, leaf_rationalizations
+
+    @torch.no_grad()
+    def rationalize(
+        self, x: torch.Tensor, predicting_leaves: list[Leaf]
+    ) -> list[LeafRationalization]:
+        # TODO: Lots of overlap with img_similarity.patch_match_candidates, so there's potential for extracting out
+        #  commonality. However, we also need to beware of premature abstraction.
+        """
+        Takes in batch_size images and leaves. For each (image, leaf), the model tries to rationalize why that leaf is
+        the correct prediction for that image. This rationalization comprises the most similar patch to the image for
+        each ancestral node of the leaf (alongside some related information).
+
+        Note that this method accepts arbitrary leaves, there's no requirement that the rationalizations be for leaves
+        corresponding to correct labels for the images, or even that the leaves were predicted by the tree. This is
+        deliberate, since it can help us assess the interpretability of the model on incorrect and/or random predictions
+        and help avoid things like confirmation bias and cherry-picking.
+
+        Args:
+            x: Images tensor
+            predicting_leaves: List of leaves
+
+        Returns:
+            List of rationalizations
+        """
+        patches, dists = self.patches(x), self.distances(
+            x
+        )  # Common subexpression elimination possible, if necessary.
+
+        rationalizations = []
+        for x_i, predicting_leaf, dists_i, patches_i in zip(
+            x, predicting_leaves, dists, patches
+        ):
+            leaf_ancestors = predicting_leaf.ancestors
+            ancestor_similarities: list[ImageProtoSimilarity] = []
+            for leaf_ancestor in leaf_ancestors:
+                node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
+
+                node_distances = dists_i[node_proto_idx, :, :]
+                similarity = img_proto_similarity(
+                    leaf_ancestor, x_i, node_distances, patches_i
+                )
+                ancestor_similarities.append(similarity)
+
+            rationalization = LeafRationalization(
+                ancestor_similarities, predicting_leaf.predicted_label()
+            )
+            rationalizations.append(rationalization)
+
+        return rationalizations
+
     def predict(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrategy = "sample_max",
+        sampling_strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
         logits = self.forward(x, sampling_strategy)[0]
         return logits.argmax(dim=1)
 
-    def predict_proba(
+    def predict_probs(
         self,
         x: torch.Tensor,
-        strategy: SamplingStrategy = "sample_max",
+        strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
         logits = self.forward(x, strategy)[0]
         return logits.softmax(dim=1)
@@ -325,7 +421,7 @@ class ProtoTree(PrototypeBase):
 def get_predicting_leaves(
     root: InternalNode,
     node_to_probs: dict[Node, NodeProbabilities],
-    sampling_strategy: Literal["sample_max", "greedy"],
+    sampling_strategy: SingleLeafStrat,
 ) -> List[Leaf]:
     """
     Selects one leaf for each entry of the batch covered in node_to_probs.

@@ -1,3 +1,4 @@
 from typing import Literal
 
-SamplingStrategy = Literal["distributed", "sample_max", "greedy"]
+SamplingStrat = Literal["distributed", "sample_max", "greedy"]
+SingleLeafStrat = Literal["sample_max", "greedy"]

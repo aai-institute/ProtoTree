@@ -2,23 +2,21 @@ from argparse import Namespace
 from pathlib import Path
 from random import randint
 import logging
-from typing import Literal
 
 import torch
-from torch.utils.data import DataLoader
 
-from prototree.eval import eval_fidelity, eval_tree
+from prototree.eval import eval_tree, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
-from prototree.img_similarity import calc_node_patch_matches
-from prototree.projection import replace_prototypes_with_patches
+from visualize.prepare.matches import node_patch_matches
+from prototree.projection import project_prototypes
 from prototree.prune import prune_unconfident_leaves
 from prototree.train import train_epoch
-from visualize.patches import save_patch_visualizations
+from visualize.create.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
 from util.net import BASE_ARCHITECTURE_TO_FEATURES
-from visualize.tree import save_tree_visualization
+from visualize.create.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -191,31 +189,27 @@ def train_prototree(args: Namespace):
 
     # EVALUATE AND ANALYSE TRAINED TREE
     tree = tree.eval()
-    perform_single_leaf_evaluation(
-        tree, train_loader, eval_name="Sampling strategies on train data"
-    )
 
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
 
     _prune_tree(tree.tree_root, leaf_pruning_threshold)
 
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
-    pruned_acc = eval_tree(tree, test_loader, desc="pruned")
-    log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
+    pruned_acc = eval_tree(tree, test_loader, desc="Pruned only")
+    log.info(f"\nTest acc. after pruning only: {pruned_acc:.3f}")
 
     # PROJECT
     log.info(
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
-    node_to_patch_matches = calc_node_patch_matches(tree, project_loader)
-    replace_prototypes_with_patches(
-        tree, node_to_patch_matches
-    )  # TODO: Assess the impact of this.
+    node_to_patch_matches = node_patch_matches(tree, project_loader)
+    project_prototypes(tree, node_to_patch_matches)  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
-    test_acc = eval_tree(tree, test_loader)
-    log.info(f"\nTest acc. after pruning and projection: {test_acc:.3f}")
 
-    perform_single_leaf_evaluation(tree, test_loader)
+    pruned_and_proj_acc = eval_tree(tree, test_loader)
+    log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
+    single_leaf_eval(tree, test_loader, "Pruned and projected")
+
     tree.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
@@ -243,27 +237,6 @@ def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
         f"After pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
     log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")
-
-
-def perform_single_leaf_evaluation(
-    projected_pruned_tree: ProtoTree,
-    test_loader: DataLoader,
-    eval_name="Final evaluation",
-):
-    test_sampling_strategies: list[Literal] = ["sample_max", "greedy"]
-    strat2acc: dict[Literal, float] = {}
-    for sampling_strategy in test_sampling_strategies:
-        acc = eval_tree(
-            projected_pruned_tree,
-            test_loader,
-            sampling_strategy=sampling_strategy,
-            desc=eval_name,
-        )
-        strat2acc[sampling_strategy] = acc
-    strat2fidelity = eval_fidelity(projected_pruned_tree, test_loader)
-    for strategy in test_sampling_strategies:
-        log.info(f"Accuracy of {strategy} routing: {strat2acc[strategy]:.3f}")
-        log.info(f"Fidelity of {strategy} routing: {strat2fidelity[strategy]:.3f}")
 
 
 def create_proto_tree(

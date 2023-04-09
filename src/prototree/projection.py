@@ -6,7 +6,7 @@ from prototree.node import Node
 
 
 @torch.no_grad()
-def replace_prototypes_with_patches(
+def project_prototypes(
     tree: ProtoTree, node_to_patch_matches: dict[Node, ImageProtoSimilarity]
 ):
     """
