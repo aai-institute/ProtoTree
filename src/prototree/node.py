@@ -34,6 +34,8 @@ def log1mexp(log_p: torch.Tensor) -> torch.Tensor:
 
 
 # TODO: replace properties by methods, they are actually rather expensive to compute!
+# TODO: There's large number of methods whose return types are subclasses,
+#  https://luzkan.github.io/smells/base-class-depends-on-subclass
 class Node(ABC):
     def __init__(self, index: int, parent: Optional["InternalNode"] = None):
         super().__init__()

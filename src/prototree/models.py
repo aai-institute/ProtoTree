@@ -22,6 +22,7 @@ class LeafRationalization:
     label: int
 
 
+# TODO: Use https://en.wikipedia.org/wiki/Composition_over_inheritance for the backbone/prototypes.
 class PrototypeBase(nn.Module):
     def __init__(
         self,
