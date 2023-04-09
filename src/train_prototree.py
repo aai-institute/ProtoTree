@@ -8,6 +8,8 @@ import torch
 from prototree.eval import eval_tree, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
+from visualize.create.explanation_dag import save_explanations_visualizations
+from visualize.prepare.explanation import data_explanations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
 from prototree.prune import prune_unconfident_leaves
@@ -209,6 +211,9 @@ def train_prototree(args: Namespace):
     pruned_and_proj_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
     single_leaf_eval(tree, test_loader, "Pruned and projected")
+    explanations = data_explanations(
+        tree, test_loader, class_names
+    )  # This is lazy due to an iterator.
 
     tree.tree_root.print_tree()
 
@@ -219,6 +224,8 @@ def train_prototree(args: Namespace):
     patches_dir = vis_dir / "patches"
     save_patch_visualizations(node_to_patch_matches, patches_dir)
     save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
+    explanations_dir = vis_dir / "explanations"
+    save_explanations_visualizations(explanations, explanations_dir)
 
     return tree
 

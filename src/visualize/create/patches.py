@@ -10,7 +10,7 @@ from PIL.Image import Image
 
 from prototree.node import InternalNode
 from prototree.img_similarity import ImageProtoSimilarity
-from util.data import get_inverse_base_transform
+from util.image import get_inverse_base_transform, get_latent_to_pixel
 
 
 @torch.no_grad()
@@ -28,13 +28,8 @@ def save_patch_visualizations(
     :return:
     """
     save_dir = Path(save_dir)
-
-    inverse_transform = get_inverse_base_transform(img_size=img_size)
-
-    def latent_to_pixel(latent_img: np.ndarray):
-        return cv2.resize(
-            latent_img, (img_size[1], img_size[0]), interpolation=cv2.INTER_CUBIC
-        )
+    inverse_transform = get_inverse_base_transform(img_size)
+    latent_to_pixel = get_latent_to_pixel(img_size)
 
     def save(img: np.ndarray, fname: str):
         path = save_dir / fname

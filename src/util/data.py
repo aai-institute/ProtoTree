@@ -1,12 +1,13 @@
-from typing import Callable
-
-import torch
 import torchvision.transforms as transforms
-from PIL.Image import Image
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
 from config import project_dir, test_dir, train_dir
+from util.image import (
+    get_augmentation_transform,
+    get_base_transform,
+    get_normalize_transform,
+)
 
 
 def get_dataloaders(
@@ -37,52 +38,6 @@ def get_dataloaders(
     return train_loader, project_loader, test_loader
 
 
-_MEAN = (0.485, 0.456, 0.406)
-_STD = (0.229, 0.224, 0.225)
-
-
-def get_normalize_transform():
-    return transforms.Normalize(mean=_MEAN, std=_STD)
-
-
-def get_inverse_normalize_transform():
-    return transforms.Normalize(
-        mean=[-m / s for m, s in zip(_MEAN, _STD)],
-        std=[1 / s for s in _STD],
-    )
-
-
-def get_base_transform(img_size=(224, 224)):
-    return transforms.Compose(
-        [
-            transforms.Resize(size=img_size),
-            transforms.ToTensor(),
-            get_normalize_transform(),
-        ]
-    )
-
-
-def get_inverse_base_transform(img_size=(224, 224)) -> Callable[[torch.Tensor], Image]:
-    return transforms.Compose(
-        [
-            get_inverse_normalize_transform(),
-            transforms.ToPILImage(),
-            transforms.Resize(size=img_size),
-        ]
-    )
-
-
-def get_augmentation_transform():
-    return transforms.RandomOrder(
-        [
-            transforms.RandomPerspective(distortion_scale=0.2, p=0.5),
-            transforms.ColorJitter((0.6, 1.4), (0.6, 1.4), (0.6, 1.4), (-0.02, 0.02)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomAffine(degrees=10, shear=(-2, 2), translate=[0.05, 0.05]),
-        ]
-    )
-
-
 def get_data(
     augment_train_set=True, img_size=(224, 224)
 ) -> tuple[ImageFolder, ImageFolder, ImageFolder]:
@@ -92,7 +47,7 @@ def get_data(
     :param img_size:
     :return: tuple of type train_set, project_set, test_set, classes, shape
     """
-    base_transform = get_base_transform(img_size=img_size)
+    base_transform = get_base_transform(img_size)
 
     if augment_train_set:
         # TODO: why first augment and then resize?

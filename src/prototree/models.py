@@ -326,11 +326,13 @@ class ProtoTree(PrototypeBase):
         :param x: tensor of shape (batch_size, n_channels, w, h)
         :param sampling_strategy:
 
-        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_rationalizations
+        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations
         """
-        logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy=sampling_strategy)
-        leaf_rationalizations = self.rationalize(x, predicting_leaves)
-        return logits, node_to_probs, predicting_leaves, leaf_rationalizations
+        logits, node_to_probs, predicting_leaves = self.forward(
+            x, sampling_strategy=sampling_strategy
+        )
+        leaf_explanations = self.rationalize(x, predicting_leaves)
+        return logits, node_to_probs, predicting_leaves, leaf_explanations
 
     @torch.no_grad()
     def rationalize(
