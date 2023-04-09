@@ -56,7 +56,8 @@ def node_patch_matches(
 def _patch_match_candidates(
     tree: ProtoTree, loader: DataLoader
 ) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
-    # TODO: Lots of overlap with Prototree.rationalize, but we need to beware of premature abstraction.
+    # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
+    #  commonality. However, we also need to beware of premature abstraction.
     """
     Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
     the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.

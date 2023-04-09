@@ -274,16 +274,16 @@ class ProtoTree(PrototypeBase):
         sampling_strategy: SamplingStrat = "distributed",
     ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
-        If sampling_strategy is `distributed`, all leaves contribute to each prediction,
-        and predicting_leaves is None.
-        For other sampling strategies, only one leaf is used per sample, which results in
-        an interpretable prediction. Then predicting_leaves is a list of leaves of length
-        `batch_size`.
+        Produces predictions for input images.
+
+        If sampling_strategy is `distributed`, all leaves contribute to each prediction, and predicting_leaves is None.
+        For other sampling strategies, only one leaf is used per sample, which results in an interpretable prediction;
+        in this case, predicting_leaves is a list of leaves of length `batch_size`.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
         :param sampling_strategy:
 
-        :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves.
+        :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves
         """
 
         node_to_probs = self.get_node_to_probs(x)
@@ -316,25 +316,45 @@ class ProtoTree(PrototypeBase):
         Optional[list[Leaf]],
         list[LeafRationalization],
     ]:
+        # TODO: This public method works by calling two other methods on the same class. This is perhaps a little bit
+        #  unusual and/or clunky, and could be making testing harder. However, it's not currently clear to me if this is
+        #  a serious problem, or what the right design for this would be.
+        """
+        Produces predictions for input images, and rationalizations for why the model made those predictions. This is
+        done by chaining self.forward and self.rationalize. See those methods for details regarding the predictions and
+        rationalizations.
+
+        :param x: tensor of shape (batch_size, n_channels, w, h)
+        :param sampling_strategy:
+
+        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_rationalizations
+        """
         logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy=sampling_strategy)
         leaf_rationalizations = self.rationalize(x, predicting_leaves)
         return logits, node_to_probs, predicting_leaves, leaf_rationalizations
 
-    # TODO: Lots of overlap with img_similarity.patch_match_candidates, but we need to beware of premature abstraction.
     @torch.no_grad()
     def rationalize(
         self, x: torch.Tensor, predicting_leaves: list[Leaf]
     ) -> list[LeafRationalization]:
+        # TODO: Lots of overlap with img_similarity.patch_match_candidates, so there's potential for extracting out
+        #  commonality. However, we also need to beware of premature abstraction.
         """
         Takes in batch_size images and leaves. For each (image, leaf), the model tries to rationalize why that leaf is
-        the correct prediction for that image.
+        the correct prediction for that image. This rationalization comprises the most similar patch to the image for
+        each ancestral node of the leaf (alongside some related information).
+
+        Note that this method accepts arbitrary leaves, there's no requirement that the rationalizations be for leaves
+        corresponding to correct labels for the images, or even that the leaves were predicted by the tree. This is
+        deliberate, since it can help us assess the interpretability of the model on incorrect and/or random predictions
+        and help avoid things like confirmation bias and cherry-picking.
 
         Args:
             x: Images tensor
             predicting_leaves: List of leaves
 
         Returns:
-
+            List of rationalizations
         """
         patches, dists = self.patches(x), self.distances(
             x
