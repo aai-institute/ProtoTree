@@ -13,7 +13,7 @@ from util.image import get_inverse_base_transform, get_latent_to_pixel
 
 
 @torch.no_grad()
-def save_explanations_visualizations(
+def save_explanation_visualizations(
     explanations: Iterator[tuple[LeafRationalization, int, tuple]],
     explanations_dir: os.PathLike,
     img_size=(224, 224),
