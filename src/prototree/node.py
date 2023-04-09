@@ -9,28 +9,12 @@ from pptree import print_tree
 from torch import nn as nn
 from torch.nn import functional as F
 
+from util.math import log1mexp
+
 # TODO: a lot of stuff here is very poorly optimized, multiple time exponential complexity calls, even in properties
 
 TNode = TypeVar("TNode", bound="Node")
 log = logging.getLogger(__name__)
-
-
-def log1mexp(log_p: torch.Tensor) -> torch.Tensor:
-    """
-    Compute `log(1-p) = log(1 - exp(log_p))` in a numerically stable way. Implementation inspired by `TensorFlow
-    log1mexp <https://github.com/tensorflow/probability/blob/v0.9.0/tensorflow_probability/python/math/generic.py
-    #L447-L471>`_ (but note that the TensorFlow function computes something slightly different).
-
-    :param log_p:
-    :return:
-    """
-    log_p = log_p - 1e-7
-    # noinspection PyTypeChecker
-    return torch.where(
-        log_p < -np.log(2),
-        torch.log(-torch.expm1(log_p)),
-        torch.log1p(-torch.exp(log_p)),
-    )
 
 
 # TODO: replace properties by methods, they are actually rather expensive to compute!
