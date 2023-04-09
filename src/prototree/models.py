@@ -313,7 +313,7 @@ class ProtoTree(PrototypeBase):
         Optional[list[Leaf]],
         list[LeafRationalization],
     ]:
-        logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy)
+        logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy=sampling_strategy)
         leaf_rationalizations = self.rationalize(x, predicting_leaves)
         return logits, node_to_probs, predicting_leaves, leaf_rationalizations
 

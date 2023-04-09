@@ -8,6 +8,7 @@ import torch
 from prototree.eval import eval_tree, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
+from visualize.create.explanations import save_prediction_visualizations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
 from prototree.prune import prune_unconfident_leaves
@@ -209,6 +210,7 @@ def train_prototree(args: Namespace):
     pruned_and_proj_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
     single_leaf_eval(tree, test_loader, "Pruned and projected")
+    save_prediction_visualizations(tree, test_loader)
 
     tree.tree_root.print_tree()
 
