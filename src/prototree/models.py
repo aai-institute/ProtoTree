@@ -22,10 +22,11 @@ class LeafRationalization:
     label: int
 
 
-# TODO: https://en.wikipedia.org/wiki/Composition_over_inheritance probably applies here for the backbone & prototypes.
-#  As added motivation, it looks like the way this is built right now violates
-#  https://en.wikipedia.org/wiki/Liskov_substitution_principle
 class PrototypeBase(nn.Module):
+    # TODO: https://en.wikipedia.org/wiki/Composition_over_inheritance probably applies here for the backbone and
+    #  prototypes. As added motivation, it looks like the way this is built right now violates
+    #  https://en.wikipedia.org/wiki/Liskov_substitution_principle
+
     def __init__(
         self,
         num_prototypes: int,
@@ -34,7 +35,6 @@ class PrototypeBase(nn.Module):
         add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
     ):
         """
-
         :param prototype_shape: shape of the prototypes. (channels, height, width)
         :param feature_net: usually a pretrained network that extracts features from the input images
         :param add_on_layers: used to connect the feature net with the prototypes.
@@ -325,6 +325,17 @@ class ProtoTree(PrototypeBase):
     def rationalize(
         self, x: torch.Tensor, predicting_leaves: list[Leaf]
     ) -> list[LeafRationalization]:
+        """
+        Takes in batch_size images and leaves. For each (image, leaf), the model tries to rationalize why that leaf is
+        the correct prediction for that image.
+
+        Args:
+            x: Images tensor
+            predicting_leaves: List of leaves
+
+        Returns:
+
+        """
         patches, dists = self.patches(x), self.distances(
             x
         )  # Common subexpression elimination possible, if necessary.

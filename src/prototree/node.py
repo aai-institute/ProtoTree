@@ -17,10 +17,11 @@ TNode = TypeVar("TNode", bound="Node")
 log = logging.getLogger(__name__)
 
 
-# TODO: replace properties by methods, they are actually rather expensive to compute!
-# TODO: There's large number of methods whose return types are subclasses,
-#  https://luzkan.github.io/smells/base-class-depends-on-subclass
 class Node(ABC):
+    # TODO: Replace properties by methods, they are actually rather expensive to compute!
+    # TODO: There's large number of methods who depend on subclasses,
+    #  https://luzkan.github.io/smells/base-class-depends-on-subclass
+
     def __init__(self, index: int, parent: Optional["InternalNode"] = None):
         super().__init__()
         self.parent = parent
