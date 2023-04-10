@@ -98,7 +98,7 @@ def train_prototree(args: Namespace):
         batch_size=batch_size,
     )
 
-    #class_names = train_loader.dataset.classes
+    # class_names = train_loader.dataset.classes
     num_classes = len(class_names)
     log.info(f"Num classes: {num_classes}")
 
@@ -224,8 +224,7 @@ def train_prototree(args: Namespace):
     patches_dir = vis_dir / "patches"
     save_patch_visualizations(node_to_patch_matches, patches_dir)
     save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
-    explanations_dir = vis_dir / "explanations"
-    save_explanation_visualizations(explanations, explanations_dir)
+    save_explanation_visualizations(explanations, patches_dir, vis_dir / "explanations")
 
     return tree
 

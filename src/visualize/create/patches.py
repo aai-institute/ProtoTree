@@ -41,7 +41,7 @@ def save_patch_visualizations(
         save_img(im_closest_patch, save_dir / f"{node.index}_closest_patch.png")
         save_img(
             im_with_bbox, save_dir / f"{node.index}_bounding_box_closest_patch.png"
-        )
+        )  # TODO: config var
         save_img(im_with_heatmap, save_dir / f"{node.index}_heatmap_original_image.png")
 
 
