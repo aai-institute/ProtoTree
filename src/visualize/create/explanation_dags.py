@@ -69,7 +69,7 @@ def _save_explanation(
         proto_node = ancestor_similarity.internal_node
         proto_file = patches_dir / f"{proto_node.index}_closest_patch.png"
         proto_pydot_node = pydot.Node(
-            pydot_node_name(proto_node),
+            _proto_node_name(proto_node),
             image=f'"{proto_file}"',
             shape="box",
         )
@@ -79,33 +79,33 @@ def _save_explanation(
             bbox_file = explanation_dir / f"level_{proto_node.depth}_bounding_box.png"
             save_img(im_with_bbox, bbox_file)
             bbox_node = pydot.Node(
-                pydot_bbox_name(proto_node),
+                _bbox_node_name(proto_node),
                 image=f'"{bbox_file}"',
                 shape="box",
             )
             bbox_nodes.append(bbox_node)
 
             decision_flow_edge = pydot.Edge(
-                pydot_node_name(proto_node),
-                pydot_node_name(proto_node.right),
+                _proto_node_name(proto_node),
+                _proto_node_name(proto_node.right),
                 label="Present",
             )
 
             bbox_edge = pydot.Edge(
-                pydot_node_name(proto_node),
-                pydot_bbox_name(proto_node),
+                _proto_node_name(proto_node),
+                _bbox_node_name(proto_node),
             )
             bbox_edges.append(bbox_edge)
         else:
             decision_flow_edge = pydot.Edge(
-                pydot_node_name(proto_node),
-                pydot_node_name(proto_node.left),
+                _proto_node_name(proto_node),
+                _proto_node_name(proto_node.left),
                 label="Absent",
             )
         decision_flow_edges.append(decision_flow_edge)
 
 
-def pydot_node_name(node: Union[InternalNode, Leaf]) -> str:
+def _proto_node_name(node: Union[InternalNode, Leaf]) -> str:
     match node:
         case InternalNode():
             return f"proto_{node.index}"
@@ -113,5 +113,5 @@ def pydot_node_name(node: Union[InternalNode, Leaf]) -> str:
             return f"leaf_{node.index}"
 
 
-def pydot_bbox_name(node: Node) -> str:
+def _bbox_node_name(node: Node) -> str:
     return f"bbox_{node.index}"
