@@ -1,4 +1,8 @@
+import os
+
+import numpy as np
 import torchvision.transforms as transforms
+from matplotlib import pyplot, pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
@@ -68,3 +72,13 @@ def get_data(
     project_set = ImageFolder(project_dir, transform=base_transform)
     test_set = ImageFolder(test_dir, transform=base_transform)
     return train_set, project_set, test_set
+
+
+def save_img(img: np.ndarray, filepath: os.PathLike):
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    plt.imsave(
+        filepath,
+        img,
+        vmin=0.0,
+        vmax=1.0,
+    )
