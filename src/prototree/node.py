@@ -37,7 +37,7 @@ class Node(ABC):
         :return:
         """
         path = []
-        max_path_len = self.depth() + 1
+        max_path_len = self.depth + 1
 
         def is_start_node(node):
             if start_node is None:
@@ -161,24 +161,29 @@ class Node(ABC):
     def num_leaves(self) -> int:
         return len(self.leaves)
 
+    @property
     def _lens_paths_to_leaves(self) -> list[int]:
         return [
             len(leaf.get_path_from_ancestor(start_node=self)) for leaf in self.leaves
         ]
 
+    @property
     def max_height(self) -> int:
-        return max(self._lens_paths_to_leaves()) - 1
+        return max(self._lens_paths_to_leaves) - 1
 
-    def mean_hight(self):
-        return np.mean(self._lens_paths_to_leaves()) - 1
+    @property
+    def mean_height(self):
+        return np.mean(self._lens_paths_to_leaves) - 1
 
+    @property
     def min_height(self):
-        return min(self._lens_paths_to_leaves()) - 1
+        return min(self._lens_paths_to_leaves) - 1
 
+    @property
     def depth(self):
         if self.is_root:
             return 0
-        return self.parent.depth() + 1
+        return self.parent.depth + 1
 
     @property
     @abstractmethod
@@ -442,17 +447,17 @@ def _health_check_height_depth(root: Node):
     The depth of a node is the number of edges from the root to that node.
     """
     cur_depth = 0
-    max_height = root.max_height()
+    max_height = root.max_height
     cur_max_height = max_height
     cur_nodes = [root]
     for _ in range(max_height):
         next_nodes = []
         for node in cur_nodes:
             assert (
-                node.depth() == cur_depth
+                node.depth == cur_depth
             ), f"Node {node} has depth {node.depth} but should be {cur_depth}"
-            node_max_height = node.max_height()
-            node_min_height = node.min_height()
+            node_max_height = node.max_height
+            node_min_height = node.min_height
             assert (
                 node_max_height <= cur_max_height
             ), f"Node {node} has max_height {node.max_height} but should be at most {cur_max_height}"
@@ -526,8 +531,8 @@ def _health_check_connectivity(node: Node, root: InternalNode):
         path_from_root[-1] == node
     ), f"Path from root should end with node but got: {path_from_root[-1]}"
     min_height = 0 if node.is_leaf else 1
-    node_max_height = node.max_height()
-    root_max_height = root.max_height()
+    node_max_height = node.max_height
+    root_max_height = root.max_height
     assert (
         min_height <= node_max_height <= root_max_height
     ), f"Node max_height should be between 1 and root max_height ({root_max_height}) but got: {node_max_height}"
@@ -568,8 +573,8 @@ def health_check(root: InternalNode, max_height: int = None):
     """
     if max_height is not None:
         assert (
-            root.max_height() <= max_height
-        ), f"Root max_height should be {max_height} but got: {root.max_height()}"
+            root.max_height <= max_height
+        ), f"Root max_height should be {max_height} but got: {root.max_height}"
 
     _health_check_root(root)
     _health_check_height_depth(root)
