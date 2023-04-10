@@ -111,6 +111,8 @@ def _proto_node_name(node: Union[InternalNode, Leaf]) -> str:
             return f"proto_{node.index}"
         case Leaf():
             return f"leaf_{node.index}"
+        case other:
+            raise ValueError(f"Unknown node {other}.")
 
 
 def _bbox_node_name(node: Node) -> str:
