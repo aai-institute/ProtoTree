@@ -24,6 +24,7 @@ def save_decision_flow_visualizations(
     img_size=(224, 224),
 ):
     decision_flows_dir = explanations_dir / "decision_flows"
+    decision_flows_dir.mkdir(parents=True, exist_ok=True)
     inv_transform = get_inverse_arr_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
@@ -41,12 +42,15 @@ def save_decision_flow_visualizations(
             patches_dir,
             decision_flow_dir,
         )
+        _save_pydot(flow_dag, decision_flow_dir)
 
-        dot_file = decision_flow_dir / "explanation.dot"
-        flow_dag.write_dot(dot_file)
 
-        png_file = decision_flow_dir / "explanation.png"
-        flow_dag.write_png(png_file)
+def _save_pydot(flow_dag: pydot.Dot, decision_flow_dir: os.PathLike):
+    dot_file = decision_flow_dir / "explanation.dot"
+    flow_dag.write_dot(dot_file)
+
+    png_file = decision_flow_dir / "explanation.png"
+    flow_dag.write_png(png_file)
 
 
 def _decision_flow_dag(
