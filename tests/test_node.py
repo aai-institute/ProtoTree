@@ -24,7 +24,7 @@ class TestTree:
         height, num_classes = 4, 5
         tree = create_tree(height=height, num_classes=num_classes)
         health_check(tree)
-        assert tree.max_height() == height
+        assert tree.max_height == height
         assert len(tree.descendants) == 2 ** (height + 1) - 1
         assert len(tree.leaves) == 2**height
         assert tree.index == 0
@@ -38,7 +38,7 @@ class TestTree:
         # root was already indexed, so the structure should be the same
         # can't use .descendants because they are a set and the order is not guaranteed
         cur_n_to_compare = [root], [reindexed_tree]
-        for d in range(root.max_height()):
+        for d in range(root.max_height):
             for node1, node2 in zip(*cur_n_to_compare):
                 assert node1.index == node2.index
             cur_n_to_compare = (
@@ -49,7 +49,7 @@ class TestTree:
     def test_paths(self, root):
         sample_leaf = next(iter(root.leaves))
         leaf_path_from_root = sample_leaf.get_path_from_ancestor()
-        assert len(leaf_path_from_root) == root.max_height() + 1
+        assert len(leaf_path_from_root) == root.max_height + 1
         assert leaf_path_from_root[-1] == sample_leaf
         assert leaf_path_from_root[0] == root
         assert root.left.get_path_from_ancestor() == [root, root.left]

@@ -45,7 +45,7 @@ def eval_tree(
 
         # TODO: maybe factor out
         if predicting_leaves:
-            leaf_depths.extend([leaf.depth() for leaf in set(predicting_leaves)])
+            leaf_depths.extend([leaf.depth for leaf in set(predicting_leaves)])
 
         if (
             batch_num == n_batches - 1

@@ -31,7 +31,7 @@ def prune_unconfident_leaves(root: InternalNode, leaf_pruning_threshold: float):
                 return False
         return True
 
-    original_height = root.max_height()
+    original_height = root.max_height
     for node in get_max_height_nodes(root, should_prune):
         # parent cannot be root since then root would then be removed
         if node.parent.is_root:

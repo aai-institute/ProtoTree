@@ -1,16 +1,17 @@
+import logging
 import os
-from pathlib import Path
 from typing import Callable
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from PIL.Image import Image
 
 from prototree.node import InternalNode
 from prototree.img_similarity import ImageProtoSimilarity
-from util.data import get_inverse_base_transform
+from util.data import save_img
+from util.image import get_latent_to_pixel, get_inverse_arr_transform
+
+log = logging.getLogger(__name__)
 
 
 @torch.no_grad()
@@ -27,42 +28,31 @@ def save_patch_visualizations(
         Will be used to create the inverse transform.
     :return:
     """
-    save_dir = Path(save_dir)
+    save_dir.mkdir(exist_ok=True, parents=True)
+    inv_transform = get_inverse_arr_transform(img_size)
+    latent_to_pixel = get_latent_to_pixel(img_size)
 
-    inverse_transform = get_inverse_base_transform(img_size=img_size)
-
-    def latent_to_pixel(latent_img: np.ndarray):
-        return cv2.resize(
-            latent_img, (img_size[1], img_size[0]), interpolation=cv2.INTER_CUBIC
-        )
-
-    def save(img: np.ndarray, fname: str):
-        path = save_dir / fname
-        path.parent.mkdir(parents=True, exist_ok=True)
-        plt.imsave(
-            path,
-            img,
-            vmin=0.0,
-            vmax=1.0,
-        )
-
+    log.info(f"Saving prototype patch visualizations to {save_dir}.")
     for node, image_proto_similarity in node_to_patch_matches.items():
         (
             im_closest_patch,
             im_original,
             im_with_bbox,
             im_with_heatmap,
-        ) = closest_patch_imgs(
-            image_proto_similarity, inverse_transform, latent_to_pixel
+        ) = closest_patch_imgs(image_proto_similarity, inv_transform, latent_to_pixel)
+
+        # TODO: These filenames should come from config (same for the other py files).
+        save_img(im_closest_patch, save_dir / f"{node.index}_closest_patch.png")
+        save_img(
+            im_with_bbox, save_dir / f"{node.index}_bounding_box_closest_patch.png"
         )
-        save(im_closest_patch, f"{node.index}_closest_patch.png")
-        save(im_with_bbox, f"{node.index}_bounding_box_closest_patch.png")
-        save(im_with_heatmap, f"{node.index}_heatmap_original_image.png")
+        save_img(im_with_heatmap, save_dir / f"{node.index}_heatmap_original_image.png")
 
 
+@torch.no_grad()
 def closest_patch_imgs(
     image_proto_similarity: ImageProtoSimilarity,
-    inverse_transform: Callable[[torch.Tensor], Image],
+    inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
 ) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     # TODO: Use the patch receptive fields instead of upsampling.
@@ -70,16 +60,15 @@ def closest_patch_imgs(
     Gets the pixels for images illustrating the closest patch from an ImageProtoSimilarity.
     :return: Pixels for: (closest patch, original image, original image with bounding box, original image with heatmap)
     """
-    patch_similarities = image_proto_similarity.all_patch_similarities().cpu().numpy()
+    patch_similarities = image_proto_similarity.all_patch_similarities.cpu().numpy()
 
     # A single pixel is selected.
     # Max because this similarity measure is higher for more similar patches.
     closest_patch_latent_mask = np.uint8(patch_similarities == patch_similarities.max())
     closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
-    h_low, h_high, w_low, w_high = covering_rectangle_indices(closest_patch_pixel_mask)
+    h_low, h_high, w_low, w_high = _covering_rectangle_indices(closest_patch_pixel_mask)
 
-    im_original_unscaled = inverse_transform(image_proto_similarity.transformed_image)
-    im_original = np.array(im_original_unscaled, dtype=np.float32) / 255
+    im_original = inv_transform(image_proto_similarity.transformed_image)
 
     im_closest_patch = im_original[
         h_low:h_high,
@@ -87,16 +76,16 @@ def closest_patch_imgs(
         :,
     ]
 
-    im_with_bbox = superimpose_bb(im_original, h_low, h_high, w_low, w_high)
+    im_with_bbox = _superimpose_bb(im_original, h_low, h_high, w_low, w_high)
 
     pixel_heatmap = latent_to_pixel(patch_similarities)
-    colored_heatmap = _to_rgb_map(pixel_heatmap)
+    colored_heatmap = _to_rgb_heatmap(pixel_heatmap)
     im_with_heatmap = 0.5 * im_original + 0.2 * colored_heatmap
 
     return im_closest_patch, im_original, im_with_bbox, im_with_heatmap
 
 
-def covering_rectangle_indices(mask: np.ndarray) -> (int, int, int, int):
+def _covering_rectangle_indices(mask: np.ndarray) -> (int, int, int, int):
     """
     Assuming that mask contains a single connected component with ones, find the indices of the
     smallest rectangle that covers the component.
@@ -110,7 +99,7 @@ def covering_rectangle_indices(mask: np.ndarray) -> (int, int, int, int):
     return lower[0], upper[0] + 1, lower[1], upper[1] + 1
 
 
-def superimpose_bb(
+def _superimpose_bb(
     img: np.ndarray,
     h_low: int,
     h_high: int,
@@ -133,7 +122,7 @@ def superimpose_bb(
     return img
 
 
-def _to_rgb_map(arr: np.ndarray) -> np.ndarray:
+def _to_rgb_heatmap(arr: np.ndarray) -> np.ndarray:
     """
     Turns a single-channel heatmap into an RGB heatmap.
     """

@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 
 import torch
@@ -8,6 +9,7 @@ from prototree.node import InternalNode
 @dataclass
 class ImageProtoSimilarity:
     # TODO: Lots of data is denormalized into this. Would it be better to normalize it?
+    # TODO: The methods on this class seem to be replicating logic from the tree/nodes, how do we avoid this?
     """
     Stores the similarities between each patch of an image and a node's prototype.
     """
@@ -17,13 +19,21 @@ class ImageProtoSimilarity:
     closest_patch_distance: float
     all_patch_distances: torch.Tensor
 
+    @property
     def all_patch_similarities(self) -> torch.Tensor:
         """
         The entries in the result are the similarity measure evaluated for each patch, i.e. the probabilities of being
-        routed to the right node for each patch.
+        routed to the right node for each patch if that patch is the closest.
         Therefore, the largest values in the result correspond to the patches which most closely match the prototype.
         """
         return torch.exp(-self.all_patch_distances)
+
+    @property
+    def highest_patch_similarity(self) -> float:
+        """
+        The similarity measure for the closest patch, i.e. the probability of being routed to the right node.
+        """
+        return math.exp(-self.closest_patch_distance)
 
 
 @torch.no_grad()

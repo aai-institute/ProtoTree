@@ -16,12 +16,6 @@ from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers
 
 
-@dataclass
-class LeafRationalization:
-    ancestor_similarities: list[ImageProtoSimilarity]
-    label: int
-
-
 class PrototypeBase(nn.Module):
     # TODO: "Composition over Inheritance" probably applies here for the backbone and prototypes. As added motivation,
     #  it looks like the way this is built right now violates the Liskov substitution principle.
@@ -150,7 +144,7 @@ class ProtoPNet(PrototypeBase):
         x = super().forward(x)
         return self.classifier(x)
 
-    def predict_proba(
+    def predict_probs(
         self,
         x: torch.Tensor,
     ) -> torch.Tensor:
@@ -162,7 +156,26 @@ class ProtoPNet(PrototypeBase):
         return torch.softmax(x, dim=-1)
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.argmax(self.predict_proba(x), dim=-1)
+        return torch.argmax(self.predict_probs(x), dim=-1)
+
+
+@dataclass
+class LeafRationalization:
+    ancestor_similarities: list[ImageProtoSimilarity]
+    leaf: Leaf
+
+    @property
+    def proto_presents(self) -> list[bool]:
+        """
+        Returns a list of bools the same length as ancestor_similarities, where each item indicates whether the
+        prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
+        the leaf is a right child.
+        """
+        ancestor_children = [
+            ancestor_similarity.internal_node
+            for ancestor_similarity in self.ancestor_similarities[1:]
+        ] + [self.leaf]
+        return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
 class ProtoTree(PrototypeBase):
@@ -326,11 +339,13 @@ class ProtoTree(PrototypeBase):
         :param x: tensor of shape (batch_size, n_channels, w, h)
         :param sampling_strategy:
 
-        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_rationalizations
+        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations
         """
-        logits, node_to_probs, predicting_leaves = self.forward(x, sampling_strategy=sampling_strategy)
-        leaf_rationalizations = self.rationalize(x, predicting_leaves)
-        return logits, node_to_probs, predicting_leaves, leaf_rationalizations
+        logits, node_to_probs, predicting_leaves = self.forward(
+            x, sampling_strategy=sampling_strategy
+        )
+        leaf_explanations = self.rationalize(x, predicting_leaves)
+        return logits, node_to_probs, predicting_leaves, leaf_explanations
 
     @torch.no_grad()
     def rationalize(
@@ -375,7 +390,8 @@ class ProtoTree(PrototypeBase):
                 ancestor_similarities.append(similarity)
 
             rationalization = LeafRationalization(
-                ancestor_similarities, predicting_leaf.predicted_label()
+                ancestor_similarities,
+                predicting_leaf,
             )
             rationalizations.append(rationalization)
 
