@@ -66,11 +66,22 @@ def _decision_flow_dag(
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     patches_dir: os.PathLike,
     decision_flow_dir: os.PathLike,
-):
+) -> pydot.Dot:
+    # TODO: There's a lot of parameters to this function (and some of the others further down this file). We could "fix"
+    #  this by making a class to hold several parameters, but it's not clear to me what the right class would be, or
+    #  whether that would actually be a useful abstraction (i.e. we probably don't just want to put lots of unrelated
+    #  items into a class to hide the number of arguments, particularly if we end up unpacking them from the class
+    #  almost immediately). Perhaps the number of parameters indicates we need a design rethink for this part of the
+    #  code.
+    """
+    Produces the pydot graph for the decision flow. This function (and others it calls) save required images with
+    side effects.
+    """
+
     proto_subgraphs, decision_pydot_edges = [], []
     for ancestor_similarity, proto_present in zip(
         leaf_rationalization.ancestor_similarities,
-        leaf_rationalization.proto_presences,
+        leaf_rationalization.proto_presents,
     ):
         proto_subgraph, decision_edge = _proto_node_components(
             ancestor_similarity,
@@ -151,6 +162,10 @@ def _bbox_components(
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     decision_flow_dir: os.PathLike,
 ):
+    """
+    Produces the bounding box image node and dotted line edge that appear if the prototype patch is present in the
+    image.
+    """
     (_, _, im_with_bbox, _) = closest_patch_imgs(
         ancestor_similarity, inv_transform, latent_to_pixel
     )  # Other return values are unused for now, but we could easily change this.
@@ -175,6 +190,9 @@ def _bbox_components(
 def _decision_edge(
     proto_node: InternalNode, proto_present: bool, similarity: float
 ) -> pydot.Edge:
+    """
+    This function produces the main arrow edges that show the progress down the tree as we reach each InternalNode.
+    """
     if proto_present:
         proto_presence, next_node = "Present", proto_node.right
     else:
@@ -193,6 +211,14 @@ def _original_im_components(
     true_class: str,
     decision_flow_dir: os.PathLike,
 ) -> tuple[list[pydot.Node], list[pydot.Edge]]:
+    """
+    Produces the nodes and edges for displaying the original image and its class at the start of the decision flow.
+
+    TODO(Hack): There's currently a separate node that holds the class label (and other text) for the original image,
+     so this function produces 2 nodes in total. This is because it's difficult to control the position of the text if
+     we use an xlabel on the image node, e.g. the dot engine doesn't respect the xlp attribute. We might want to try
+     other engines (e.g. Neato) instead.
+    """
     original_im = inv_transform(root_similarity.transformed_image)
     original_file = decision_flow_dir / "original.png"
     save_img(original_im, original_file)
@@ -221,7 +247,7 @@ def _original_im_components(
 
 def _img_pydot_node(node_name: str, im_file: os.PathLike, size: float) -> pydot.Node:
     """
-    Creates a pydot node which resizes the im_file to the specified size..
+    Creates a pydot node which resizes the im_file to the specified size.
     """
     return pydot.Node(
         node_name,

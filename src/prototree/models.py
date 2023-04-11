@@ -165,7 +165,7 @@ class LeafRationalization:
     leaf: Leaf
 
     @property
-    def proto_presences(self) -> list[bool]:
+    def proto_presents(self) -> list[bool]:
         """
         Returns a list of bools the same length as ancestor_similarities, where each item indicates whether the
         prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
