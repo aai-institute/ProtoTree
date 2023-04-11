@@ -6,6 +6,7 @@ import numpy as np
 import pydot
 import torch
 from PIL.Image import Image
+from tqdm import tqdm
 
 from prototree.models import LeafRationalization
 from prototree.node import InternalNode, Leaf, Node
@@ -24,10 +25,11 @@ def save_explanation_visualizations(
     inverse_transform = get_inverse_base_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
+    tqdm_explanations = tqdm(explanations, desc="Visualizing explanations", ncols=0)
     for explanation_counter, (leaf_explanation, true_label, class_names) in enumerate(
-        explanations
+        tqdm_explanations
     ):
-        explanation_dir = explanations_dir / str(explanation_counter)
+        explanation_dir = explanations_dir / f"img_{explanation_counter}"
         _save_explanation(
             leaf_explanation,
             true_label,

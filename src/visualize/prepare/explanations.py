@@ -2,7 +2,6 @@ from typing import Iterator
 
 import torch
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from prototree.models import ProtoTree, LeafRationalization
 
@@ -18,8 +17,7 @@ def data_explanations(
         leaf_explanation, true_label, class_names, explanation_counter
     An iterator is used to avoid OOMing on large datasets.
     """
-    tqdm_loader = tqdm(loader, desc="Producing explanations", ncols=0)
-    for batch_num, (x, y) in enumerate(tqdm_loader):
+    for x, y in loader:
         x, y = x.to(tree.device), y.to(tree.device)
         logits, node_to_probs, predicting_leaves, leaf_explanations = tree.explain(x)
         for leaf_explanation, true_label in zip(leaf_explanations, y):
