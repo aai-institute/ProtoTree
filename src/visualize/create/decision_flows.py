@@ -1,3 +1,4 @@
+import logging
 import os
 from collections.abc import Callable
 from typing import Iterator
@@ -14,6 +15,8 @@ from util.data import save_img
 from util.image import get_latent_to_pixel, get_inverse_arr_transform
 from visualize.create.dot import _node_name, gen_leaf, FONT, graph_with_components
 from visualize.create.patches import closest_patch_imgs
+
+log = logging.getLogger(__name__)
 
 
 @torch.no_grad()
@@ -33,7 +36,8 @@ def save_decision_flow_visualizations(
     inv_transform = get_inverse_arr_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
-    tqdm_explanations = tqdm(explanations, desc="Visualizing decision flows", ncols=0)
+    log.info(f"Saving decision flow visualizations of the explanations to {decision_flows_dir}.")
+    tqdm_explanations = tqdm(explanations, desc="Saving decision flow visualizations of the explanations", ncols=0)
     for explanation_counter, (leaf_explanation, true_class, class_names) in enumerate(
         tqdm_explanations
     ):

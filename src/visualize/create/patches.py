@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Callable
 
@@ -9,6 +10,8 @@ from prototree.node import InternalNode
 from prototree.img_similarity import ImageProtoSimilarity
 from util.data import save_img
 from util.image import get_latent_to_pixel, get_inverse_arr_transform
+
+log = logging.getLogger(__name__)
 
 
 @torch.no_grad()
@@ -29,6 +32,7 @@ def save_patch_visualizations(
     inv_transform = get_inverse_arr_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
+    log.info(f"Saving prototype patch visualizations to {save_dir}.")
     for node, image_proto_similarity in node_to_patch_matches.items():
         (
             im_closest_patch,
@@ -36,10 +40,12 @@ def save_patch_visualizations(
             im_with_bbox,
             im_with_heatmap,
         ) = closest_patch_imgs(image_proto_similarity, inv_transform, latent_to_pixel)
+
+        # TODO: These filenames should come from config (same for the other py files).
         save_img(im_closest_patch, save_dir / f"{node.index}_closest_patch.png")
         save_img(
             im_with_bbox, save_dir / f"{node.index}_bounding_box_closest_patch.png"
-        )  # TODO: config var
+        )
         save_img(im_with_heatmap, save_dir / f"{node.index}_heatmap_original_image.png")
 
 

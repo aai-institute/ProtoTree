@@ -11,14 +11,15 @@ from torch.nn import functional as F
 
 from util.math import log1mexp
 
-# TODO: a lot of stuff here is very poorly optimized, multiple time exponential complexity calls, even in properties
+# TODO: A lot of stuff here is very poorly optimized, multiple calls with exponential time complexity in the depth,
+#  even in properties.
 
 TNode = TypeVar("TNode", bound="Node")
 log = logging.getLogger(__name__)
 
 
 class Node(ABC):
-    # TODO: Replace properties by methods, they are actually rather expensive to compute!
+    # TODO: Replace properties by methods, they are actually rather expensive to compute. Perhaps we can cache them?
     # TODO: There's large number of methods who depend on subclasses,
     #  https://luzkan.github.io/smells/base-class-depends-on-subclass
 

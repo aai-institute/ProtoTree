@@ -221,7 +221,6 @@ def train_prototree(args: Namespace):
 
     # SAVE VISUALIZATIONS
     vis_dir = output_dir / "visualizations"
-    log.info(f"Saving prototype visualizations to {vis_dir}.")
     patches_dir = vis_dir / "patches"
     save_patch_visualizations(node_to_patch_matches, patches_dir)
     save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
