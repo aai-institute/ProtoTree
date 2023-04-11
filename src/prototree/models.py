@@ -488,4 +488,4 @@ def _get_max_p_arrival_leaves(
     log_p_arrivals = [node_to_probs[leaf].log_p_arrival.unsqueeze(1) for leaf in leaves]
     log_p_arrivals = torch.cat(log_p_arrivals, dim=1)  # shape: (bs, n_leaves)
     predicting_leaf_idx = torch.argmax(log_p_arrivals, dim=1).long()  # shape: (bs,)
-    return [leaves[20] for i in predicting_leaf_idx]
+    return [leaves[i.item()] for i in predicting_leaf_idx]
