@@ -8,7 +8,7 @@ import torch
 from prototree.eval import eval_tree, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
-from visualize.create.explanation_dags import save_explanation_visualizations
+from visualize.create.decision_flows import save_decision_flow_visualizations
 from visualize.prepare.explanations import data_explanations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
@@ -54,7 +54,9 @@ def save_tree(
 def train_prototree(args: Namespace):
     # data and paths
     dataset = args.dataset
-    output_dir = Path(args.output_dir).resolve()  # Absolute path makes it easier for Graphviz to find images.
+    output_dir = Path(
+        args.output_dir
+    ).resolve()  # Absolute path makes it easier for Graphviz to find images.
 
     # training hardware
     milestones = args.milestones_list
@@ -224,7 +226,9 @@ def train_prototree(args: Namespace):
     patches_dir = vis_dir / "patches"
     save_patch_visualizations(node_to_patch_matches, patches_dir)
     save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
-    save_explanation_visualizations(explanations, patches_dir, vis_dir / "explanations")
+    save_decision_flow_visualizations(
+        explanations, patches_dir, vis_dir / "explanations"
+    )
 
     return tree
 

@@ -26,7 +26,7 @@ def save_patch_visualizations(
         Will be used to create the inverse transform.
     :return:
     """
-    inverse_transform = get_inverse_base_transform(img_size)
+    inv_transform = get_inverse_base_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
     for node, image_proto_similarity in node_to_patch_matches.items():
@@ -35,9 +35,7 @@ def save_patch_visualizations(
             im_original,
             im_with_bbox,
             im_with_heatmap,
-        ) = closest_patch_imgs(
-            image_proto_similarity, inverse_transform, latent_to_pixel
-        )
+        ) = closest_patch_imgs(image_proto_similarity, inv_transform, latent_to_pixel)
         save_img(im_closest_patch, save_dir / f"{node.index}_closest_patch.png")
         save_img(
             im_with_bbox, save_dir / f"{node.index}_bounding_box_closest_patch.png"
@@ -48,7 +46,7 @@ def save_patch_visualizations(
 @torch.no_grad()
 def closest_patch_imgs(
     image_proto_similarity: ImageProtoSimilarity,
-    inverse_transform: Callable[[torch.Tensor], Image],
+    inv_transform: Callable[[torch.Tensor], Image],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
 ) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     # TODO: Use the patch receptive fields instead of upsampling.
@@ -64,7 +62,7 @@ def closest_patch_imgs(
     closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
     h_low, h_high, w_low, w_high = _covering_rectangle_indices(closest_patch_pixel_mask)
 
-    im_original_unscaled = inverse_transform(image_proto_similarity.transformed_image)
+    im_original_unscaled = inv_transform(image_proto_similarity.transformed_image)
     im_original = np.array(im_original_unscaled, dtype=np.float32) / 255
 
     im_closest_patch = im_original[

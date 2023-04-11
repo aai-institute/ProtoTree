@@ -163,7 +163,6 @@ class ProtoPNet(PrototypeBase):
 class LeafRationalization:
     ancestor_similarities: list[ImageProtoSimilarity]
     leaf: Leaf
-    label: int
 
     @property
     def ancestors_went_right(self) -> list[bool]:
@@ -389,7 +388,6 @@ class ProtoTree(PrototypeBase):
             rationalization = LeafRationalization(
                 ancestor_similarities,
                 predicting_leaf,
-                predicting_leaf.predicted_label(),
             )
             rationalizations.append(rationalization)
 
