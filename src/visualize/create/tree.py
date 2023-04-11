@@ -20,26 +20,26 @@ INTERNAL_NODE_IMG_GAP = 4
 
 @torch.no_grad()
 def save_tree_visualization(
-    tree: ProtoTree, patches_dir: os.PathLike, save_dir: os.PathLike, class_names: tuple
+    tree: ProtoTree, patches_dir: os.PathLike, tree_dir: os.PathLike, class_names: tuple
 ):
     """
     Saves visualization as a DOT file and png.
     """
-    node_imgs_dir = save_dir / "node_imgs"
+    node_imgs_dir = tree_dir / "node_imgs"
     node_imgs_dir.mkdir(parents=True, exist_ok=True)
 
     pydot_tree = _gen_pydot_tree(
         tree.tree_root, patches_dir, node_imgs_dir, class_names
     )
 
-    dot_file = save_dir / "tree.dot"
+    dot_file = tree_dir / "tree.dot"
     log.info(
         f"Saving tree DOT to {dot_file}, this file is just for debugging/further processing, and is not directly "
         f"used in image output generation."
     )
     pydot_tree.write_dot(dot_file)
 
-    png_file = save_dir / "treevis.png"
+    png_file = tree_dir / "treevis.png"
     log.info(f"Saving rendered tree to {png_file}")
     pydot_tree.write_png(png_file)
 
@@ -77,9 +77,7 @@ def _gen_pydot_nodes(
         case InternalNode():
             img = _gen_internal_node_img(subtree_root, patches_dir)
             # TODO: Perhaps we should extract some pure functions here.
-            img_file = os.path.abspath(
-                node_imgs_dir / f"node_{subtree_root.index}_vis.jpg"
-            )
+            img_file = node_imgs_dir / f"node_{subtree_root.index}_vis.jpg"
             img.save(img_file)
 
             pydot_node = pydot.Node(

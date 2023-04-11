@@ -18,7 +18,7 @@ def data_explanations(
         leaf_explanation, true_label, class_names, explanation_counter
     An iterator is used to avoid OOMing on large datasets.
     """
-    tqdm_loader = tqdm(loader, desc="Data loader", ncols=0)
+    tqdm_loader = tqdm(loader, desc="Producing explanations", ncols=0)
     for batch_num, (x, y) in enumerate(tqdm_loader):
         x, y = x.to(tree.device), y.to(tree.device)
         logits, node_to_probs, predicting_leaves, leaf_explanations = tree.explain(x)

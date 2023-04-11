@@ -54,7 +54,7 @@ def save_tree(
 def train_prototree(args: Namespace):
     # data and paths
     dataset = args.dataset
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir).resolve()
 
     # training hardware
     milestones = args.milestones_list

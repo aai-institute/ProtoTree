@@ -52,8 +52,8 @@ def _save_explanation(
         "Decision flow for explanation of 1 image.",
         graph_type="digraph",
     )
-    proto_pydot_nodes, bbox_nodes = [], []
-    decision_flow_edges, bbox_edges = [], []
+    proto_pydot_nodes, bbox_pydot_nodes = [], []
+    decision_pydot_edges, bbox_pydot_edges = [], []
 
     for ancestor_similarity, went_right in zip(
         leaf_rationalization.ancestor_similarities,
@@ -71,38 +71,53 @@ def _save_explanation(
         proto_pydot_node = pydot.Node(
             _proto_node_name(proto_node),
             image=f'"{proto_file}"',
-            shape="box",
+            label="",
+            shape="plaintext",
         )
         proto_pydot_nodes.append(proto_pydot_node)
 
         if went_right:
             bbox_file = explanation_dir / f"level_{proto_node.depth}_bounding_box.png"
             save_img(im_with_bbox, bbox_file)
-            bbox_node = pydot.Node(
+            bbox_pydot_node = pydot.Node(
                 _bbox_node_name(proto_node),
                 image=f'"{bbox_file}"',
-                shape="box",
+                label="",
+                shape="plaintext",
             )
-            bbox_nodes.append(bbox_node)
+            bbox_pydot_nodes.append(bbox_pydot_node)
 
-            decision_flow_edge = pydot.Edge(
+            decision_edge = pydot.Edge(
                 _proto_node_name(proto_node),
                 _proto_node_name(proto_node.right),
                 label="Present",
             )
 
-            bbox_edge = pydot.Edge(
+            bbox_pydot_edge = pydot.Edge(
                 _proto_node_name(proto_node),
                 _bbox_node_name(proto_node),
             )
-            bbox_edges.append(bbox_edge)
+            bbox_pydot_edges.append(bbox_pydot_edge)
         else:
-            decision_flow_edge = pydot.Edge(
+            decision_edge = pydot.Edge(
                 _proto_node_name(proto_node),
                 _proto_node_name(proto_node.left),
                 label="Absent",
             )
-        decision_flow_edges.append(decision_flow_edge)
+        decision_pydot_edges.append(decision_edge)
+
+    pydot_nodes = proto_pydot_nodes + bbox_pydot_nodes
+    pydot_edges = decision_pydot_edges + bbox_pydot_edges
+    for pydot_node in pydot_nodes:
+        dag.add_node(pydot_node)
+    for pydot_edge in pydot_edges:
+        dag.add_edge(pydot_edge)
+
+    dot_file = explanation_dir / "explanation.dot"
+    dag.write_dot(dot_file)
+
+    png_file = explanation_dir / "explanation.png"
+    dag.write_png(png_file)
 
 
 def _proto_node_name(node: Union[InternalNode, Leaf]) -> str:
