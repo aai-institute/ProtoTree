@@ -40,3 +40,15 @@ def _node_name(node: Node) -> str:
             return f"leaf_{node.index}"
         case other:
             raise ValueError(f"Unknown node {other}.")
+
+
+def graph_with_components(graph: pydot.Dot, nodes: list[pydot.Node], subgraphs: list[pydot.Subgraph],
+                          edges: list[pydot.Edge]) -> pydot.Dot:
+    for pydot_node in nodes:
+        graph.add_node(pydot_node)
+    for pydot_subgraph in subgraphs:
+        graph.add_subgraph(pydot_subgraph)
+    for pydot_edge in edges:
+        graph.add_edge(pydot_edge)
+
+    return graph

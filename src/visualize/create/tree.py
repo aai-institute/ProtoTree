@@ -7,7 +7,7 @@ from PIL import Image, ImageOps
 
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, Leaf, Node
-from visualize.create.dot import _leaf_label, FONT, _node_name, gen_leaf
+from visualize.create.dot import _leaf_label, FONT, _node_name, gen_leaf, graph_with_components
 
 log = logging.getLogger(__name__)
 
@@ -56,12 +56,7 @@ def _pydot_tree(
 
     pydot_nodes = _pydot_nodes(root, patches_dir, node_imgs_dir, class_names)
     pydot_edges = _pydot_edges(root)
-    for pydot_node in pydot_nodes:
-        pydot_tree.add_node(pydot_node)
-    for pydot_edge in pydot_edges:
-        pydot_tree.add_edge(pydot_edge)
-
-    return pydot_tree
+    return graph_with_components(pydot_tree, pydot_nodes, [], pydot_edges)
 
 
 def _pydot_nodes(
