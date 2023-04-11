@@ -7,7 +7,13 @@ from PIL import Image, ImageOps
 
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, Leaf, Node
-from visualize.create.dot import _leaf_label, FONT, _node_name, gen_leaf, graph_with_components
+from visualize.create.dot import (
+    _leaf_label,
+    FONT,
+    _node_name,
+    gen_leaf,
+    graph_with_components,
+)
 
 log = logging.getLogger(__name__)
 

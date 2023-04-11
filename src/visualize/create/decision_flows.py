@@ -7,6 +7,7 @@ import pydot
 import torch
 from tqdm import tqdm
 
+from prototree.img_similarity import ImageProtoSimilarity
 from prototree.models import LeafRationalization
 from prototree.node import Node
 from util.data import save_img
@@ -17,7 +18,7 @@ from visualize.create.patches import closest_patch_imgs
 
 @torch.no_grad()
 def save_decision_flow_visualizations(
-    explanations: Iterator[tuple[LeafRationalization, int, tuple]],
+    explanations: Iterator[tuple[LeafRationalization, str, tuple]],
     patches_dir: os.PathLike,
     explanations_dir: os.PathLike,
     img_size=(224, 224),
@@ -27,13 +28,13 @@ def save_decision_flow_visualizations(
     latent_to_pixel = get_latent_to_pixel(img_size)
 
     tqdm_explanations = tqdm(explanations, desc="Visualizing decision flows", ncols=0)
-    for explanation_counter, (leaf_explanation, true_label, class_names) in enumerate(
+    for explanation_counter, (leaf_explanation, true_class, class_names) in enumerate(
         tqdm_explanations
     ):
         decision_flow_dir = decision_flows_dir / f"img_{explanation_counter}"
         flow_dag = _decision_flow_dag(
             leaf_explanation,
-            true_label,
+            true_class,
             class_names,
             inv_transform,
             latent_to_pixel,
@@ -50,7 +51,7 @@ def save_decision_flow_visualizations(
 
 def _decision_flow_dag(
     leaf_rationalization: LeafRationalization,
-    true_label: int,
+    true_class: str,
     class_names: tuple,
     inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
@@ -72,7 +73,9 @@ def _decision_flow_dag(
         proto_node = ancestor_similarity.internal_node
         proto_file = patches_dir / f"{proto_node.index}_closest_patch.png"
 
-        proto_subgraph = pydot.Subgraph(f"proto_subgraph_{proto_node.depth}", rank="same")
+        proto_subgraph = pydot.Subgraph(
+            f"proto_subgraph_{proto_node.depth}", rank="same"
+        )
 
         proto_pydot_node = pydot.Node(
             _node_name(proto_node),
@@ -115,7 +118,7 @@ def _decision_flow_dag(
                 dir="none",
                 tailport="s",
                 headport="n",
-                minlen=2
+                minlen=2,
             )
 
             proto_subgraph.add_node(bbox_pydot_node)
@@ -130,13 +133,39 @@ def _decision_flow_dag(
         decision_pydot_edges.append(decision_edge)
         proto_subgraphs.append(proto_subgraph)
 
-    original_im = inv_transform(
-        leaf_rationalization.ancestor_similarities[0].transformed_image
+    original_nodes, original_edges = _original_im_components(
+        inv_transform,
+        leaf_rationalization.ancestor_similarities[0],
+        true_class,
+        decision_flow_dir,
     )
+
+    pydot_lone_nodes = [leaf_pydot_node] + original_nodes
+    pydot_edges = decision_pydot_edges + original_edges
+    return _assemble_flow_dag(pydot_lone_nodes, proto_subgraphs, pydot_edges)
+
+
+def _assemble_flow_dag(
+    nodes: list[pydot.Node], subgraphs: list[pydot.Subgraph], edges: list[pydot.Edge]
+) -> pydot.Dot:
+    flow_dag = pydot.Dot(
+        "Decision flow for explanation of an image.",
+        graph_type="digraph",
+        rankdir="LR",
+    )
+    return graph_with_components(flow_dag, nodes, subgraphs, edges)
+
+
+def _original_im_components(
+    inv_transform: Callable[[torch.Tensor], np.ndarray],
+    root_similarity: ImageProtoSimilarity,
+    true_class: str,
+    decision_flow_dir: os.PathLike,
+) -> tuple[list[pydot.Node], list[pydot.Edge]]:
+    original_im = inv_transform(root_similarity.transformed_image)
     original_file = decision_flow_dir / "original.png"
     save_img(original_im, original_file)
 
-    true_name = class_names[true_label]
     original_im_node = pydot.Node(
         "original",
         image=f'"{original_file}"',
@@ -149,7 +178,7 @@ def _decision_flow_dag(
     )
     original_label_node = pydot.Node(
         "original_label",
-        label=f"Test image\n{true_name}",
+        label=f"Test image\n{true_class}",
         lp="c",
         fontname=FONT,
         shape="plaintext",
@@ -159,24 +188,13 @@ def _decision_flow_dag(
     )
     original_to_proto_edge = pydot.Edge(
         "original",
-        _node_name(leaf_rationalization.ancestor_similarities[0].internal_node),
+        _node_name(root_similarity.internal_node),
         weight=100,
     )
     original_nodes = [original_label_node, original_im_node]
     original_edges = [original_label_edge, original_to_proto_edge]
 
-    pydot_lone_nodes = [leaf_pydot_node] + original_nodes
-    pydot_edges = decision_pydot_edges + original_edges
-    return _assemble_flow_dag(pydot_lone_nodes, proto_subgraphs, pydot_edges)
-
-
-def _assemble_flow_dag(nodes: list[pydot.Node], subgraphs: list[pydot.Subgraph], edges: list[pydot.Edge]) -> pydot.Dot:
-    flow_dag = pydot.Dot(
-        "Decision flow for explanation of an image.",
-        graph_type="digraph",
-        rankdir="LR",
-    )
-    return graph_with_components(flow_dag, nodes, subgraphs, edges)
+    return original_nodes, original_edges
 
 
 def _bbox_node_name(node: Node) -> str:
