@@ -169,7 +169,7 @@ class LeafRationalization:
         """
         Returns a list of bools the same length as ancestor_similarities, where each item indicates whether the
         prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
-        the leaf is a right child or not.
+        the leaf is a right child.
         """
         ancestor_children = [
             ancestor_similarity.internal_node
