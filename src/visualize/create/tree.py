@@ -8,7 +8,6 @@ from PIL import Image, ImageOps
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, Leaf, Node
 from visualize.create.dot import (
-    _leaf_label,
     FONT,
     _node_name,
     gen_leaf,
@@ -29,12 +28,15 @@ def save_tree_visualization(
 ):
     """
     Saves visualization as a DOT file and png.
+    TODO: Note that this currently relies on the patch visualizations being run first, we should probably change this,
+     or change the API to enforce it.
     """
     node_imgs_dir = tree_dir / "node_imgs"
     node_imgs_dir.mkdir(parents=True, exist_ok=True)
 
     pydot_tree = _pydot_tree(tree.tree_root, patches_dir, node_imgs_dir, class_names)
     _save_pydot(pydot_tree, tree_dir)
+
 
 def _save_pydot(pydot_tree: pydot.Dot, tree_dir: os.PathLike):
     dot_file = tree_dir / "tree.dot"

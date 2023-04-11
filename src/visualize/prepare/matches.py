@@ -14,7 +14,7 @@ from prototree.node import InternalNode
 def node_patch_matches(
     tree: ProtoTree,
     loader: DataLoader,
-    constrain_on_classes=True,
+    constrain_on_classes=False,
 ) -> dict[InternalNode, ImageProtoSimilarity]:
     # TODO: Generalize to ProtoBase
     """
@@ -23,8 +23,9 @@ def node_patch_matches(
 
     :param tree:
     :param loader: The dataset.
-    :param constrain_on_classes: If True, only consider patches from classes that are contained in
-        the prototype's leaves' predictions.
+    :param constrain_on_classes: Defaults to False. If True, only consider patches from classes that are contained in
+        the prototype's leaves' predictions. Note that if True, node_patch_matches could end up not having all the
+        nodes in its keys, which can lead to problems later on.
     :return: The map of nodes to best matches.
     """
 
@@ -41,12 +42,11 @@ def node_patch_matches(
             proto_similarity.internal_node
         ):
             node = proto_similarity.internal_node
-            cur_closest = node_to_patch_matches[node]
-            if (
-                (node not in node_to_patch_matches)
-                or proto_similarity.closest_patch_distance
-                < cur_closest.closest_patch_distance
-            ):
+            if node in node_to_patch_matches:
+                cur_closest = node_to_patch_matches[node]
+                if proto_similarity.closest_patch_distance < cur_closest.closest_patch_distance:
+                    node_to_patch_matches[node] = proto_similarity
+            else:
                 node_to_patch_matches[node] = proto_similarity
 
     return node_to_patch_matches

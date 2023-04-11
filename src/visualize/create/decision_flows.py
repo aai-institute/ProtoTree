@@ -23,6 +23,11 @@ def save_decision_flow_visualizations(
     explanations_dir: os.PathLike,
     img_size=(224, 224),
 ):
+    """
+    Saves visualizations of each explanation as a DOT file and png.
+    TODO: Note that this currently relies on the patch visualizations being run first, we should probably change this,
+     or change the API to enforce it.
+    """
     decision_flows_dir = explanations_dir / "decision_flows"
     decision_flows_dir.mkdir(parents=True, exist_ok=True)
     inv_transform = get_inverse_arr_transform(img_size)

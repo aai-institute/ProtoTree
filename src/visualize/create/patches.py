@@ -25,6 +25,7 @@ def save_patch_visualizations(
         Will be used to create the inverse transform.
     :return:
     """
+    save_dir.mkdir(exist_ok=True, parents=True)
     inv_transform = get_inverse_arr_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
