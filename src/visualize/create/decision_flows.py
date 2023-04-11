@@ -59,61 +59,18 @@ def _decision_flow_dag(
     decision_flow_dir: os.PathLike,
 ):
     proto_subgraphs, decision_pydot_edges = [], []
-
-    leaf_pydot_node = gen_leaf(leaf_rationalization.leaf, class_names)
-
     for ancestor_similarity, went_right in zip(
         leaf_rationalization.ancestor_similarities,
         leaf_rationalization.ancestors_went_right,
     ):
-        (_, _, im_with_bbox, _) = closest_patch_imgs(
-            ancestor_similarity, inv_transform, latent_to_pixel
-        )  # Other return values are unused for now, but we could easily change this.
-
-        proto_node = ancestor_similarity.internal_node
-        proto_file = patches_dir / f"{proto_node.index}_closest_patch.png"
-
-        proto_subgraph = pydot.Subgraph(
-            f"proto_subgraph_{proto_node.depth}", rank="same"
+        proto_subgraph, decision_edge = _proto_node_components(
+            ancestor_similarity,
+            went_right,
+            inv_transform,
+            latent_to_pixel,
+            patches_dir,
+            decision_flow_dir,
         )
-
-        proto_pydot_node = _img_pydot_node(_node_name(proto_node), proto_file, 1.5)
-        proto_subgraph.add_node(proto_pydot_node)
-
-        similarity = ancestor_similarity.highest_patch_similarity
-        if went_right:
-            bbox_file = decision_flow_dir / f"level_{proto_node.depth}_bounding_box.png"
-            save_img(im_with_bbox, bbox_file)
-            bbox_pydot_node = _img_pydot_node(
-                _bbox_node_name(proto_node), bbox_file, 2.0
-            )
-
-            decision_edge = pydot.Edge(
-                _node_name(proto_node),
-                _node_name(proto_node.right),
-                label=f"Present\nSimilarity={similarity:.5f}",
-                weight=100,
-            )
-
-            bbox_pydot_edge = pydot.Edge(
-                _node_name(proto_node),
-                _bbox_node_name(proto_node),
-                style="dashed",
-                dir="none",
-                tailport="s",
-                headport="n",
-                minlen=2,
-            )
-
-            proto_subgraph.add_node(bbox_pydot_node)
-            proto_subgraph.add_edge(bbox_pydot_edge)
-        else:
-            decision_edge = pydot.Edge(
-                _node_name(proto_node),
-                _node_name(proto_node.left),
-                label=f"Absent\nSimilarity={similarity:.5f}",
-            )
-
         decision_pydot_edges.append(decision_edge)
         proto_subgraphs.append(proto_subgraph)
 
@@ -123,10 +80,11 @@ def _decision_flow_dag(
         true_class,
         decision_flow_dir,
     )
+    leaf_pydot_node = gen_leaf(leaf_rationalization.leaf, class_names)
 
-    pydot_lone_nodes = [leaf_pydot_node] + original_nodes
+    pydot_nodes = [leaf_pydot_node] + original_nodes
     pydot_edges = decision_pydot_edges + original_edges
-    return _assemble_flow_dag(pydot_lone_nodes, proto_subgraphs, pydot_edges)
+    return _assemble_flow_dag(pydot_nodes, proto_subgraphs, pydot_edges)
 
 
 def _assemble_flow_dag(
@@ -138,6 +96,64 @@ def _assemble_flow_dag(
         rankdir="LR",
     )
     return graph_with_components(flow_dag, nodes, subgraphs, edges)
+
+
+def _proto_node_components(
+    ancestor_similarity: ImageProtoSimilarity,
+    went_right: bool,
+    inv_transform: Callable[[torch.Tensor], np.ndarray],
+    latent_to_pixel: Callable[[np.ndarray], np.ndarray],
+    patches_dir: os.PathLike,
+    decision_flow_dir: os.PathLike,
+) -> tuple[pydot.Subgraph, pydot.Edge]:
+    """
+    Produces the components of the graph that correspond to the decision-making with the prototype at a single node in
+    the tree. This consists of a subgraph of {prototype visualization, (optional) bounding box for the matching patch on
+    the image, (optional) edge connecting the two images}, and an edge leading to the next node in the tree.
+    """
+    (_, _, im_with_bbox, _) = closest_patch_imgs(
+        ancestor_similarity, inv_transform, latent_to_pixel
+    )  # Other return values are unused for now, but we could easily change this.
+    proto_node = ancestor_similarity.internal_node
+    proto_file = patches_dir / f"{proto_node.index}_closest_patch.png"
+
+    proto_subgraph = pydot.Subgraph(f"proto_subgraph_{proto_node.depth}", rank="same")
+
+    proto_pydot_node = _img_pydot_node(_node_name(proto_node), proto_file, 1.5)
+    proto_subgraph.add_node(proto_pydot_node)
+
+    similarity = ancestor_similarity.highest_patch_similarity
+    if went_right:
+        bbox_file = decision_flow_dir / f"level_{proto_node.depth}_bounding_box.png"
+        save_img(im_with_bbox, bbox_file)
+        bbox_pydot_node = _img_pydot_node(_bbox_node_name(proto_node), bbox_file, 2.0)
+
+        decision_edge = pydot.Edge(
+            _node_name(proto_node),
+            _node_name(proto_node.right),
+            label=f"Present\nSimilarity={similarity:.5f}",
+            weight=100,
+        )
+
+        bbox_pydot_edge = pydot.Edge(
+            _node_name(proto_node),
+            _bbox_node_name(proto_node),
+            style="dashed",
+            dir="none",
+            tailport="s",
+            headport="n",
+            minlen=2,
+        )
+
+        proto_subgraph.add_node(bbox_pydot_node)
+        proto_subgraph.add_edge(bbox_pydot_edge)
+    else:
+        decision_edge = pydot.Edge(
+            _node_name(proto_node),
+            _node_name(proto_node.left),
+            label=f"Absent\nSimilarity={similarity:.5f}",
+        )
+    return proto_subgraph, decision_edge
 
 
 def _original_im_components(
