@@ -19,6 +19,7 @@ class ImageProtoSimilarity:
     closest_patch_distance: float
     all_patch_distances: torch.Tensor
 
+    @property
     def all_patch_similarities(self) -> torch.Tensor:
         """
         The entries in the result are the similarity measure evaluated for each patch, i.e. the probabilities of being
@@ -27,6 +28,7 @@ class ImageProtoSimilarity:
         """
         return torch.exp(-self.all_patch_distances)
 
+    @property
     def highest_patch_similarity(self) -> float:
         """
         The similarity measure for the closest patch, i.e. the probability of being routed to the right node.

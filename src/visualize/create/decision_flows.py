@@ -5,14 +5,13 @@ from typing import Iterator
 import numpy as np
 import pydot
 import torch
-from PIL.Image import Image
 from tqdm import tqdm
 
 from prototree.models import LeafRationalization
 from prototree.node import Node
 from util.data import save_img
-from util.image import get_inverse_base_transform, get_latent_to_pixel
-from visualize.create.dot import _node_name, gen_leaf
+from util.image import get_latent_to_pixel, get_inverse_arr_transform
+from visualize.create.dot import _node_name, gen_leaf, FONT
 from visualize.create.patches import closest_patch_imgs
 
 
@@ -24,7 +23,7 @@ def save_decision_flow_visualizations(
     img_size=(224, 224),
 ):
     decision_flows_dir = explanations_dir / "decision_flows"
-    inv_transform = get_inverse_base_transform(img_size)
+    inv_transform = get_inverse_arr_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
     tqdm_explanations = tqdm(explanations, desc="Visualizing decision flows", ncols=0)
@@ -47,7 +46,7 @@ def _save_decision_flows(
     leaf_rationalization: LeafRationalization,
     true_label: int,
     class_names: tuple,
-    inv_transform: Callable[[torch.Tensor], Image],
+    inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     patches_dir: os.PathLike,
     explanation_dir: os.PathLike,
@@ -55,6 +54,7 @@ def _save_decision_flows(
     dag = pydot.Dot(
         "Decision flow for explanation of 1 image.",
         graph_type="digraph",
+        rankdir="LR",
     )
     proto_pydot_nodes, bbox_pydot_nodes = [], []
     decision_pydot_edges, bbox_pydot_edges = [], []
@@ -74,17 +74,26 @@ def _save_decision_flows(
         proto_pydot_node = pydot.Node(
             _node_name(proto_node),
             image=f'"{proto_file}"',
+            imagescale=True,
+            fixedsize=True,
+            height=1.5,
+            width=1.5,
             label="",
             shape="plaintext",
         )
         proto_pydot_nodes.append(proto_pydot_node)
 
+        similarity = ancestor_similarity.highest_patch_similarity
         if went_right:
             bbox_file = explanation_dir / f"level_{proto_node.depth}_bounding_box.png"
             save_img(im_with_bbox, bbox_file)
             bbox_pydot_node = pydot.Node(
                 _bbox_node_name(proto_node),
                 image=f'"{bbox_file}"',
+                imagescale=True,
+                fixedsize=True,
+                height=2,
+                width=2,
                 label="",
                 shape="plaintext",
             )
@@ -93,24 +102,66 @@ def _save_decision_flows(
             decision_edge = pydot.Edge(
                 _node_name(proto_node),
                 _node_name(proto_node.right),
-                label="Present",
+                label=f"Present\nSimilarity={similarity:.5f}",
+                weight=100,
             )
 
             bbox_pydot_edge = pydot.Edge(
                 _node_name(proto_node),
                 _bbox_node_name(proto_node),
+                style="dashed",
+                dir="none",
+                tailport="s",
+                headport="n",
             )
             bbox_pydot_edges.append(bbox_pydot_edge)
         else:
             decision_edge = pydot.Edge(
                 _node_name(proto_node),
                 _node_name(proto_node.left),
-                label="Absent",
+                label=f"Absent\nSimilarity={similarity:.5f}",
             )
         decision_pydot_edges.append(decision_edge)
 
-    pydot_nodes = proto_pydot_nodes + bbox_pydot_nodes + [leaf_pydot_node]
-    pydot_edges = decision_pydot_edges + bbox_pydot_edges
+    original_im = inv_transform(
+        leaf_rationalization.ancestor_similarities[0].transformed_image
+    )
+    original_file = explanation_dir / "original.png"
+    save_img(original_im, original_file)
+
+    true_name = class_names[true_label]
+    original_im_node = pydot.Node(
+        "original",
+        image=f'"{original_file}"',
+        imagescale=True,
+        fixedsize=True,
+        height=2,
+        width=2,
+        label="",
+        shape="plaintext",
+    )
+    original_label_node = pydot.Node(
+        "original_label",
+        label=f"Test image\n{true_name}",
+        lp="c",
+        fontname=FONT,
+        shape="plaintext",
+    )
+    original_label_edge = pydot.Edge(
+        "original_label", "original", weight=100, style="invis"
+    )
+    original_to_proto_edge = pydot.Edge(
+        "original",
+        _node_name(leaf_rationalization.ancestor_similarities[0].internal_node),
+        weight=100,
+    )
+    original_nodes = [original_label_node, original_im_node]
+    original_edges = [original_label_edge, original_to_proto_edge]
+
+    pydot_nodes = (
+        proto_pydot_nodes + bbox_pydot_nodes + [leaf_pydot_node] + original_nodes
+    )
+    pydot_edges = decision_pydot_edges + bbox_pydot_edges + original_edges
     for pydot_node in pydot_nodes:
         dag.add_node(pydot_node)
     for pydot_edge in pydot_edges:

@@ -4,12 +4,11 @@ from typing import Callable
 import cv2
 import numpy as np
 import torch
-from PIL.Image import Image
 
 from prototree.node import InternalNode
 from prototree.img_similarity import ImageProtoSimilarity
 from util.data import save_img
-from util.image import get_inverse_base_transform, get_latent_to_pixel
+from util.image import get_latent_to_pixel, get_inverse_arr_transform
 
 
 @torch.no_grad()
@@ -26,7 +25,7 @@ def save_patch_visualizations(
         Will be used to create the inverse transform.
     :return:
     """
-    inv_transform = get_inverse_base_transform(img_size)
+    inv_transform = get_inverse_arr_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
     for node, image_proto_similarity in node_to_patch_matches.items():
@@ -46,7 +45,7 @@ def save_patch_visualizations(
 @torch.no_grad()
 def closest_patch_imgs(
     image_proto_similarity: ImageProtoSimilarity,
-    inv_transform: Callable[[torch.Tensor], Image],
+    inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
 ) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     # TODO: Use the patch receptive fields instead of upsampling.
@@ -54,7 +53,7 @@ def closest_patch_imgs(
     Gets the pixels for images illustrating the closest patch from an ImageProtoSimilarity.
     :return: Pixels for: (closest patch, original image, original image with bounding box, original image with heatmap)
     """
-    patch_similarities = image_proto_similarity.all_patch_similarities().cpu().numpy()
+    patch_similarities = image_proto_similarity.all_patch_similarities.cpu().numpy()
 
     # A single pixel is selected.
     # Max because this similarity measure is higher for more similar patches.
@@ -62,8 +61,7 @@ def closest_patch_imgs(
     closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
     h_low, h_high, w_low, w_high = _covering_rectangle_indices(closest_patch_pixel_mask)
 
-    im_original_unscaled = inv_transform(image_proto_similarity.transformed_image)
-    im_original = np.array(im_original_unscaled, dtype=np.float32) / 255
+    im_original = inv_transform(image_proto_similarity.transformed_image)
 
     im_closest_patch = im_original[
         h_low:h_high,
@@ -74,7 +72,7 @@ def closest_patch_imgs(
     im_with_bbox = _superimpose_bb(im_original, h_low, h_high, w_low, w_high)
 
     pixel_heatmap = latent_to_pixel(patch_similarities)
-    colored_heatmap = _to_rgb_map(pixel_heatmap)
+    colored_heatmap = _to_rgb_heatmap(pixel_heatmap)
     im_with_heatmap = 0.5 * im_original + 0.2 * colored_heatmap
 
     return im_closest_patch, im_original, im_with_bbox, im_with_heatmap
@@ -117,7 +115,7 @@ def _superimpose_bb(
     return img
 
 
-def _to_rgb_map(arr: np.ndarray) -> np.ndarray:
+def _to_rgb_heatmap(arr: np.ndarray) -> np.ndarray:
     """
     Turns a single-channel heatmap into an RGB heatmap.
     """

@@ -35,6 +35,13 @@ def get_inverse_base_transform(
     )
 
 
+def get_inverse_arr_transform(
+    img_size: tuple[int, int]
+) -> Callable[[torch.Tensor], np.ndarray]:
+    inv_transform = get_inverse_base_transform(img_size)
+    return lambda tensor: np.array(inv_transform(tensor), dtype=np.float32) / 255
+
+
 def get_base_transform(img_size: tuple[int, int]) -> Callable[[torch.Tensor], Image]:
     return transforms.Compose(
         [
