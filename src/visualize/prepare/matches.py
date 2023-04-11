@@ -44,7 +44,10 @@ def node_patch_matches(
             node = proto_similarity.internal_node
             if node in node_to_patch_matches:
                 cur_closest = node_to_patch_matches[node]
-                if proto_similarity.closest_patch_distance < cur_closest.closest_patch_distance:
+                if (
+                    proto_similarity.closest_patch_distance
+                    < cur_closest.closest_patch_distance
+                ):
                     node_to_patch_matches[node] = proto_similarity
             else:
                 node_to_patch_matches[node] = proto_similarity

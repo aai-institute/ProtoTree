@@ -165,8 +165,12 @@ class LeafRationalization:
     leaf: Leaf
 
     @property
-    def ancestors_went_right(self) -> list[bool]:
-        """ """
+    def proto_presences(self) -> list[bool]:
+        """
+        Returns a list of bools the same length as ancestor_similarities, where each item indicates whether the
+        prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
+        the leaf is a right child or not.
+        """
         ancestor_children = [
             ancestor_similarity.internal_node
             for ancestor_similarity in self.ancestor_similarities[1:]
