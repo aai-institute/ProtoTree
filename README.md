@@ -18,6 +18,6 @@ This will probably be turned into a Python package and moved to a new repository
 ### For development
 Currently, all these steps are only done manually on a development machine. We should set up a pipeline that does these things automatically and reproducibly.
 1. Install requirements from `requirements-dev.txt`.
-2. You can run tests with the command `pytest`.
-3. You can lint the code with `black src` and `black tests`.
-4. You can check types with `MYPYPATH=src mypy src --explicit-package-bases`. Note that on the first run it will be helpful to run `mypy --install-types`.
+2. You can lint the code with `black src` and `black tests`.
+3. You can check types with `MYPYPATH=src mypy src --explicit-package-bases`. Note that it will be helpful to run `mypy --install-types` beforehand.
+4. You can run tests with the command `pytest`.
