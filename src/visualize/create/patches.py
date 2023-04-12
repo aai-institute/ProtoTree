@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Callable
+from typing import Callable, Iterable
 
 import cv2
 import numpy as np
@@ -12,6 +12,14 @@ from util.data import save_img
 from util.image import get_latent_to_pixel, get_inverse_arr_transform
 
 log = logging.getLogger(__name__)
+
+# TODO: Should we make dataclasses for these?
+BboxInds = tuple[int, int, int, int]
+ColorRgb = tuple[int, int, int]
+Bbox = tuple[BboxInds, ColorRgb]
+
+RED_RGB: ColorRgb = (255, 0, 0)
+YELLOW_RGB: ColorRgb = (0, 255, 255)
 
 
 @torch.no_grad()
@@ -62,21 +70,17 @@ def closest_patch_imgs(
     """
     patch_similarities = image_proto_similarity.all_patch_similarities.cpu().numpy()
 
-    # A single pixel is selected.
-    # Max because this similarity measure is higher for more similar patches.
-    closest_patch_latent_mask = np.uint8(patch_similarities == patch_similarities.max())
-    closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
-    h_low, h_high, w_low, w_high = _covering_rectangle_indices(closest_patch_pixel_mask)
-
     im_original = inv_transform(image_proto_similarity.transformed_image)
 
+    bbox_inds = _bbox_indices(patch_similarities, latent_to_pixel)
+    h_low, h_high, w_low, w_high = bbox_inds
     im_closest_patch = im_original[
         h_low:h_high,
         w_low:w_high,
         :,
     ]
 
-    im_with_bbox = _superimpose_bb(im_original, h_low, h_high, w_low, w_high)
+    im_with_bbox = _superimpose_bboxs(im_original, [(bbox_inds, YELLOW_RGB)])
 
     pixel_heatmap = latent_to_pixel(patch_similarities)
     colored_heatmap = _to_rgb_heatmap(pixel_heatmap)
@@ -85,7 +89,18 @@ def closest_patch_imgs(
     return im_closest_patch, im_original, im_with_bbox, im_with_heatmap
 
 
-def _covering_rectangle_indices(mask: np.ndarray) -> (int, int, int, int):
+def _bbox_indices(
+    patch_similarities: np.ndarray,
+    latent_to_pixel: Callable[[np.ndarray], np.ndarray],
+) -> BboxInds:
+    # A single pixel is selected.
+    # Max because this similarity measure is higher for more similar patches.
+    closest_patch_latent_mask = np.uint8(patch_similarities == patch_similarities.max())
+    closest_patch_pixel_mask = latent_to_pixel(closest_patch_latent_mask)
+    return _covering_bbox_inds(closest_patch_pixel_mask)
+
+
+def _covering_bbox_inds(mask: np.ndarray) -> BboxInds:
     """
     Assuming that mask contains a single connected component with ones, find the indices of the
     smallest rectangle that covers the component.
@@ -99,25 +114,24 @@ def _covering_rectangle_indices(mask: np.ndarray) -> (int, int, int, int):
     return lower[0], upper[0] + 1, lower[1], upper[1] + 1
 
 
-def _superimpose_bb(
+def _superimpose_bboxs(
     img: np.ndarray,
-    h_low: int,
-    h_high: int,
-    w_low: int,
-    w_high: int,
-    bbox_color=(0, 255, 255),
+    bboxs: Iterable[Bbox]
 ) -> np.ndarray:
     """
-    Takes a 3D float array of shape (H, W, 3), range [0, 1], and RGB format, and superimposes a bounding box.
+    Takes a 3D float array of shape (H, W, 3), range [0, 1], and RGB format, and superimposes the given bounding boxes
+    in the order given.
     """
     img = np.uint8(255 * img)
-    img = cv2.rectangle(
-        img,
-        pt1=(w_low, h_low),
-        pt2=(w_high, h_high),
-        color=bbox_color,
-        thickness=2,
-    )
+    for bbox_inds, bbox_color in bboxs:
+        h_low, h_high, w_low, w_high = bbox_inds
+        img = cv2.rectangle(
+            img,
+            pt1=(w_low, h_low),
+            pt2=(w_high, h_high),
+            color=bbox_color,
+            thickness=2,
+        )
     img = np.float32(img) / 255
     return img
 

@@ -13,7 +13,8 @@ from prototree.models import LeafRationalization
 from prototree.node import Node, InternalNode
 from util.data import save_img
 from util.image import get_latent_to_pixel, get_inverse_arr_transform
-from visualize.create.dot import _node_name, gen_leaf, FONT, graph_with_components
+from visualize.create.dot import _node_name, gen_leaf, graph_with_components
+from visualize.create.explanation.common import _original_im_components, _img_pydot_node
 from visualize.create.patches import closest_patch_imgs
 
 log = logging.getLogger(__name__)
@@ -106,7 +107,8 @@ def _decision_flow_dag(
 
     original_nodes, original_edges = _original_im_components(
         inv_transform,
-        leaf_rationalization.ancestor_similarities[0],
+        leaf_rationalization.ancestor_similarities[0].transformed_image,
+        _node_name(leaf_rationalization.ancestor_similarities[0].internal_node),
         true_class,
         decision_flow_dir,
     )
@@ -212,62 +214,6 @@ def _decision_edge(
         _node_name(proto_node),
         _node_name(next_node),
         label=f"{proto_presence}\nSimilarity={similarity:.5f}",
-    )
-
-
-def _original_im_components(
-    inv_transform: Callable[[torch.Tensor], np.ndarray],
-    root_similarity: ImageProtoSimilarity,
-    true_class: str,
-    decision_flow_dir: os.PathLike,
-) -> tuple[list[pydot.Node], list[pydot.Edge]]:
-    """
-    Produces the nodes and edges for displaying the original image and its class at the start of the decision flow.
-
-    TODO(Hack): There's currently a separate node that holds the class label (and other text) for the original image,
-     so this function produces 2 nodes in total. This is because it's difficult to control the position of the text if
-     we use an xlabel on the image node, e.g. the dot engine doesn't respect the xlp attribute. We might want to try
-     other engines (e.g. Neato) instead.
-    """
-    original_im = inv_transform(root_similarity.transformed_image)
-    original_file = decision_flow_dir / "original.png"
-    save_img(original_im, original_file)
-
-    original_im_node = _img_pydot_node("original", original_file, 2.0)
-    original_label_node = pydot.Node(
-        "original_label",
-        label=f"Test image\n{true_class}",
-        lp="c",
-        fontname=FONT,
-        shape="plaintext",
-    )
-    original_label_edge = pydot.Edge(
-        "original_label", "original", weight=100, style="invis", minlen=0.5
-    )
-    original_to_proto_edge = pydot.Edge(
-        "original",
-        _node_name(root_similarity.internal_node),
-        weight=100,
-    )
-    original_nodes = [original_label_node, original_im_node]
-    original_edges = [original_label_edge, original_to_proto_edge]
-
-    return original_nodes, original_edges
-
-
-def _img_pydot_node(node_name: str, im_file: os.PathLike, size: float) -> pydot.Node:
-    """
-    Creates a pydot node which resizes the im_file to the specified size.
-    """
-    return pydot.Node(
-        node_name,
-        image=f'"{im_file}"',
-        imagescale=True,
-        fixedsize=True,
-        height=size,
-        width=size,
-        label="",
-        shape="plaintext",
     )
 
 

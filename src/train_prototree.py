@@ -8,7 +8,9 @@ import torch
 from prototree.eval import eval_tree, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
-from visualize.create.decision_flows import save_decision_flow_visualizations
+from visualize.create.explanation.decision_flows import (
+    save_decision_flow_visualizations,
+)
 from visualize.prepare.explanations import data_explanations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
