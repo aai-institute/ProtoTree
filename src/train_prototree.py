@@ -11,6 +11,7 @@ from prototree.node import InternalNode, log_leaves_properties
 from visualize.create.explanation.decision_flows import (
     save_decision_flow_visualizations,
 )
+from visualize.create.explanation.multi_bbox import save_multi_bbox_visualizations
 from visualize.prepare.explanations import data_explanations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
@@ -215,9 +216,11 @@ def train_prototree(args: Namespace):
     pruned_and_proj_acc = eval_tree(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
     single_leaf_eval(tree, test_loader, "Pruned and projected")
-    explanations = data_explanations(
-        tree, test_loader, class_names
-    )  # This is lazy due to an iterator.
+
+    def explanations_provider():
+        return data_explanations(
+            tree, test_loader, class_names
+        )  # This is lazy to enable iterator reuse.
 
     tree.tree_root.print_tree()
 
@@ -226,8 +229,11 @@ def train_prototree(args: Namespace):
     patches_dir = vis_dir / "patches"
     save_patch_visualizations(node_to_patch_matches, patches_dir)
     save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
+    save_multi_bbox_visualizations(
+        explanations_provider(), patches_dir, vis_dir / "explanations"
+    )
     save_decision_flow_visualizations(
-        explanations, patches_dir, vis_dir / "explanations"
+        explanations_provider(), patches_dir, vis_dir / "explanations"
     )
 
     return tree

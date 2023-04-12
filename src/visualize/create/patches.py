@@ -115,10 +115,7 @@ def _covering_bbox_inds(mask: np.ndarray) -> BboxInds:
     return lower[0], upper[0] + 1, lower[1], upper[1] + 1
 
 
-def _superimpose_bboxs(
-    img: np.ndarray,
-    bboxs: Iterable[Bbox]
-) -> np.ndarray:
+def _superimpose_bboxs(img: np.ndarray, bboxs: Iterable[Bbox]) -> np.ndarray:
     """
     Takes a 3D float array of shape (H, W, 3), range [0, 1], and RGB format, and superimposes the given bounding boxes
     in the order given.

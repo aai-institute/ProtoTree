@@ -10,7 +10,13 @@ from tqdm import tqdm
 from prototree.models import LeafRationalization
 from util.data import save_img
 from util.image import get_inverse_arr_transform, get_latent_to_pixel
-from visualize.create.patches import _bbox_indices, GREEN_RGB, RED_RGB, _to_rgb_heatmap, _superimpose_bboxs
+from visualize.create.patches import (
+    _bbox_indices,
+    GREEN_RGB,
+    RED_RGB,
+    _to_rgb_heatmap,
+    _superimpose_bboxs,
+)
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +50,15 @@ def save_multi_bbox_visualizations(
         tqdm_explanations
     ):
         multi_bbox_dir = multi_bboxs_dir / f"img_{explanation_counter}"
+        _multi_bbox_graph(
+            leaf_explanation,
+            true_class,
+            class_names,
+            inv_transform,
+            latent_to_pixel,
+            patches_dir,
+            multi_bbox_dir,
+        )
 
 
 def _multi_bbox_graph(
@@ -71,7 +86,9 @@ def _multi_bbox_graph(
     avg_pixel_heatmap = np.mean(pixel_heatmaps, axis=0)
     avg_pixel_rgb_heatmap = _to_rgb_heatmap(avg_pixel_heatmap)
 
-    im_original = inv_transform(leaf_rationalization.ancestor_similarities[0].transformed_image)
+    im_original = inv_transform(
+        leaf_rationalization.ancestor_similarities[0].transformed_image
+    )
     im_with_bboxs = _superimpose_bboxs(im_original, bboxs)
     im_with_heatmap = 0.5 * im_original + 0.2 * avg_pixel_rgb_heatmap
 
