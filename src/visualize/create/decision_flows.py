@@ -36,8 +36,14 @@ def save_decision_flow_visualizations(
     inv_transform = get_inverse_arr_transform(img_size)
     latent_to_pixel = get_latent_to_pixel(img_size)
 
-    log.info(f"Saving decision flow visualizations of the explanations to {decision_flows_dir}.")
-    tqdm_explanations = tqdm(explanations, desc="Saving decision flow visualizations of the explanations", ncols=0)
+    log.info(
+        f"Saving decision flow visualizations of the explanations to {decision_flows_dir}."
+    )
+    tqdm_explanations = tqdm(
+        explanations,
+        desc="Saving decision flow visualizations of the explanations",
+        ncols=0,
+    )
     for explanation_counter, (leaf_explanation, true_class, class_names) in enumerate(
         tqdm_explanations
     ):

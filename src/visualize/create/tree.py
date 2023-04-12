@@ -80,7 +80,9 @@ def _pydot_nodes(
     #  and then using NoReturn seems to defeat the point of abstracting into a superclass.
     match subtree_root:
         case InternalNode() as internal_node:
-            return _pydot_nodes_internal(internal_node, patches_dir, node_imgs_dir, class_names)
+            return _pydot_nodes_internal(
+                internal_node, patches_dir, node_imgs_dir, class_names
+            )
         case Leaf() as leaf:
             return _pydot_nodes_leaf(leaf, class_names)
         case other:
