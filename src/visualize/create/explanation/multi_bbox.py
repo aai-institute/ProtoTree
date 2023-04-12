@@ -8,8 +8,9 @@ import torch
 from tqdm import tqdm
 
 from prototree.models import LeafRationalization
+from util.data import save_img
 from util.image import get_inverse_arr_transform, get_latent_to_pixel
-from visualize.create.patches import _bbox_indices, YELLOW_RGB, RED_RGB, _to_rgb_heatmap, _superimpose_bboxs
+from visualize.create.patches import _bbox_indices, GREEN_RGB, RED_RGB, _to_rgb_heatmap, _superimpose_bboxs
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ def _multi_bbox_graph(
         patch_similarities = ancestor_similarity.all_patch_similarities.cpu().numpy()
 
         bbox_inds = _bbox_indices(patch_similarities, latent_to_pixel)
-        bbox_color = YELLOW_RGB if proto_present else RED_RGB
+        bbox_color = GREEN_RGB if proto_present else RED_RGB
         bboxs.append((bbox_inds, bbox_color))
 
         pixel_heatmaps.append(latent_to_pixel(patch_similarities))
@@ -74,3 +75,5 @@ def _multi_bbox_graph(
     im_with_bboxs = _superimpose_bboxs(im_original, bboxs)
     im_with_heatmap = 0.5 * im_original + 0.2 * avg_pixel_rgb_heatmap
 
+    save_img(im_with_bboxs, multi_bbox_dir / "im_with_bboxs.png")
+    save_img(im_with_heatmap, multi_bbox_dir / "im_with_heatmap.png")

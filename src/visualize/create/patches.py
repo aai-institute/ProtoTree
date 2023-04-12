@@ -19,6 +19,7 @@ ColorRgb = tuple[int, int, int]
 Bbox = tuple[BboxInds, ColorRgb]
 
 RED_RGB: ColorRgb = (255, 0, 0)
+GREEN_RGB: ColorRgb = (0, 255, 0)
 YELLOW_RGB: ColorRgb = (0, 255, 255)
 
 
