@@ -29,7 +29,7 @@ def save_tree_visualization(
 ):
     """
     Saves visualization as a DOT file and png.
-    TODO: Note that this currently relies on the patch visualizations being run first, we should probably change this,
+    TODO: Note that this currently relies on the patch visualizations being run first. We should probably change this,
      or change the API to enforce it.
     """
     node_imgs_dir = tree_dir / "node_imgs"
@@ -70,17 +70,23 @@ def _pydot_tree(
     return graph_with_components(pydot_tree, pydot_nodes, [], pydot_edges)
 
 
-@singledispatch
 def _pydot_nodes(
     subtree_root: Node,
     patches_dir: os.PathLike,
     node_imgs_dir: os.PathLike,
     class_names: tuple,
 ) -> list[pydot.Node]:
-    raise ValueError(f"Unrecognized node {subtree_root}.")
+    # TODO: How do we get a Julia-style by-default error when we can't dispatch? Or even better, some sort of typing
+    #  error like in Rust, Scala etc? (same for everywhere else we match on node type)
+    match subtree_root:
+        case InternalNode() as internal_node:
+            return _pydot_nodes_internal(internal_node, patches_dir, node_imgs_dir, class_names)
+        case Leaf() as leaf:
+            return _pydot_nodes_leaf(leaf, class_names)
+        case other:
+            raise ValueError(f"Unrecognized node {other}.")
 
 
-@_pydot_nodes.register
 def _pydot_nodes_internal(
     subtree_root: InternalNode,
     patches_dir: os.PathLike,
@@ -110,11 +116,8 @@ def _pydot_nodes_internal(
     return [pydot_node] + l_descendants + r_descendants
 
 
-@_pydot_nodes.register
 def _pydot_nodes_leaf(
     leaf: Leaf,
-    patches_dir: os.PathLike,
-    node_imgs_dir: os.PathLike,
     class_names: tuple,
 ) -> list[pydot.Node]:
     pydot_node = gen_leaf(leaf, class_names)
@@ -123,26 +126,30 @@ def _pydot_nodes_leaf(
 
 def _pydot_edges(subtree_root: Node) -> list[pydot.Edge]:
     match subtree_root:
-        case InternalNode():
-            l_descendants = _pydot_edges(subtree_root.left)
-            r_descendants = _pydot_edges(subtree_root.right)
-            l_edge = pydot.Edge(
-                _node_name(subtree_root),
-                _node_name(subtree_root.left),
-                label="Absent",
-                **EDGE_ATTRS,
-            )
-            r_edge = pydot.Edge(
-                _node_name(subtree_root),
-                _node_name(subtree_root.right),
-                label="Present",
-                **EDGE_ATTRS,
-            )
-            return [l_edge, r_edge] + l_descendants + r_descendants
+        case InternalNode() as internal_node:
+            return _pydot_edges_internal(internal_node)
         case Leaf():
             return []
         case other:
             raise ValueError(f"Unrecognized node {other}.")
+
+
+def _pydot_edges_internal(subtree_root: InternalNode) -> list[pydot.Edge]:
+    l_descendants = _pydot_edges(subtree_root.left)
+    r_descendants = _pydot_edges(subtree_root.right)
+    l_edge = pydot.Edge(
+        _node_name(subtree_root),
+        _node_name(subtree_root.left),
+        label="Absent",
+        **EDGE_ATTRS,
+    )
+    r_edge = pydot.Edge(
+        _node_name(subtree_root),
+        _node_name(subtree_root.right),
+        label="Present",
+        **EDGE_ATTRS,
+    )
+    return [l_edge, r_edge] + l_descendants + r_descendants
 
 
 def _gen_internal_node_img(node: InternalNode, patches_dir: os.PathLike) -> Image:

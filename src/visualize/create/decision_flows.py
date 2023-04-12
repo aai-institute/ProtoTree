@@ -28,7 +28,7 @@ def save_decision_flow_visualizations(
 ):
     """
     Saves visualizations of each explanation as a DOT file and png.
-    TODO: Note that this currently relies on the patch visualizations being run first, we should probably change this,
+    TODO: Note that this currently relies on the patch visualizations being run first. We should probably change this,
      or change the API to enforce it.
     """
     decision_flows_dir = explanations_dir / "decision_flows"
