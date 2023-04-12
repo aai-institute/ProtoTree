@@ -97,12 +97,12 @@ def train_prototree(args: Namespace):
     # PREPARE DATA
     device = get_device(disable_cuda)
     pin_memory = "cuda" in device.type
-    train_loader, project_loader, test_loader = get_dataloaders(
+    class_names, train_loader, project_loader, test_loader = get_dataloaders(
         pin_memory=pin_memory,
         batch_size=batch_size,
     )
 
-    class_names = train_loader.dataset.classes
+    # class_names = train_loader.dataset.classes
     num_classes = len(class_names)
     log.info(f"Num classes: {num_classes}")
 
