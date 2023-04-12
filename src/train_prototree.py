@@ -11,7 +11,7 @@ from prototree.node import InternalNode, log_leaves_properties
 from visualize.create.explanation.decision_flows import (
     save_decision_flow_visualizations,
 )
-from visualize.create.explanation.multi_bbox import save_multi_bbox_visualizations
+from visualize.create.explanation.multi_patch import save_multi_patch_visualizations
 from visualize.prepare.explanations import data_explanations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
@@ -229,9 +229,7 @@ def train_prototree(args: Namespace):
     patches_dir = vis_dir / "patches"
     save_patch_visualizations(node_to_patch_matches, patches_dir)
     save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
-    save_multi_bbox_visualizations(
-        explanations_provider(), patches_dir, vis_dir / "explanations"
-    )
+    save_multi_patch_visualizations(explanations_provider(), vis_dir / "explanations")
     save_decision_flow_visualizations(
         explanations_provider(), patches_dir, vis_dir / "explanations"
     )
