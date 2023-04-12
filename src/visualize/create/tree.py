@@ -1,4 +1,3 @@
-from functools import singledispatch
 import logging
 import os
 
@@ -77,7 +76,8 @@ def _pydot_nodes(
     class_names: tuple,
 ) -> list[pydot.Node]:
     # TODO: How do we get a Julia-style by-default error when we can't dispatch? Or even better, some sort of typing
-    #  error like in Rust, Scala etc? (same for everywhere else we match on node type)
+    #  error like in Rust, Scala etc? (same for everywhere else we match on node type) Specifying a union/enum manually
+    #  and then using NoReturn seems to defeat the point of abstracting into a superclass.
     match subtree_root:
         case InternalNode() as internal_node:
             return _pydot_nodes_internal(internal_node, patches_dir, node_imgs_dir, class_names)
