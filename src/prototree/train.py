@@ -120,7 +120,7 @@ def update_leaf(
     masked_leaf_logits = y_true_one_hot * leaf_logits
     masked_log_combined = masked_log_p_arrival + masked_leaf_logits - masked_logits
 
-    # TODO: Can't use logsumexp because masked tensors don't support it.
+    # TODO: Can't use logsumexp because sparse masked tensors don't support it.
     masked_dist_update = torch.logsumexp(masked_log_combined, dim=0)
 
     dist_update = masked_dist_update.to_tensor(0.0)
