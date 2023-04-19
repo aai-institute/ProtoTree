@@ -16,10 +16,9 @@ log = logging.getLogger(__name__)
 # TODO: Should we make dataclasses for these?
 BboxInds = tuple[int, int, int, int]
 ColorRgb = tuple[int, int, int]
-Bbox = tuple[BboxInds, ColorRgb]
+Alpha = float
+Bbox = tuple[BboxInds, ColorRgb, Alpha]
 
-RED_RGB: ColorRgb = (255, 0, 0)
-GREEN_RGB: ColorRgb = (0, 255, 0)
 YELLOW_RGB: ColorRgb = (0, 255, 255)
 
 
@@ -81,7 +80,7 @@ def closest_patch_imgs(
         :,
     ]
 
-    im_with_bbox = _superimpose_bboxs(im_original, [(bbox_inds, YELLOW_RGB)])
+    im_with_bbox = _superimpose_bboxs(im_original, [(bbox_inds, YELLOW_RGB, 1.0)])
 
     pixel_heatmap = latent_to_pixel(patch_similarities)
     colored_heatmap = _to_rgb_heatmap(pixel_heatmap)
@@ -121,15 +120,17 @@ def _superimpose_bboxs(img: np.ndarray, bboxs: Iterable[Bbox]) -> np.ndarray:
     in the order given.
     """
     img = np.uint8(255 * img)
-    for bbox_inds, bbox_color in bboxs:
+    for bbox_inds, bbox_color, bbox_alpha in bboxs:
         h_low, h_high, w_low, w_high = bbox_inds
-        img = cv2.rectangle(
-            img,
+        overlay = img.copy()
+        overlay = cv2.rectangle(
+            overlay,
             pt1=(w_low, h_low),
             pt2=(w_high, h_high),
             color=bbox_color,
             thickness=2,
         )
+        img = cv2.addWeighted(overlay, bbox_alpha, img, 1.0 - bbox_alpha, 0.0)
     img = np.float32(img) / 255
     return img
 
@@ -146,3 +147,26 @@ def _to_rgb_heatmap(arr: np.ndarray) -> np.ndarray:
         :, :, ::-1
     ]  # Reverse channels, so red covers the most similar patches (the highest similarity values).
     return arr
+
+
+def _bbox_color(similarity: float) -> ColorRgb:
+    # TODO: Is there no built-in way to do this? There don't seem to be any color maps (or ways of using color maps)
+    #  that do what we want.
+    """
+    Takes a similarity float between 0 and 1 (inclusive) and maps it to colors ranging from red for 0, to yellow
+    for 0.5, to green for 1.
+    """
+    if similarity < 0.0 or similarity > 1.0:
+        raise ValueError(
+            f"Invalid similarity of {similarity}. Should be between 0 and 1 inclusive."
+        )
+
+    if similarity <= 0.5:
+        interpolator = similarity * 2.0
+        green_component = int(255 * interpolator)
+        return 255, green_component, 0
+
+    else:
+        interpolator = 1.0 - similarity
+        red_component = int(interpolator * 255)
+        return red_component, 255, 0
