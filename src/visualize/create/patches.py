@@ -156,17 +156,13 @@ def _bbox_color(similarity: float) -> ColorRgb:
     Takes a similarity float between 0 and 1 (inclusive) and maps it to colors ranging from red for 0, to yellow
     for 0.5, to green for 1.
     """
-    if similarity < 0.0 or similarity > 1.0:
-        raise ValueError(
-            f"Invalid similarity of {similarity}. Should be between 0 and 1 inclusive."
-        )
+    assert 0.0 <= similarity <= 1.0
 
     if similarity <= 0.5:
         interpolator = similarity * 2.0
         green_component = int(255 * interpolator)
         return 255, green_component, 0
 
-    else:
-        interpolator = 1.0 - similarity
-        red_component = int(interpolator * 255)
-        return red_component, 255, 0
+    interpolator = 1.0 - similarity
+    red_component = int(interpolator * 255)
+    return red_component, 255, 0
