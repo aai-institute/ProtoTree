@@ -140,7 +140,7 @@ def get_args() -> argparse.Namespace:
         "--freeze_epochs",
         type=int,
         default=30,
-        help="Number of epochs where pretrained features_net will be frozen",
+        help="Number of epochs where the pretrained backbone will be frozen.",
     )
     parser.add_argument(
         "--dir_for_saving_images",

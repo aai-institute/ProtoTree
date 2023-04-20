@@ -114,7 +114,7 @@ def train_prototree(args: Namespace):
         channels_proto=channels_proto,
         num_classes=num_classes,
         depth=depth,
-        backbone=backbone,
+        backbone_net=backbone,
         pretrained=pretrained,
     )
     log.info(
@@ -259,7 +259,7 @@ def create_proto_tree(
     channels_proto: int,
     num_classes: int,
     depth: int,
-    backbone="resnet50_inat",
+    backbone_net="resnet50_inat",
     pretrained=True,
 ):
     """
@@ -270,18 +270,18 @@ def create_proto_tree(
         coincides with the output channels of the net+add_on layers, prior to prototype layers.
     :param num_classes:
     :param depth: depth of tree, will result in 2^depth leaves and 2^depth-1 internal nodes
-    :param backbone: name of backbone, e.g. resnet18
+    :param backbone_net: name of backbone, e.g. resnet18
     :param pretrained:
     :return:
     """
-    features_net = BASE_ARCHITECTURE_TO_FEATURES[backbone](pretrained=pretrained)
+    backbone = BASE_ARCHITECTURE_TO_FEATURES[backbone_net](pretrained=pretrained)
     tree = ProtoTree(
         num_classes=num_classes,
         depth=depth,
         channels_proto=channels_proto,
         h_proto=h_proto,
         w_proto=w_proto,
-        feature_net=features_net,
+        backbone=backbone,
     )
     apply_xavier(tree)
     return tree

@@ -25,12 +25,12 @@ class PrototypeBase(nn.Module):
         self,
         num_prototypes: int,
         prototype_shape: tuple[int, int, int],
-        feature_net: torch.nn.Module,
+        backbone: torch.nn.Module,
         add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
     ):
         """
         :param prototype_shape: shape of the prototypes. (channels, height, width)
-        :param feature_net: usually a pretrained network that extracts features from the input images
+        :param backbone: usually a pretrained network that extracts features from the input images
         :param add_on_layers: used to connect the feature net with the prototypes.
         """
         super().__init__()
@@ -51,8 +51,8 @@ class PrototypeBase(nn.Module):
         elif add_on_layers is None:
             self.add_on = nn.Identity()
         elif add_on_layers == "default":
-            self.add_on = default_add_on_layers(feature_net, prototype_shape[0])
-        self.net = feature_net
+            self.add_on = default_add_on_layers(backbone, prototype_shape[0])
+        self.net = backbone
 
     def extract_features(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -136,9 +136,9 @@ class ProtoPNet(PrototypeBase):
         num_classes: int,
         num_prototypes: int,
         prototype_shape: tuple[int, int, int],
-        feature_net: nn.Module,
+        backbone: nn.Module,
     ):
-        super().__init__(num_prototypes, prototype_shape, feature_net)
+        super().__init__(num_prototypes, prototype_shape, backbone)
         self.classifier = nn.Linear(num_prototypes, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -187,7 +187,7 @@ class ProtoTree(PrototypeBase):
         channels_proto: int,
         h_proto: int,
         w_proto: int,
-        feature_net: torch.nn.Module,
+        backbone: torch.nn.Module,
         add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
     ):
         # the number of internal nodes
@@ -195,7 +195,7 @@ class ProtoTree(PrototypeBase):
         super().__init__(
             num_prototypes=num_prototypes,
             prototype_shape=(channels_proto, w_proto, h_proto),
-            feature_net=feature_net,
+            backbone=backbone,
             add_on_layers=add_on_layers,
         )
         self.num_classes = num_classes
