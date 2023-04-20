@@ -17,10 +17,6 @@ from util.net import default_add_on_layers
 
 
 class PrototypeBase(nn.Module):
-    # TODO: "Composition over Inheritance" probably applies here for the backbone and prototypes. As added motivation,
-    #  it looks like the way this is built right now violates the Liskov substitution principle (e.g. Mypy picks up
-    #  incompatible signatures for methods like `forward`).
-
     def __init__(
         self,
         num_prototypes: int,
