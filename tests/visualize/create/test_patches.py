@@ -25,3 +25,9 @@ def test_bbox_color_happy(similarity: float, expected_color: ColorRgb):
     #  behaviour with the current code.
     actual_color = _bbox_color(similarity)
     assert actual_color == expected_color
+
+
+@pytest.mark.parametrize("similarity", [-0.01, 1.01])
+def test_bbox_color_invalid_similarity(similarity: float):
+    with pytest.raises(AssertionError):
+        _bbox_color(similarity)
