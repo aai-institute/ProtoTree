@@ -4,13 +4,12 @@ import torch.nn.functional as F
 
 
 class L2Conv2D(nn.Module):
-
     """
     Convolutional layer that computes the squared L2 distances for each prototype
     instead of the conventional inner product.
     """
 
-    def __init__(self, num_prototypes: int, input_channels: int, w: int, h: int):
+    def __init__(self, num_prototypes: int, input_channels: int, w: int, h: int, initial_mean=0.0, initial_std=1.0):
         """
         Create a new L2Conv2D layer
         :param num_prototypes: The number of prototypes in the layer
@@ -27,11 +26,8 @@ class L2Conv2D(nn.Module):
         # TODO: make consistent ordering!!
         prototype_shape = (num_prototypes, input_channels, w, h)
 
-        # TODO: N(0, 1) here isn't the final value, it's set again in _init_prototype_layer. Is is possible to make this
-        #  clearer?
-        self.prototype_tensors = nn.Parameter(
-            torch.randn(*prototype_shape), requires_grad=True
-        )
+        prototype_initial_values = torch.randn(*prototype_shape) * initial_std + initial_mean
+        self.prototype_tensors = nn.Parameter(prototype_initial_values, requires_grad=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
