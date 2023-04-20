@@ -22,7 +22,7 @@ from visualize.create.patches import (
 )
 def test_bbox_color_happy(similarity: float, expected_color: ColorRgb):
     # TODO: It's a bit odd testing internal/protected functions, but it's a bit tricky to test the higher level image
-    #  behaviour with the current code.
+    #  behavior with the current code.
     actual_color = _bbox_color(similarity)
     assert actual_color == expected_color
 
