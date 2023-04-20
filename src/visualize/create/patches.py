@@ -19,7 +19,9 @@ ColorRgb = tuple[int, int, int]
 Alpha = float
 Bbox = tuple[BboxInds, ColorRgb, Alpha]
 
-YELLOW_RGB: ColorRgb = (0, 255, 255)
+RED_RGB: ColorRgb = (255, 0, 0)
+YELLOW_RGB: ColorRgb = (255, 255, 0)
+GREEN_RGB: ColorRgb = (0, 255, 0)
 
 
 @torch.no_grad()
@@ -163,6 +165,6 @@ def _bbox_color(similarity: float) -> ColorRgb:
         green_component = int(255 * interpolator)
         return 255, green_component, 0
 
-    interpolator = 1.0 - similarity
+    interpolator = (1.0 - similarity) * 2.0
     red_component = int(interpolator * 255)
     return red_component, 255, 0
