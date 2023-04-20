@@ -6,7 +6,7 @@ import logging
 import torch
 
 from prototree.eval import eval_tree, single_leaf_eval
-from prototree.models import ProtoTree
+from prototree.models import ProtoTree, PrototypeBase
 from prototree.node import InternalNode, log_leaves_properties
 from visualize.create.explanation.decision_flows import (
     save_decision_flow_visualizations,
@@ -25,17 +25,6 @@ from visualize.create.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
-
-
-@torch.no_grad()
-def apply_xavier(tree: ProtoTree):
-    def _xavier_on_conv(m):
-        if type(m) == torch.nn.Conv2d:
-            torch.nn.init.xavier_normal_(
-                m.weight, gain=torch.nn.init.calculate_gain("sigmoid")
-            )
-
-    tree.add_on.apply(_xavier_on_conv)
 
 
 def save_tree(
@@ -275,15 +264,14 @@ def create_proto_tree(
     :return:
     """
     backbone = BASE_ARCHITECTURE_TO_FEATURES[backbone_net](pretrained=pretrained)
-    tree = ProtoTree(
-        num_classes=num_classes,
-        depth=depth,
-        channels_proto=channels_proto,
-        h_proto=h_proto,
-        w_proto=w_proto,
-        backbone=backbone,
+    num_prototypes = 2 ** depth - 1
+    proto_base = PrototypeBase(
+        num_prototypes=num_prototypes,
+        prototype_shape=(channels_proto, w_proto, h_proto),
+        backbone=backbone
     )
-    apply_xavier(tree)
+    proto_base.apply_xavier()
+    tree = ProtoTree(proto_base, num_classes=num_classes, depth=depth)
     return tree
 
 

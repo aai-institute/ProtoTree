@@ -52,7 +52,7 @@ class PrototypeBase(nn.Module):
             self.add_on = nn.Identity()
         elif add_on_layers == "default":
             self.add_on = default_add_on_layers(backbone, prototype_shape[0])
-        self.net = backbone
+        self.backbone = backbone
 
     def extract_features(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -60,7 +60,7 @@ class PrototypeBase(nn.Module):
         has the shape (batch_size, num_channels, height, width), where num_channels is the
         number of channels of the prototypes.
         """
-        x = self.net(x)
+        x = self.backbone(x)
         x = self.add_on(x)
         return x
 
@@ -106,6 +106,16 @@ class PrototypeBase(nn.Module):
     def prototype_shape(self):
         return self.prototype_layer.prototype_shape
 
+    @torch.no_grad()
+    def apply_xavier(self):
+        def _xavier_on_conv(m):
+            if type(m) == torch.nn.Conv2d:
+                torch.nn.init.xavier_normal_(
+                    m.weight, gain=torch.nn.init.calculate_gain("sigmoid")
+                )
+
+        self.add_on.apply(_xavier_on_conv)
+
     # TODO: remove all saving things - delegate to downstream code
     def save(self, basedir: PathLike, file_name: str = "model.pth"):
         self.eval()
@@ -135,10 +145,11 @@ class ProtoPNet(PrototypeBase):
         self,
         num_classes: int,
         num_prototypes: int,
-        prototype_shape: tuple[int, int, int],
-        backbone: nn.Module,
+        proto_base: PrototypeBase
     ):
-        super().__init__(num_prototypes, prototype_shape, backbone)
+        self.proto_base = proto_base
+
+        # TODO: Use dependency injection for the second half of the model?
         self.classifier = nn.Linear(num_prototypes, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -179,25 +190,17 @@ class LeafRationalization:
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
-class ProtoTree(PrototypeBase):
+class ProtoTree(nn.Module):
     def __init__(
         self,
+        proto_base: PrototypeBase,
         num_classes: int,
-        depth: int,
-        channels_proto: int,
-        h_proto: int,
-        w_proto: int,
-        backbone: torch.nn.Module,
-        add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
+        depth: int
     ):
-        # the number of internal nodes
-        num_prototypes = 2**depth - 1
-        super().__init__(
-            num_prototypes=num_prototypes,
-            prototype_shape=(channels_proto, w_proto, h_proto),
-            backbone=backbone,
-            add_on_layers=add_on_layers,
-        )
+        super().__init__()
+        self.proto_base = proto_base
+
+        # TODO: Use dependency injection for the second half of the model?
         self.num_classes = num_classes
         self.tree_root = create_tree(depth, num_classes)
         self.node_to_proto_idx = {
@@ -207,6 +210,7 @@ class ProtoTree(PrototypeBase):
 
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
+        self.proto_base.to(*args, **kwargs)
         for leaf in self.tree_root.leaves:
             leaf.to(*args, **kwargs)
         return self
@@ -218,7 +222,7 @@ class ProtoTree(PrototypeBase):
         """
         Extracts the mapping `node->log_p_right` from the prototype similarities.
         """
-        similarities = super().forward(x)
+        similarities = self.proto_base.forward(x)
         return self._get_node_to_log_p_right(similarities)
 
     @staticmethod
@@ -433,6 +437,10 @@ class ProtoTree(PrototypeBase):
     @property
     def num_leaves(self):
         return self.tree_root.num_leaves
+
+    @property
+    def device(self):
+        return self.proto_base.device
 
 
 def get_predicting_leaves(

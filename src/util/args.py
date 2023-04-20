@@ -225,12 +225,13 @@ def get_optimizer(
         # TODO: what is this?
         if "dist_params" in name:
             dist_params.append(param)
+
     # set up optimizer
     if "resnet50_inat" in net or (
         "resnet50" in net and dataset == "CARS"
-    ):  # to reproduce experimental results
-        # freeze resnet50 except last convolutional layer
-        for name, param in tree.net.named_parameters():
+    ):
+        # TODO: Seems to defeat the point of encapsulation if we're accessing the backbone directly.
+        for name, param in tree.proto_base.backbone.named_parameters():
             # TODO: improve this logic
             if "layer4.2" not in name:
                 params_to_freeze.append(param)
@@ -249,12 +250,14 @@ def get_optimizer(
                 "weight_decay_rate": weight_decay,
             },
             {
-                "params": tree.add_on.parameters(),
+                # TODO: Seems to defeat the point of encapsulation if we're accessing the add_on directly.
+                "params": tree.proto_base.add_on.parameters(),
                 "lr": lr_block,
                 "weight_decay_rate": weight_decay,
             },
             {
-                "params": tree.prototype_layer.parameters(),
+                # TODO: Seems to defeat the point of encapsulation if we're accessing the prototype_layer directly.
+                "params": tree.proto_base.prototype_layer.parameters(),
                 "lr": lr,
                 "weight_decay_rate": 0,
             },
