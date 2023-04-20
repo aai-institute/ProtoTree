@@ -16,6 +16,8 @@ class L2Conv2D(nn.Module):
         :param input_channels: The number of channels in the input features
         :param w: Width of the prototypes
         :param h: Height of the prototypes
+        :param initial_mean: Initialize the prototypes with a Gaussian with this mean.
+        :param initial_std: Initialize the prototypes with a Gaussian with this standard deviation.
         """
         super().__init__()
         self.num_prototypes = num_prototypes
