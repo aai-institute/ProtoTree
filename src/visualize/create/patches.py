@@ -97,12 +97,14 @@ def closest_patch_imgs(
 
     bbox_inds = _bbox_indices(patch_similarities, latent_to_pixel)
     im_closest_patch = im_original[
-        bbox_inds.h_low:bbox_inds.h_high,
-        bbox_inds.w_low:bbox_inds.w_high,
+        bbox_inds.h_low : bbox_inds.h_high,
+        bbox_inds.w_low : bbox_inds.w_high,
         :,
     ]
 
-    im_with_bbox = _superimpose_bboxs(im_original, [Bbox(bbox_inds, YELLOW_RGB, Opacity(1.0))])
+    im_with_bbox = _superimpose_bboxs(
+        im_original, [Bbox(bbox_inds, YELLOW_RGB, Opacity(1.0))]
+    )
 
     pixel_heatmap = latent_to_pixel(patch_similarities)
     colored_heatmap = _to_rgb_heatmap(pixel_heatmap)
@@ -151,7 +153,9 @@ def _superimpose_bboxs(img: np.ndarray, bboxs: Iterable[Bbox]) -> np.ndarray:
             color=astuple(bbox.color),
             thickness=2,
         )
-        img = cv2.addWeighted(overlay, bbox.opacity.alpha, img, 1.0 - bbox.opacity.alpha, 0.0)
+        img = cv2.addWeighted(
+            overlay, bbox.opacity.alpha, img, 1.0 - bbox.opacity.alpha, 0.0
+        )
     img = np.float32(img) / 255
     return img
 
