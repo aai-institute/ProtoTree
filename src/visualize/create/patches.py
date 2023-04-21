@@ -1,6 +1,6 @@
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, astuple
 from typing import Callable, Iterable
 
 import cv2
@@ -142,16 +142,16 @@ def _superimpose_bboxs(img: np.ndarray, bboxs: Iterable[Bbox]) -> np.ndarray:
     in the order given.
     """
     img = np.uint8(255 * img)
-    for bbox_inds, bbox_color, bbox_alpha in bboxs:
+    for bbox in bboxs:
         overlay = img.copy()
         overlay = cv2.rectangle(
             overlay,
-            pt1=(bbox_inds.w_low, bbox_inds.h_low),
-            pt2=(bbox_inds.w_high, bbox_inds.h_high),
-            color=bbox_color,
+            pt1=(bbox.inds.w_low, bbox.inds.h_low),
+            pt2=(bbox.inds.w_high, bbox.inds.h_high),
+            color=astuple(bbox.color),
             thickness=2,
         )
-        img = cv2.addWeighted(overlay, bbox_alpha, img, 1.0 - bbox_alpha, 0.0)
+        img = cv2.addWeighted(overlay, bbox.opacity.alpha, img, 1.0 - bbox.opacity.alpha, 0.0)
     img = np.float32(img) / 255
     return img
 
