@@ -1,5 +1,6 @@
 import logging
 import os
+from dataclasses import dataclass
 from typing import Callable, Iterable
 
 import cv2
@@ -13,15 +14,35 @@ from util.image import get_latent_to_pixel, get_inverse_arr_transform
 
 log = logging.getLogger(__name__)
 
-# TODO: Should we make dataclasses for these?
-BboxInds = tuple[int, int, int, int]
-ColorRgb = tuple[int, int, int]
-Alpha = float
-Bbox = tuple[BboxInds, ColorRgb, Alpha]
 
-RED_RGB: ColorRgb = (255, 0, 0)
-YELLOW_RGB: ColorRgb = (255, 255, 0)
-GREEN_RGB: ColorRgb = (0, 255, 0)
+@dataclass
+class BboxInds:
+    h_low: int
+    h_high: int
+    w_low: int
+    w_high: int
+
+
+@dataclass
+class ColorRgb:
+    red: int
+    green: int
+    blue: int
+
+
+@dataclass
+class Opacity:
+    alpha: float
+
+
+@dataclass
+class Bbox:
+    inds: BboxInds
+    color: ColorRgb
+    opacity: Opacity
+
+
+YELLOW_RGB: ColorRgb = ColorRgb(255, 255, 0)
 
 
 @torch.no_grad()
@@ -82,7 +103,7 @@ def closest_patch_imgs(
         :,
     ]
 
-    im_with_bbox = _superimpose_bboxs(im_original, [(bbox_inds, YELLOW_RGB, 1.0)])
+    im_with_bbox = _superimpose_bboxs(im_original, [Bbox(bbox_inds, YELLOW_RGB, Opacity(1.0))])
 
     pixel_heatmap = latent_to_pixel(patch_similarities)
     colored_heatmap = _to_rgb_heatmap(pixel_heatmap)
@@ -113,7 +134,7 @@ def _covering_bbox_inds(mask: np.ndarray) -> BboxInds:
     nonzero_indices = mask.nonzero()
     lower = np.min(nonzero_indices, axis=1)
     upper = np.max(nonzero_indices, axis=1)
-    return lower[0], upper[0] + 1, lower[1], upper[1] + 1
+    return BboxInds(lower[0], upper[0] + 1, lower[1], upper[1] + 1)
 
 
 def _superimpose_bboxs(img: np.ndarray, bboxs: Iterable[Bbox]) -> np.ndarray:
@@ -123,12 +144,11 @@ def _superimpose_bboxs(img: np.ndarray, bboxs: Iterable[Bbox]) -> np.ndarray:
     """
     img = np.uint8(255 * img)
     for bbox_inds, bbox_color, bbox_alpha in bboxs:
-        h_low, h_high, w_low, w_high = bbox_inds
         overlay = img.copy()
         overlay = cv2.rectangle(
             overlay,
-            pt1=(w_low, h_low),
-            pt2=(w_high, h_high),
+            pt1=(bbox_inds.w_low, bbox_inds.h_low),
+            pt2=(bbox_inds.w_high, bbox_inds.h_high),
             color=bbox_color,
             thickness=2,
         )
@@ -163,8 +183,8 @@ def _bbox_color(similarity: float) -> ColorRgb:
     if similarity <= 0.5:
         interpolator = similarity * 2.0
         green_component = int(255 * interpolator)
-        return 255, green_component, 0
+        return ColorRgb(255, green_component, 0)
 
     interpolator = (1.0 - similarity) * 2.0
     red_component = int(interpolator * 255)
-    return red_component, 255, 0
+    return ColorRgb(red_component, 255, 0)
