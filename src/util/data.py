@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torchvision.transforms as transforms
 from matplotlib import pyplot, pyplot as plt
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
 from config import project_dir, test_dir, train_dir
@@ -24,7 +24,7 @@ def get_dataloaders(
     :param kwargs: passed to DataLoader
     :return:
     """
-    class_names, train_set, project_set, test_set = get_data()
+    train_set, project_set, test_set = get_data()
 
     def get_loader(dataset: ImageFolder, batch_size=batch_size):
         return DataLoader(
@@ -39,12 +39,12 @@ def get_dataloaders(
     # make batch size smaller to prevent out of memory errors during projection
     project_loader = get_loader(project_set, batch_size=batch_size // 4)
     test_loader = get_loader(test_set)
-    return class_names, train_loader, project_loader, test_loader
+    return train_loader, project_loader, test_loader
 
 
 def get_data(
     augment_train_set=True, img_size=(224, 224)
-) -> tuple[tuple, ImageFolder, ImageFolder, ImageFolder]:
+) -> tuple[ImageFolder, ImageFolder, ImageFolder]:
     """
 
     :param augment_train_set: only affects the train set, project set and test set are not augmented
@@ -71,12 +71,7 @@ def get_data(
     train_set = ImageFolder(train_dir, transform=train_transform)
     project_set = ImageFolder(project_dir, transform=base_transform)
     test_set = ImageFolder(test_dir, transform=base_transform)
-    idx = [i for i in range(7 * 16)]
-    train_set_small = Subset(train_set, idx)
-    train_set_small.dataset.classes = train_set.classes
-    project_set_small = Subset(project_set, idx)
-    test_set_small = Subset(test_set, idx)
-    return train_set.classes, train_set_small, project_set_small, test_set_small
+    return train_set, project_set, test_set
 
 
 def save_img(img: np.ndarray, filepath: os.PathLike):
