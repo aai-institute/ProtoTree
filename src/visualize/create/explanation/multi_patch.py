@@ -11,10 +11,11 @@ from util.data import save_img
 from util.image import get_inverse_arr_transform, get_latent_to_pixel
 from visualize.create.patches import (
     _bbox_indices,
-    GREEN_RGB,
-    RED_RGB,
     _to_rgb_heatmap,
     _superimpose_bboxs,
+    _bbox_color,
+    Opacity,
+    Bbox,
 )
 
 log = logging.getLogger(__name__)
@@ -67,15 +68,19 @@ def _save_multi_patch_vis(
     Saves the original image and copies of it with {an average heatmap, all bounding boxes from patches, bounding boxes
     from patches that were similar enough to be considered present}.
     """
-    transformed_orig = leaf_rationalization.ancestor_similarities[0].transformed_image
+    ancestor_sims = leaf_rationalization.ancestor_similarities
+    transformed_orig = ancestor_sims[0].transformed_image
     im_original = inv_transform(transformed_orig)
+
+    # TODO: Seems a bit redundant that we're extracting the similarities and then max similarities separately.
     all_patch_similarities = [
-        sim.all_patch_similarities.cpu().numpy()
-        for sim in leaf_rationalization.ancestor_similarities
+        sim.all_patch_similarities.cpu().numpy() for sim in ancestor_sims
     ]
+    highest_similarities = [sim.highest_patch_similarity for sim in ancestor_sims]
 
     im_with_bboxs, im_with_present_bboxs = _bboxs_overlaid(
         all_patch_similarities,
+        highest_similarities,
         leaf_rationalization.proto_presents,
         latent_to_pixel,
         im_original,
@@ -92,6 +97,7 @@ def _save_multi_patch_vis(
 
 def _bboxs_overlaid(
     all_patch_similarities: list[np.ndarray],
+    highest_similarities: list[float],
     proto_presents: list[bool],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     im_original: np.ndarray,
@@ -100,9 +106,15 @@ def _bboxs_overlaid(
     Produces copies of the original image overlaid with {all bounding boxes from patches, bounding boxes from patches
     that were similar enough to be considered present}. Present bounding boxes are green, absent boxes are red.
     """
-    bboxs_inds = [_bbox_indices(sim, latent_to_pixel) for sim in all_patch_similarities]
-    bboxs_color = [GREEN_RGB if present else RED_RGB for present in proto_presents]
-    bboxs = list(zip(bboxs_inds, bboxs_color))
+    bboxs_inds = [
+        _bbox_indices(sims, latent_to_pixel) for sims in all_patch_similarities
+    ]
+    bboxs_color = [_bbox_color(sim) for sim in highest_similarities]
+    bboxs_opacities = [Opacity(sim) for sim in highest_similarities]
+    bboxs = [
+        Bbox(inds, color, opacity)
+        for inds, color, opacity in zip(bboxs_inds, bboxs_color, bboxs_opacities)
+    ]
     present_bboxs = [bbox for bbox, present in zip(bboxs, proto_presents) if present]
 
     im_with_bboxs = _superimpose_bboxs(im_original, bboxs)
