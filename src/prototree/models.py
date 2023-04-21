@@ -4,6 +4,7 @@ from os import PathLike
 from pathlib import Path
 from typing import List, Literal, Optional, Union
 
+import lightning.pytorch as pl
 import numpy as np
 import torch
 import torch.nn as nn
@@ -186,7 +187,7 @@ class LeafRationalization:
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
-class ProtoTree(nn.Module):
+class ProtoTree(pl.LightningModule):
     def __init__(
         self,
         proto_base: PrototypeBase,
