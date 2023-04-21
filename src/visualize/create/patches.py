@@ -96,10 +96,9 @@ def closest_patch_imgs(
     im_original = inv_transform(image_proto_similarity.transformed_image)
 
     bbox_inds = _bbox_indices(patch_similarities, latent_to_pixel)
-    h_low, h_high, w_low, w_high = bbox_inds
     im_closest_patch = im_original[
-        h_low:h_high,
-        w_low:w_high,
+        bbox_inds.h_low:bbox_inds.h_high,
+        bbox_inds.w_low:bbox_inds.w_high,
         :,
     ]
 
