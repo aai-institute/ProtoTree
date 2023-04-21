@@ -14,6 +14,8 @@ from visualize.create.patches import (
     _to_rgb_heatmap,
     _superimpose_bboxs,
     _bbox_color,
+    Opacity,
+    Bbox,
 )
 
 log = logging.getLogger(__name__)
@@ -108,7 +110,11 @@ def _bboxs_overlaid(
         _bbox_indices(sims, latent_to_pixel) for sims in all_patch_similarities
     ]
     bboxs_color = [_bbox_color(sim) for sim in highest_similarities]
-    bboxs = list(zip(bboxs_inds, bboxs_color, highest_similarities))
+    bboxs_opacities = [Opacity(sim) for sim in highest_similarities]
+    bboxs = [
+        Bbox(inds, color, opacity)
+        for inds, color, opacity in zip(bboxs_inds, bboxs_color, bboxs_opacities)
+    ]
     present_bboxs = [bbox for bbox, present in zip(bboxs, proto_presents) if present]
 
     im_with_bboxs = _superimpose_bboxs(im_original, bboxs)
