@@ -113,29 +113,6 @@ class PrototypeBase(nn.Module):
 
         self.add_on.apply(_xavier_on_conv)
 
-    # TODO: remove all saving things - delegate to downstream code
-    def save(self, basedir: PathLike, file_name: str = "model.pth"):
-        self.eval()
-        basedir = Path(basedir)
-        basedir.mkdir(parents=True, exist_ok=True)
-        torch.save(self, basedir / file_name)
-
-    def save_state(
-        self,
-        basedir: PathLike,
-        state_file_name="model_state.pth",
-        pickle_file_name="tree.pkl",
-    ):
-        basedir = Path(basedir)
-        basedir.mkdir(parents=True, exist_ok=True)
-        torch.save(self.state_dict(), basedir / state_file_name)
-        with open(basedir / pickle_file_name, "wb") as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    @staticmethod
-    def load(directory_path: str):
-        return torch.load(directory_path + "/model.pth")
-
 
 class ProtoPNet(PrototypeBase):
     def __init__(
