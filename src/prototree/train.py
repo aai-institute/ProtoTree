@@ -7,14 +7,14 @@ import torch.utils.data
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.models import TreeSection
+from prototree.models import ProtoTree
 from prototree.node import Leaf, Node, NodeProbabilities
 
 log = logging.getLogger(__name__)
 
 
 def train_epoch(
-    tree: TreeSection,
+    model: ProtoTree,
     train_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     progress_desc: str = "Train Epoch",
@@ -26,23 +26,23 @@ def train_epoch(
         desc=progress_desc,
     )
     tqdm_loader.update()  # Stops earlier logging appearing after tqdm starts showing progress.
-    tree.train()
+    model.train()
 
     total_loss = 0.0
     total_acc = 0.0
     for batch_num, (x, y) in enumerate(tqdm_loader):
-        tree.train()
+        model.train()
         optimizer.zero_grad()
-        x, y = x.to(tree.device), y.to(tree.device)
-        logits, node_to_prob, predicting_leaves = tree.forward(x)
+        x, y = x.to(model.device), y.to(model.device)
+        logits, node_to_prob, predicting_leaves = model.forward(x)
         loss = F.nll_loss(logits, y)
         loss.backward()
         optimizer.step()
 
         smoothing_factor = 1 - 1 / n_batches
-        tree.eval()
+        model.eval()
         update_leaf_distributions(
-            tree.tree_root, y, logits.detach(), node_to_prob, smoothing_factor
+            model.tree_section.tree_root, y, logits.detach(), node_to_prob, smoothing_factor
         )
 
         y_pred = torch.argmax(logits, dim=1)
