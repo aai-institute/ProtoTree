@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.nn import functional as F
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
@@ -508,6 +509,66 @@ class TreeSection(nn.Module):
         log_p_arrivals = torch.cat(log_p_arrivals, dim=1)  # shape: (bs, n_leaves)
         predicting_leaf_idx = torch.argmax(log_p_arrivals, dim=1).long()  # shape: (bs,)
         return [leaves[i.item()] for i in predicting_leaf_idx]
+
+    @torch.no_grad()
+    def update_leaf_distributions(
+        self,
+        y_true: torch.Tensor,
+        logits: torch.Tensor,
+        node_to_prob: dict[Node, NodeProbabilities],
+        smoothing_factor: float,
+    ):
+        """
+        :param y_true: shape (batch_size)
+        :param logits: shape (batch_size, num_classes)
+        :param node_to_prob:
+        :param smoothing_factor:
+        """
+        batch_size, num_classes = logits.shape
+
+        y_true_one_hot = F.one_hot(y_true, num_classes=num_classes)
+        y_true_logits = torch.log(y_true_one_hot)
+
+        for leaf in self.leaves:
+            TreeSection._update_leaf_distribution(leaf, node_to_prob, logits, y_true_logits, smoothing_factor)
+
+    @staticmethod
+    def _update_leaf_distribution(
+        leaf: Leaf,
+        node_to_prob: dict[Node, NodeProbabilities],
+        logits: torch.Tensor,
+        y_true_logits: torch.Tensor,
+        smoothing_factor: float,
+    ):
+        """
+        :param leaf:
+        :param node_to_prob:
+        :param logits: of shape (batch_size, num_classes)
+        :param y_true_logits: of shape (batch_size, num_classes)
+        :param smoothing_factor:
+        :return:
+        """
+        # shape (batch_size, 1)
+        log_p_arrival = node_to_prob[leaf].log_p_arrival.unsqueeze(1)
+        # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
+        leaf_logits = leaf.y_logits()
+
+        # TODO: y_true_logits is mostly -Inf terms (the rest being 0s) that won't contribute to the total, and we are
+        #  also summing together tensors of different shapes. We should be able to express this more clearly and
+        #  efficiently by taking advantage of this sparsity.
+        log_dist_update = torch.logsumexp(
+            log_p_arrival + leaf_logits + y_true_logits - logits,
+            dim=0,
+        )
+
+        dist_update = torch.exp(log_dist_update)
+
+        # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
+        # weighted moving average, designed to ensure stability of the leaf class probability distributions (
+        # leaf.dist_params), by filtering out noise from minibatching in the optimization.
+        leaf.dist_params.mul_(smoothing_factor)
+
+        leaf.dist_params.add_(dist_update)
 
     def log_leaves_properties(self):
         """
