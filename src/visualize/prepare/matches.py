@@ -6,13 +6,13 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from prototree.img_similarity import ImageProtoSimilarity, img_proto_similarity
-from prototree.models import ProtoTree
+from prototree.models import TreeSection
 from prototree.node import InternalNode
 
 
 @torch.no_grad()
 def node_patch_matches(
-    tree: ProtoTree,
+    tree: TreeSection,
     loader: DataLoader,
     constrain_on_classes=False,
 ) -> dict[InternalNode, ImageProtoSimilarity]:
@@ -57,7 +57,7 @@ def node_patch_matches(
 
 @torch.no_grad()
 def _patch_match_candidates(
-    tree: ProtoTree, loader: DataLoader
+    tree: TreeSection, loader: DataLoader
 ) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
     # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
     #  commonality. However, we also need to beware of premature abstraction.

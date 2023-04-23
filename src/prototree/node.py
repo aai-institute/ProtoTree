@@ -619,30 +619,3 @@ class NodeProbabilities:
         return self.log_p_arrival.shape[0]
 
 
-def log_leaves_properties(
-    leaves: list[Leaf],
-    leaf_pruning_threshold: float,
-):
-    """
-    Logs information about which leaves have a sufficiently high confidence and whether there
-    are classes not predicted by any leaf. Useful for debugging the training process.
-
-    :param leaves:
-    :param leaf_pruning_threshold:
-    :return:
-    """
-    n_leaves_above_threshold = 0
-    classes_covered = set()
-    for leaf in leaves:
-        classes_covered.add(leaf.predicted_label())
-        if leaf.conf_predicted_label() > leaf_pruning_threshold:
-            n_leaves_above_threshold += 1
-
-    log.info(
-        f"Leaves with confidence > {leaf_pruning_threshold:.3f}: {n_leaves_above_threshold}"
-    )
-
-    num_classes = leaves[0].num_classes
-    class_labels_without_leaf = set(range(num_classes)) - classes_covered
-    if class_labels_without_leaf:
-        log.info(f"Never predicted classes: {class_labels_without_leaf}")

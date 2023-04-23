@@ -7,14 +7,14 @@ import torch.utils.data
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.models import ProtoTree
+from prototree.models import TreeSection
 from prototree.node import Leaf, Node, NodeProbabilities
 
 log = logging.getLogger(__name__)
 
 
 def train_epoch(
-    tree: ProtoTree,
+    tree: TreeSection,
     train_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     progress_desc: str = "Train Epoch",

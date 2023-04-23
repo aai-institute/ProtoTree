@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 
 @torch.no_grad()
-def eval_tree(
+def eval_model(
     tree: ProtoTree,
     data_loader: DataLoader,
     sampling_strategy: SamplingStrat = "distributed",
@@ -71,7 +71,7 @@ def single_leaf_eval(
 ):
     test_sampling_strategies: list[SingleLeafStrat] = ["sample_max"]
     for strategy in test_sampling_strategies:
-        acc = eval_tree(
+        acc = eval_model(
             projected_pruned_tree,
             test_loader,
             sampling_strategy=strategy,

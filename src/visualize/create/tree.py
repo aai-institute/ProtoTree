@@ -5,7 +5,7 @@ import pydot
 import torch
 from PIL import Image, ImageOps
 
-from prototree.models import ProtoTree
+from prototree.models import TreeSection
 from prototree.node import InternalNode, Leaf, Node
 from visualize.create.dot import (
     FONT,
@@ -24,7 +24,7 @@ INTERNAL_NODE_IMG_GAP = 4
 
 @torch.no_grad()
 def save_tree_visualization(
-    tree: ProtoTree, patches_dir: os.PathLike, tree_dir: os.PathLike, class_names: tuple
+    tree: TreeSection, patches_dir: os.PathLike, tree_dir: os.PathLike, class_names: tuple
 ):
     """
     Saves visualization as a DOT file and png.

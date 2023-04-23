@@ -5,7 +5,7 @@ import torch
 import torch.optim
 from torch.nn import Parameter
 
-from prototree.models import ProtoTree
+from prototree.models import TreeSection
 
 # Utility functions for handling parsed arguments
 
@@ -192,7 +192,7 @@ def get_milestones_list(milestones_str: str):
 
 
 def get_optimizer(
-    tree: ProtoTree,
+    tree: TreeSection,
     optimizer: Literal["SGD", "Adam", "AdamW"],
     net: str,
     dataset: str,

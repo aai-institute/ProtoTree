@@ -1,13 +1,13 @@
 import torch
 
 from prototree.img_similarity import ImageProtoSimilarity
-from prototree.models import ProtoTree
+from prototree.models import TreeSection
 from prototree.node import Node
 
 
 @torch.no_grad()
 def project_prototypes(
-    tree: ProtoTree, node_to_patch_matches: dict[Node, ImageProtoSimilarity]
+    tree: TreeSection, node_to_patch_matches: dict[Node, ImageProtoSimilarity]
 ):
     """
     Replaces each prototype with a given patch.

@@ -5,9 +5,9 @@ import logging
 
 import torch
 
-from prototree.eval import eval_tree, single_leaf_eval
-from prototree.models import ProtoTree, PrototypeBase
-from prototree.node import InternalNode, log_leaves_properties
+from prototree.eval import eval_model, single_leaf_eval
+from prototree.models import ProtoTree
+from prototree.node import InternalNode
 from visualize.create.explanation.decision_flows import (
     save_decision_flow_visualizations,
 )
@@ -20,26 +20,10 @@ from prototree.train import train_epoch
 from visualize.create.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
-from util.net import BASE_ARCHITECTURE_TO_FEATURES
 from visualize.create.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
-
-
-def save_tree(
-    tree: ProtoTree,
-    optimizer,
-    scheduler,
-    checkpoint_dir: str,
-    name="latest",
-):
-    basedir = Path(checkpoint_dir) / name
-    tree.eval()
-    tree.save(basedir)
-    tree.save_state(basedir)
-    torch.save(optimizer.state_dict(), basedir / "optimizer_state.pth")
-    torch.save(scheduler.state_dict(), basedir / "scheduler_state.pth")
 
 
 # TODO: remove dependency on args everywhere
@@ -96,22 +80,6 @@ def train_prototree(args: Namespace):
     num_classes = len(class_names)
     log.info(f"Num classes: {num_classes}")
 
-    # PREPARE MODEL
-    tree = create_proto_tree(
-        h_proto=h_proto,
-        w_proto=w_proto,
-        channels_proto=channels_proto,
-        num_classes=num_classes,
-        depth=depth,
-        backbone_net=backbone,
-        pretrained=pretrained,
-    )
-    log.info(
-        f"Max depth {depth}, so {tree.num_internal_nodes} internal nodes and {tree.num_leaves} leaves."
-    )
-    log.info(f"Running on {device=}")
-    tree = tree.to(device)
-
     # PREPARE PRUNING
     # Leaves that didn't learn anything will have a distribution close to torch.ones(num_classes) / num_classes, so we
     # prune leaves where no probability is fairly close to the "no-learning" value of 1 / num_classes. The
@@ -119,9 +87,26 @@ def train_prototree(args: Namespace):
     # TODO: Perhaps we should instead tune this threshold with a search algorithm.
     leaf_pruning_threshold = leaf_pruning_multiplier / num_classes
 
+    # PREPARE MODEL
+    model = ProtoTree(
+        h_proto=h_proto,
+        w_proto=w_proto,
+        channels_proto=channels_proto,
+        num_classes=num_classes,
+        depth=depth,
+        leaf_pruning_threshold=leaf_pruning_threshold,
+        backbone_net=backbone,
+        pretrained=pretrained,
+    )
+    log.info(
+        f"Max depth {depth}, so {model.tree_section.num_internal_nodes} internal nodes and {model.tree_section.num_leaves} leaves."
+    )
+    log.info(f"Running on {device=}")
+    model = model.to(device)
+
     # PREPARE OPTIMIZER AND SCHEDULER
     optimizer, params_to_freeze, params_to_train = get_optimizer(
-        tree,
+        model,
         optim_type,
         backbone,
         dataset,
@@ -167,63 +152,60 @@ def train_prototree(args: Namespace):
             unfreeze()
 
         train_epoch(
-            tree,
+            model,
             train_loader,
             optimizer,
             progress_desc=f"Training epoch {epoch}/{epochs}",
         )
         scheduler.step()
 
-        log_leaves_properties(
-            tree.leaves,
-            leaf_pruning_threshold,
-        )
+        model.log_state()
 
         if should_evaluate(epoch):
-            eval_tree(tree, test_loader, desc=f"Testing after epoch: {epoch}")
+            eval_model(model, test_loader, desc=f"Testing after epoch: {epoch}")
     log.info(f"Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE
-    tree = tree.eval()
+    model = model.eval()
 
-    log_leaves_properties(tree.leaves, leaf_pruning_threshold)
+    model.log_state()
 
-    _prune_tree(tree.tree_root, leaf_pruning_threshold)
+    _prune_tree(model.tree_root, leaf_pruning_threshold)
 
-    log_leaves_properties(tree.leaves, leaf_pruning_threshold)
-    pruned_acc = eval_tree(tree, test_loader, desc="Pruned only")
+    model.log_state()
+    pruned_acc = eval_model(model, test_loader, desc="Pruned only")
     log.info(f"\nTest acc. after pruning only: {pruned_acc:.3f}")
 
     # PROJECT
     log.info(
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
-    node_to_patch_matches = node_patch_matches(tree, project_loader)
-    project_prototypes(tree, node_to_patch_matches)  # TODO: Assess the impact of this.
-    log_leaves_properties(tree.leaves, leaf_pruning_threshold)
+    node_to_patch_matches = node_patch_matches(model, project_loader)
+    project_prototypes(model, node_to_patch_matches)  # TODO: Assess the impact of this.
+    model.log_state()
 
-    pruned_and_proj_acc = eval_tree(tree, test_loader)
+    pruned_and_proj_acc = eval_model(model, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
-    single_leaf_eval(tree, test_loader, "Pruned and projected")
+    single_leaf_eval(model, test_loader, "Pruned and projected")
 
     def explanations_provider():
         return data_explanations(
-            tree, test_loader, class_names
+            model, test_loader, class_names
         )  # This is lazy to enable iterator reuse.
 
-    tree.tree_root.print_tree()
+    model.tree_root.print_tree()
 
     # SAVE VISUALIZATIONS
     vis_dir = output_dir / "visualizations"
     patches_dir = vis_dir / "patches"
     save_patch_visualizations(node_to_patch_matches, patches_dir)
-    save_tree_visualization(tree, patches_dir, vis_dir / "tree", class_names)
+    save_tree_visualization(model, patches_dir, vis_dir / "tree", class_names)
     save_multi_patch_visualizations(explanations_provider(), vis_dir / "explanations")
     save_decision_flow_visualizations(
         explanations_provider(), patches_dir, vis_dir / "explanations"
     )
 
-    return tree
+    return model
 
 
 def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
@@ -251,27 +233,7 @@ def create_proto_tree(
     backbone_net="resnet50_inat",
     pretrained=True,
 ):
-    # TODO: Put in a class.
-    """
-    :param h_proto: height of prototype
-    :param w_proto: width of prototype
-    :param channels_proto: number of input channels for the prototypes,
-        coincides with the output channels of the net+add_on layers, prior to prototype layers.
-    :param num_classes:
-    :param depth: depth of tree, will result in 2^depth leaves and 2^depth-1 internal nodes
-    :param backbone_net: name of backbone, e.g. resnet18
-    :param pretrained:
-    :return:
-    """
-    backbone = BASE_ARCHITECTURE_TO_FEATURES[backbone_net](pretrained=pretrained)
-    num_prototypes = 2 ** depth - 1
-    proto_base = PrototypeBase(
-        num_prototypes=num_prototypes,
-        prototype_shape=(channels_proto, w_proto, h_proto),
-        backbone=backbone
-    )
-    proto_base.apply_xavier()
-    tree = ProtoTree(proto_base, num_classes=num_classes, depth=depth)
+
     return tree
 
 

@@ -11,10 +11,10 @@ import torch.nn as nn
 from torch import Tensor
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
-from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
+from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
 from prototree.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
-from util.net import default_add_on_layers
+from util.net import default_add_on_layers, BASE_ARCHITECTURE_TO_FEATURES
 
 
 class PrototypeBase(nn.Module):
@@ -164,100 +164,39 @@ class LeafRationalization:
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
-class ProtoTree(pl.LightningModule):
-    def __init__(
-        self,
-        proto_base: PrototypeBase,
-        num_classes: int,
-        depth: int
-    ):
+class ProtoTree(nn.Module):
+    def __init__(self,
+                 h_proto: int,
+                 w_proto: int,
+                 channels_proto: int,
+                 num_classes: int,
+                 depth: int,
+                 leaf_pruning_threshold: float,
+                 backbone_net="resnet50_inat",
+                 pretrained=True,
+                 ):
+        """
+        :param h_proto: height of prototype
+        :param w_proto: width of prototype
+        :param channels_proto: number of input channels for the prototypes,
+            coincides with the output channels of the net+add_on layers, prior to prototype layers.
+        :param num_classes:
+        :param depth: depth of tree, will result in 2^depth leaves and 2^depth-1 internal nodes
+        :param backbone_net: name of backbone, e.g. resnet18
+        :param pretrained:
+        """
         super().__init__()
-        self.proto_base = proto_base
 
-        # TODO: Use dependency injection for the second half of the model?
-        self.num_classes = num_classes
-        self.tree_root = create_tree(depth, num_classes)
-        self.node_to_proto_idx = {
-            node: idx
-            for idx, node in enumerate(self.tree_root.descendant_internal_nodes)
-        }
-
-    def to(self, *args, **kwargs):
-        super().to(*args, **kwargs)
-        self.proto_base.to(*args, **kwargs)
-        for leaf in self.tree_root.leaves:
-            leaf.to(*args, **kwargs)
-        return self
-
-    def _get_node_to_log_p_right(self, similarities: torch.Tensor):
-        return {node: -similarities[:, i] for node, i in self.node_to_proto_idx.items()}
-
-    def get_node_to_log_p_right(self, x: torch.Tensor) -> dict[Node, torch.Tensor]:
-        """
-        Extracts the mapping `node->log_p_right` from the prototype similarities.
-        """
-        similarities = self.proto_base.forward(x)
-        return self._get_node_to_log_p_right(similarities)
-
-    @staticmethod
-    def _node_to_probs_from_p_right(
-        node_to_log_p_right: dict[Node, torch.Tensor], root: InternalNode
-    ):
-        """
-        This method was separated out from get_node_to_probs to
-        highlight that it doesn't directly depend on the input x and could
-        in principle be moved to the forward of the tree or somewhere else.
-
-        :param node_to_log_p_right: computed from the similarities, see get_node_to_log_p_right
-        :param root: a root of a tree from which node_to_log_p_right was computed
-        :return:
-        """
-        root_log_p_right = node_to_log_p_right[root]
-
-        root_probs = NodeProbabilities(
-            log_p_arrival=torch.zeros_like(
-                root_log_p_right, device=root_log_p_right.device
-            ),
-            log_p_right=root_log_p_right,
+        # TODO: Use dependency injection here?
+        backbone = BASE_ARCHITECTURE_TO_FEATURES[backbone_net](pretrained=pretrained)
+        num_prototypes = 2 ** depth - 1
+        self.proto_base = PrototypeBase(
+            num_prototypes=num_prototypes,
+            prototype_shape=(channels_proto, w_proto, h_proto),
+            backbone=backbone
         )
-        result = {root: root_probs}
-
-        def add_strict_descendants(node: Union[InternalNode, Leaf]):
-            """
-            Adds the log probability of arriving at all strict descendants of node to the result dict.
-            """
-            if node.is_leaf:
-                return
-            n_probs = result[node]
-            log_p_right_right = node_to_log_p_right.get(node.right)
-            log_p_right_left = node_to_log_p_right.get(node.left)
-
-            log_p_arrival_left = n_probs.log_p_arrival_left
-            log_p_arrival_right = n_probs.log_p_arrival_right
-            result[node.left] = NodeProbabilities(
-                log_p_arrival=log_p_arrival_left,
-                log_p_right=log_p_right_left,
-            )
-            result[node.right] = NodeProbabilities(
-                log_p_arrival=log_p_arrival_right,
-                log_p_right=log_p_right_right,
-            )
-
-            add_strict_descendants(node.left)
-            add_strict_descendants(node.right)
-
-        add_strict_descendants(root)
-        return result
-
-    def get_node_to_probs(self, x: torch.Tensor) -> dict[Node, NodeProbabilities]:
-        """
-        Computes the log probabilities (left, right, arrival) for all nodes for the input x.
-
-        :param x: input images of shape (batch_size, channels, height, width)
-        :return: dictionary mapping each node to a dataclass containing tensors of shape (batch_size,)
-        """
-        node_to_log_p_right = self.get_node_to_log_p_right(x)
-        return self._node_to_probs_from_p_right(node_to_log_p_right, self.tree_root)
+        self.proto_base.apply_xavier()
+        self.tree_section = TreeSection(num_classes=num_classes, depth=depth, leaf_pruning_threshold=leaf_pruning_threshold)
 
     def forward(
         self,
@@ -277,16 +216,17 @@ class ProtoTree(pl.LightningModule):
         :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves
         """
 
-        node_to_probs = self.get_node_to_probs(x)
+        similarities = self.proto_base.forward(x)
+        node_to_probs = self.tree_section.get_node_to_probs(similarities)
 
         # TODO: Find a better approach for this branching logic (https://martinfowler.com/bliki/FlagArgument.html).
         match self.training, sampling_strategy:
             case _, "distributed":
                 predicting_leaves = None
-                logits = self.tree_root.forward(node_to_probs)
+                logits = self.tree_section.tree_root.forward(node_to_probs)
             case False, "sample_max" | "greedy":
-                predicting_leaves = get_predicting_leaves(
-                    self.tree_root, node_to_probs, sampling_strategy
+                predicting_leaves = TreeSection.get_predicting_leaves(
+                    self.tree_section.tree_root, node_to_probs, sampling_strategy
                 )
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
@@ -349,7 +289,7 @@ class ProtoTree(pl.LightningModule):
         Returns:
             List of rationalizations
         """
-        patches, dists = self.patches(x), self.distances(
+        patches, dists = self.proto_base.patches(x), self.proto_base.distances(
             x
         )  # Common subexpression elimination possible, if necessary.
 
@@ -360,7 +300,7 @@ class ProtoTree(pl.LightningModule):
             leaf_ancestors = predicting_leaf.ancestors
             ancestor_similarities: list[ImageProtoSimilarity] = []
             for leaf_ancestor in leaf_ancestors:
-                node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
+                node_proto_idx = self.tree_section.node_to_proto_idx[leaf_ancestor]
 
                 node_distances = dists_i[node_proto_idx, :, :]
                 similarity = img_proto_similarity(
@@ -392,6 +332,106 @@ class ProtoTree(pl.LightningModule):
         logits = self.forward(x, strategy)[0]
         return logits.softmax(dim=1)
 
+    def log_state(self):
+        self.tree_section.log_leaves_properties()
+
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        self.proto_base.to(*args, **kwargs)
+        self.tree_section.to(*args, **kwargs)
+        return self
+
+    @property
+    def device(self):
+        return self.proto_base.device
+
+
+class TreeSection(nn.Module):
+    def __init__(
+        self,
+        num_classes: int,
+        depth: int,
+        leaf_pruning_threshold: float
+    ):
+        super().__init__()
+
+        self.num_classes = num_classes
+        self.tree_root = create_tree(depth, num_classes)
+        self.node_to_proto_idx = {
+            node: idx
+            for idx, node in enumerate(self.tree_root.descendant_internal_nodes)
+        }
+        self.leaf_pruning_threshold = leaf_pruning_threshold
+
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        for leaf in self.tree_root.leaves:
+            leaf.to(*args, **kwargs)
+        return self
+
+    def get_node_to_log_p_right(self, similarities: torch.Tensor) -> dict[Node, torch.Tensor]:
+        return {node: -similarities[:, i] for node, i in self.node_to_proto_idx.items()}
+
+    @staticmethod
+    def _node_to_probs_from_p_right(
+        node_to_log_p_right: dict[Node, torch.Tensor], root: InternalNode
+    ):
+        """
+        This method was separated out from get_node_to_probs to
+        highlight that it doesn't directly depend on the input x and could
+        in principle be moved to the forward of the tree or somewhere else.
+
+        :param node_to_log_p_right: computed from the similarities, see get_node_to_log_p_right
+        :param root: a root of a tree from which node_to_log_p_right was computed
+        :return:
+        """
+        root_log_p_right = node_to_log_p_right[root]
+
+        root_probs = NodeProbabilities(
+            log_p_arrival=torch.zeros_like(
+                root_log_p_right, device=root_log_p_right.device
+            ),
+            log_p_right=root_log_p_right,
+        )
+        result = {root: root_probs}
+
+        def add_strict_descendants(node: Union[InternalNode, Leaf]):
+            """
+            Adds the log probability of arriving at all strict descendants of node to the result dict.
+            """
+            if node.is_leaf:
+                return
+            n_probs = result[node]
+            log_p_right_right = node_to_log_p_right.get(node.right)
+            log_p_right_left = node_to_log_p_right.get(node.left)
+
+            log_p_arrival_left = n_probs.log_p_arrival_left
+            log_p_arrival_right = n_probs.log_p_arrival_right
+            result[node.left] = NodeProbabilities(
+                log_p_arrival=log_p_arrival_left,
+                log_p_right=log_p_right_left,
+            )
+            result[node.right] = NodeProbabilities(
+                log_p_arrival=log_p_arrival_right,
+                log_p_right=log_p_right_right,
+            )
+
+            add_strict_descendants(node.left)
+            add_strict_descendants(node.right)
+
+        add_strict_descendants(root)
+        return result
+
+    def get_node_to_probs(self, similarities: torch.Tensor) -> dict[Node, NodeProbabilities]:
+        """
+        Computes the log probabilities (left, right, arrival) for all nodes for the input x.
+
+        :param similarities:
+        :return: dictionary mapping each node to a dataclass containing tensors of shape (batch_size,)
+        """
+        node_to_log_p_right = self.get_node_to_log_p_right(similarities)
+        return self._node_to_probs_from_p_right(node_to_log_p_right, self.tree_root)
+
     @property
     def all_nodes(self) -> set:
         return self.tree_root.descendants
@@ -412,63 +452,80 @@ class ProtoTree(pl.LightningModule):
     def num_leaves(self):
         return self.tree_root.num_leaves
 
-    @property
-    def device(self):
-        return self.proto_base.device
+    @staticmethod
+    def get_predicting_leaves(
+        root: InternalNode,
+        node_to_probs: dict[Node, NodeProbabilities],
+        sampling_strategy: SingleLeafStrat,
+    ) -> List[Leaf]:
+        """
+        Selects one leaf for each entry of the batch covered in node_to_probs.
+        """
+        match sampling_strategy:
+            case "sample_max":
+                return TreeSection._get_max_p_arrival_leaves(root.leaves, node_to_probs)
+            case "greedy":
+                return TreeSection._get_predicting_leaves_greedily(root, node_to_probs)
+            case other:
+                raise ValueError(f"Unknown sampling strategy {other}")
 
+    @staticmethod
+    def _get_predicting_leaves_greedily(
+        root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
+    ) -> List[Leaf]:
+        """
+        Selects one leaf for each entry of the batch covered in node_to_probs.
+        """
+        neg_log_2 = -np.log(2)
 
-def get_predicting_leaves(
-    root: InternalNode,
-    node_to_probs: dict[Node, NodeProbabilities],
-    sampling_strategy: SingleLeafStrat,
-) -> List[Leaf]:
-    """
-    Selects one leaf for each entry of the batch covered in node_to_probs.
-    """
-    match sampling_strategy:
-        case "sample_max":
-            return _get_max_p_arrival_leaves(root.leaves, node_to_probs)
-        case "greedy":
-            return _get_predicting_leaves_greedily(root, node_to_probs)
-        case other:
-            raise ValueError(f"Unknown sampling strategy {other}")
+        def get_leaf_for_sample(sample_idx: int):
+            # walk through greedily from root to leaf using probabilities for the selected sample
+            cur_node = root
+            while cur_node.is_internal:
+                cur_probs = node_to_probs[cur_node]
+                log_p_left = cur_probs.log_p_left[sample_idx].item()
+                if log_p_left > neg_log_2:
+                    cur_node = cur_node.left
+                else:
+                    cur_node = cur_node.right
+            return cur_node
 
+        batch_size = node_to_probs[root].batch_size
+        return [get_leaf_for_sample(i) for i in range(batch_size)]
 
-def _get_predicting_leaves_greedily(
-    root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
-) -> List[Leaf]:
-    """
-    Selects one leaf for each entry of the batch covered in node_to_probs.
-    """
-    neg_log_2 = -np.log(2)
+    @staticmethod
+    def _get_max_p_arrival_leaves(
+        leaves: List[Leaf], node_to_probs: dict[Node, NodeProbabilities]
+    ) -> List[Leaf]:
+        """
+        Selects one leaf for each entry of the batch covered in node_to_probs.
 
-    def get_leaf_for_sample(sample_idx: int):
-        # walk through greedily from root to leaf using probabilities for the selected sample
-        cur_node = root
-        while cur_node.is_internal:
-            cur_probs = node_to_probs[cur_node]
-            log_p_left = cur_probs.log_p_left[sample_idx].item()
-            if log_p_left > neg_log_2:
-                cur_node = cur_node.left
-            else:
-                cur_node = cur_node.right
-        return cur_node
+        :param leaves:
+        :param node_to_probs: see `ProtoTree.get_node_to_probs`
+        :return: list of leaves of length `node_to_probs.batch_size`
+        """
+        log_p_arrivals = [node_to_probs[leaf].log_p_arrival.unsqueeze(1) for leaf in leaves]
+        log_p_arrivals = torch.cat(log_p_arrivals, dim=1)  # shape: (bs, n_leaves)
+        predicting_leaf_idx = torch.argmax(log_p_arrivals, dim=1).long()  # shape: (bs,)
+        return [leaves[i.item()] for i in predicting_leaf_idx]
 
-    batch_size = node_to_probs[root].batch_size
-    return [get_leaf_for_sample(i) for i in range(batch_size)]
+    def log_leaves_properties(self):
+        """
+        Logs information about which leaves have a sufficiently high confidence and whether there
+        are classes not predicted by any leaf. Useful for debugging the training process.
+        """
+        n_leaves_above_threshold = 0
+        classes_covered = set()
+        for leaf in self.leaves:
+            classes_covered.add(leaf.predicted_label())
+            if leaf.conf_predicted_label() > self.leaf_pruning_threshold:
+                n_leaves_above_threshold += 1
 
+        log.info(
+            f"Leaves with confidence > {self.leaf_pruning_threshold:.3f}: {n_leaves_above_threshold}"
+        )
 
-def _get_max_p_arrival_leaves(
-    leaves: List[Leaf], node_to_probs: dict[Node, NodeProbabilities]
-) -> List[Leaf]:
-    """
-    Selects one leaf for each entry of the batch covered in node_to_probs.
-
-    :param leaves:
-    :param node_to_probs: see `ProtoTree.get_node_to_probs`
-    :return: list of leaves of length `node_to_probs.batch_size`
-    """
-    log_p_arrivals = [node_to_probs[leaf].log_p_arrival.unsqueeze(1) for leaf in leaves]
-    log_p_arrivals = torch.cat(log_p_arrivals, dim=1)  # shape: (bs, n_leaves)
-    predicting_leaf_idx = torch.argmax(log_p_arrivals, dim=1).long()  # shape: (bs,)
-    return [leaves[i.item()] for i in predicting_leaf_idx]
+        num_classes = self.leaves[0].num_classes
+        class_labels_without_leaf = set(range(num_classes)) - classes_covered
+        if class_labels_without_leaf:
+            log.info(f"Never predicted classes: {class_labels_without_leaf}")
