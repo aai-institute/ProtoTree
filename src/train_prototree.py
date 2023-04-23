@@ -251,8 +251,8 @@ def create_proto_tree(
     backbone_net="resnet50_inat",
     pretrained=True,
 ):
+    # TODO: Put in a class.
     """
-
     :param h_proto: height of prototype
     :param w_proto: width of prototype
     :param channels_proto: number of input channels for the prototypes,
