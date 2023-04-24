@@ -201,7 +201,13 @@ class ProtoTree(pl.LightningModule):
         self.automatic_optimization = False
 
     def training_step(self, batch, batch_idx):
-        nonlinear_optim, nonlinear_scheduler, freeze_epochs, params_to_freeze, params_to_train = self.optimizers()
+        (
+            nonlinear_optim,
+            nonlinear_scheduler,
+            freeze_epochs,
+            params_to_freeze,
+            params_to_train,
+        ) = self.optimizers()
         x, y = batch
 
         if batch_idx == 0:

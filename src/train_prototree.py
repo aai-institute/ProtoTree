@@ -16,8 +16,13 @@ from visualize.prepare.explanations import data_explanations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
 from prototree.prune import prune_unconfident_leaves
-from prototree.train import train_epoch, get_nonlinear_optimizer, NonlinearOptimParams, NonlinearSchedulerParams, \
-    get_nonlinear_scheduler
+from prototree.train import (
+    train_epoch,
+    get_nonlinear_optimizer,
+    NonlinearOptimParams,
+    NonlinearSchedulerParams,
+    get_nonlinear_scheduler,
+)
 from visualize.create.patches import save_patch_visualizations
 from util.args import get_args
 from util.data import get_dataloaders
@@ -103,9 +108,7 @@ def train_prototree(args: Namespace):
         dataset=dataset,
     )
     nonlinear_scheduler_params = NonlinearSchedulerParams(
-        optim_params=nonlinear_optim_params,
-        milestones=milestones,
-        gamma=gamma
+        optim_params=nonlinear_optim_params, milestones=milestones, gamma=gamma
     )
 
     # PREPARE MODEL
@@ -191,13 +194,13 @@ def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
 
 
 def create_proto_tree(
-        h_proto: int,
-        w_proto: int,
-        channels_proto: int,
-        num_classes: int,
-        depth: int,
-        backbone_net="resnet50_inat",
-        pretrained=True,
+    h_proto: int,
+    w_proto: int,
+    channels_proto: int,
+    num_classes: int,
+    depth: int,
+    backbone_net="resnet50_inat",
+    pretrained=True,
 ):
     return tree
 

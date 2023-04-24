@@ -86,12 +86,20 @@ class NonlinearSchedulerParams:
 
 
 def get_nonlinear_scheduler(model: ProtoTree, params: NonlinearSchedulerParams):
-    optimizer, params_to_freeze, params_to_train = get_nonlinear_optimizer(model, params.optim_params)
+    optimizer, params_to_freeze, params_to_train = get_nonlinear_optimizer(
+        model, params.optim_params
+    )
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=params.milestones, gamma=params.gamma
     )
 
-    return optimizer, scheduler, params.optim_params.freeze_epochs, params_to_freeze, params_to_train
+    return (
+        optimizer,
+        scheduler,
+        params.optim_params.freeze_epochs,
+        params_to_freeze,
+        params_to_train,
+    )
 
 
 def get_nonlinear_optimizer(
