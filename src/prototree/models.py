@@ -10,6 +10,7 @@ from torch.nn import functional as F
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
+from prototree.train import NonlinearSchedulerParams, get_nonlinear_scheduler
 from prototree.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, NAME_TO_NET
@@ -154,7 +155,7 @@ class LeafRationalization:
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
-class ProtoTree(nn.Module):
+class ProtoTree(pl.LightningModule):
     def __init__(
         self,
         h_proto: int,
@@ -164,6 +165,7 @@ class ProtoTree(nn.Module):
         depth: int,
         leaf_pruning_threshold: float,
         leaf_opt_ewma_alpha: float,
+        nonlinear_scheduler_params: NonlinearSchedulerParams,
         backbone_name="resnet50_inat",
         pretrained=True,
     ):
@@ -194,6 +196,24 @@ class ProtoTree(nn.Module):
             leaf_pruning_threshold=leaf_pruning_threshold,
             leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
         )
+
+        self.nonlinear_scheduler_params = nonlinear_scheduler_params
+        self.automatic_optimization = False
+
+    def training_step(self, batch, batch_idx):
+        nonlinear_optim, nonlinear_scheduler, params_to_freeze, params_to_train = self.optimizers()
+        x, y = batch
+
+        nonlinear_optim.zero_grad()
+        logits, node_to_prob, predicting_leaves = self.forward(x)
+        loss = F.nll_loss(logits, y)
+        loss.backward()
+        nonlinear_optim.step()
+
+        self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
+
+    def configure_optimizers(self):
+        return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
 
     def forward(
         self,

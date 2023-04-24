@@ -16,7 +16,8 @@ from visualize.prepare.explanations import data_explanations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
 from prototree.prune import prune_unconfident_leaves
-from prototree.train import train_epoch, get_nonlinear_optimizer, NonlinearOptimParams
+from prototree.train import train_epoch, get_nonlinear_optimizer, NonlinearOptimParams, NonlinearSchedulerParams, \
+    get_nonlinear_scheduler
 from visualize.create.patches import save_patch_visualizations
 from util.args import get_args
 from util.data import get_dataloaders
@@ -43,7 +44,7 @@ def train_prototree(args: Namespace):
     batch_size = args.batch_size
     lr = args.lr
     lr_block = args.lr_block
-    lr_net = args.lr_net
+    lr_backbone = args.lr_net
     momentum = args.momentum
     weight_decay = args.weight_decay
 
@@ -90,6 +91,22 @@ def train_prototree(args: Namespace):
     n_training_batches = len(train_loader)
     leaf_opt_ewma_alpha = 1 / n_training_batches
 
+    nonlinear_optim_params = NonlinearOptimParams(
+        optim_type=optim_type,
+        backbone_name=backbone_name,
+        momentum=momentum,
+        weight_decay=weight_decay,
+        lr=lr,
+        lr_block=lr_block,
+        lr_backbone=lr_backbone,
+        dataset=dataset,
+    )
+    nonlinear_scheduler_params = NonlinearSchedulerParams(
+        optim_params=nonlinear_optim_params,
+        milestones=milestones,
+        gamma=gamma
+    )
+
     # PREPARE MODEL
     model = ProtoTree(
         h_proto=h_proto,
@@ -99,29 +116,13 @@ def train_prototree(args: Namespace):
         depth=depth,
         leaf_pruning_threshold=leaf_pruning_threshold,
         leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
+        nonlinear_scheduler_params=nonlinear_scheduler_params,
         backbone_name=backbone_name,
         pretrained=pretrained,
     )
     log.info(
-        f"Max depth {depth}, so {model.tree_section.num_internal_nodes} internal nodes and {model.tree_section.num_leaves} leaves."
-    )
-    log.info(f"Running on {device=}")
-    model = model.to(device)
-
-    nonlinear_optim_params = NonlinearOptimParams(
-        optim_type=optim_type,
-        backbone_name=backbone_name,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        lr=lr,
-        lr_block=lr_block,
-        lr_backbone=lr_net,
-        dataset=dataset,
-    )
-    # PREPARE OPTIMIZER AND SCHEDULER
-    optimizer, params_to_freeze, params_to_train = get_nonlinear_optimizer(model, nonlinear_optim_params)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        optimizer=optimizer, milestones=milestones, gamma=gamma
+        f"Max depth {depth}, so {model.tree_section.num_internal_nodes} internal nodes and "
+        f"{model.tree_section.num_leaves} leaves."
     )
 
     # TRAINING HELPERS
@@ -150,23 +151,7 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     log.info("Starting training.")
-    for epoch in range(1, epochs + 1):
-        if params_frozen and epoch > freeze_epochs:
-            log.info(f"\nUnfreezing network at {epoch=}.")
-            unfreeze()
 
-        train_epoch(
-            model,
-            train_loader,
-            optimizer,
-            progress_desc=f"Training epoch {epoch}/{epochs}",
-        )
-        scheduler.step()
-
-        model.log_state()
-
-        if should_evaluate(epoch):
-            eval_model(model, test_loader, desc=f"Testing after epoch: {epoch}")
     log.info(f"Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE

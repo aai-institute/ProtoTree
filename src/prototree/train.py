@@ -10,7 +10,7 @@ from torch.nn import Parameter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.models import ProtoTree, TreeSection, ProtoBase
+from prototree.models import ProtoTree
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +75,22 @@ class NonlinearOptimParams:
     lr_block: float
     lr_backbone: float
     dataset: str  # TODO: We shouldn't have dataset specific stuff here.
+
+
+@dataclass
+class NonlinearSchedulerParams:
+    optim_params: NonlinearOptimParams
+    milestones: list[int]
+    gamma: float
+
+
+def get_nonlinear_scheduler(model: ProtoTree, params: NonlinearSchedulerParams):
+    optimizer, params_to_freeze, params_to_train = get_nonlinear_optimizer(model, params.optim_params)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer=optimizer, milestones=params.milestones, gamma=params.gamma
+    )
+
+    return optimizer, scheduler, params_to_freeze, params_to_train
 
 
 def get_nonlinear_optimizer(
