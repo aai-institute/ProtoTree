@@ -201,8 +201,23 @@ class ProtoTree(pl.LightningModule):
         self.automatic_optimization = False
 
     def training_step(self, batch, batch_idx):
-        nonlinear_optim, nonlinear_scheduler, params_to_freeze, params_to_train = self.optimizers()
+        nonlinear_optim, nonlinear_scheduler, freeze_epochs, params_to_freeze, params_to_train = self.optimizers()
         x, y = batch
+
+        if batch_idx == 0:
+            current_epoch = self.trainer.current_epoch
+            if current_epoch > 0:
+                nonlinear_scheduler.step()
+
+            if freeze_epochs > 0:
+                if current_epoch == 0:
+                    log.info(f"Freezing network for {freeze_epochs} epochs.")
+                    for param in params_to_freeze:
+                        param.requires_grad = False
+                elif current_epoch == freeze_epochs + 1:
+                    log.info(f"Unfreezing network on epoch {current_epoch}.")
+                    for param in params_to_freeze:
+                        param.requires_grad = True
 
         nonlinear_optim.zero_grad()
         logits, node_to_prob, predicting_leaves = self.forward(x)

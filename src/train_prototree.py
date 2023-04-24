@@ -99,6 +99,7 @@ def train_prototree(args: Namespace):
         lr=lr,
         lr_block=lr_block,
         lr_backbone=lr_backbone,
+        freeze_epochs=freeze_epochs,
         dataset=dataset,
     )
     nonlinear_scheduler_params = NonlinearSchedulerParams(
@@ -124,30 +125,6 @@ def train_prototree(args: Namespace):
         f"Max depth {depth}, so {model.tree_section.num_internal_nodes} internal nodes and "
         f"{model.tree_section.num_leaves} leaves."
     )
-
-    # TRAINING HELPERS
-    def should_evaluate(candidate_epoch: int):
-        if evaluate_each_epoch > 0 and candidate_epoch == 0:
-            return False
-        return candidate_epoch % evaluate_each_epoch == 0 or candidate_epoch == epochs
-
-    params_frozen = False
-
-    def freeze():
-        nonlocal params_frozen
-        for param in params_to_freeze:
-            param.requires_grad = False
-        params_frozen = True
-
-    def unfreeze():
-        nonlocal params_frozen
-        for param in params_to_freeze:
-            param.requires_grad = True
-        params_frozen = False
-
-    if freeze_epochs > 0:
-        log.info(f"Freezing network for {freeze_epochs} epochs.")
-        freeze()
 
     # TRAIN
     log.info("Starting training.")

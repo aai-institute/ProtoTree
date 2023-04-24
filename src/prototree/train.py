@@ -74,6 +74,7 @@ class NonlinearOptimParams:
     lr: float
     lr_block: float
     lr_backbone: float
+    freeze_epochs: int
     dataset: str  # TODO: We shouldn't have dataset specific stuff here.
 
 
@@ -90,7 +91,7 @@ def get_nonlinear_scheduler(model: ProtoTree, params: NonlinearSchedulerParams):
         optimizer=optimizer, milestones=params.milestones, gamma=params.gamma
     )
 
-    return optimizer, scheduler, params_to_freeze, params_to_train
+    return optimizer, scheduler, params.optim_params.freeze_epochs, params_to_freeze, params_to_train
 
 
 def get_nonlinear_optimizer(
