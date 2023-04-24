@@ -3,66 +3,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 import torch
-import torch.nn.functional as F
 import torch.optim
 import torch.utils.data
 from torch.nn import Parameter
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-
-from prototree.models import ProtoTree
 
 log = logging.getLogger(__name__)
-
-
-def train_epoch(
-    model: ProtoTree,
-    train_loader: DataLoader,
-    optimizer: torch.optim.Optimizer,
-    progress_desc: str = "Train Epoch",
-) -> dict:
-    n_batches = len(train_loader)
-
-    tqdm_loader = tqdm(
-        train_loader,
-        desc=progress_desc,
-    )
-    tqdm_loader.update()  # Stops earlier logging appearing after tqdm starts showing progress.
-    model.train()
-
-    total_loss = 0.0
-    total_acc = 0.0
-    for batch_num, (x, y) in enumerate(tqdm_loader):
-        model.train()
-        optimizer.zero_grad()
-        x, y = x.to(model.device), y.to(model.device)
-        logits, node_to_prob, predicting_leaves = model.forward(x)
-        loss = F.nll_loss(logits, y)
-        loss.backward()
-        optimizer.step()
-
-        model.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
-
-        model.eval()
-        y_pred = torch.argmax(logits, dim=1)
-        acc = torch.sum(y_pred == y).item() / len(x)
-        tqdm_loader.set_postfix_str(f"batch: loss={loss.item():.5f}, {acc=:.5f}")
-        total_loss += loss.item()
-        total_acc += acc
-
-        if (
-            batch_num == n_batches - 1
-        ):  # TODO: Hack due to https://github.com/tqdm/tqdm/issues/1369
-            avg_loss = total_loss / n_batches
-            avg_acc = total_acc / n_batches
-            tqdm_loader.set_postfix_str(
-                f"average: loss={avg_loss:.5f}, acc={avg_acc:.5f}"
-            )
-
-    return {
-        "loss": avg_loss,
-        "train_accuracy": avg_acc,
-    }
 
 
 @dataclass
@@ -85,26 +30,21 @@ class NonlinearSchedulerParams:
     gamma: float
 
 
-def get_nonlinear_scheduler(model: ProtoTree, params: NonlinearSchedulerParams):
-    optimizer, params_to_freeze, params_to_train = get_nonlinear_optimizer(
+def get_nonlinear_scheduler(model, params: NonlinearSchedulerParams):
+    optimizer = get_nonlinear_optimizer(
         model, params.optim_params
     )
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=params.milestones, gamma=params.gamma
     )
+    scheduler.freeze_epochs = params.optim_params.freeze_epochs
 
-    return (
-        optimizer,
-        scheduler,
-        params.optim_params.freeze_epochs,
-        params_to_freeze,
-        params_to_train,
-    )
+    return [optimizer], [scheduler]
 
 
 def get_nonlinear_optimizer(
-    model: ProtoTree, optim_params: NonlinearOptimParams
-) -> tuple[torch.optim.Optimizer, list[Parameter], list[Parameter]]:
+    model, optim_params: NonlinearOptimParams
+) -> torch.optim.Optimizer:
     """
     :return: the optimizer, parameter set that can be frozen, and parameter set of the net that will be trained
     """
@@ -176,4 +116,7 @@ def get_nonlinear_optimizer(
         raise ValueError(
             f"Unknown optimizer type: {optim_params.optim_type}. Supported optimizers are SGD, Adam, and AdamW."
         )
-    return optimizer, params_to_freeze, params_to_train
+
+    optimizer.params_to_freeze = params_to_freeze
+    optimizer.params_to_train = params_to_train
+    return optimizer

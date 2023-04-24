@@ -201,13 +201,9 @@ class ProtoTree(pl.LightningModule):
         self.automatic_optimization = False
 
     def training_step(self, batch, batch_idx):
-        (
-            nonlinear_optim,
-            nonlinear_scheduler,
-            freeze_epochs,
-            params_to_freeze,
-            params_to_train,
-        ) = self.optimizers()
+        nonlinear_optim = self.optimizers()
+        nonlinear_scheduler = self.lr_schedulers()
+
         x, y = batch
 
         if batch_idx == 0:
@@ -216,14 +212,14 @@ class ProtoTree(pl.LightningModule):
                 nonlinear_scheduler.step()
 
             # TODO: https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.BaseFinetuning.html ?
-            if freeze_epochs > 0:
+            if nonlinear_scheduler.freeze_epochs > 0:
                 if current_epoch == 0:
-                    log.info(f"Freezing network for {freeze_epochs} epochs.")
-                    for param in params_to_freeze:
+                    log.info(f"Freezing network for {nonlinear_scheduler.freeze_epochs} epochs.")
+                    for param in nonlinear_optim.params_to_freeze:
                         param.requires_grad = False
-                elif current_epoch == freeze_epochs + 1:
+                elif current_epoch == nonlinear_scheduler.freeze_epochs + 1:
                     log.info(f"Unfreezing network on epoch {current_epoch}.")
-                    for param in params_to_freeze:
+                    for param in nonlinear_optim.params_to_freeze:
                         param.requires_grad = True
 
         nonlinear_optim.zero_grad()
@@ -233,6 +229,8 @@ class ProtoTree(pl.LightningModule):
         nonlinear_optim.step()
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
+
+        log.info(f"{loss=}, epoch={self.trainer.current_epoch}, {batch_idx=}")
 
     def configure_optimizers(self):
         return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
@@ -611,7 +609,7 @@ class TreeSection(nn.Module):
         # This exponentially weighted moving average is designed to ensure stability of the leaf class probability
         # distributions (leaf.dist_params), by lowpass filtering out noise from minibatching in the optimization.
         leaf.dist_params.mul_(1.0 - self.leaf_opt_ewma_alpha)
-        leaf.dist_params.add_(dist_update * self.leaf_opt_ewma_alpha)
+        leaf.dist_params.add_(dist_update)
 
     def log_leaves_properties(self):
         """

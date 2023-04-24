@@ -1,32 +1,30 @@
+import logging
 from argparse import Namespace
 from pathlib import Path
 from random import randint
-import logging
 
+import lightning.pytorch as pl
 import torch
 
 from prototree.eval import eval_model, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode
+from prototree.projection import project_prototypes
+from prototree.prune import prune_unconfident_leaves
+from prototree.train import (
+    NonlinearOptimParams,
+    NonlinearSchedulerParams,
+)
+from util.args import get_args
+from util.data import get_dataloaders
 from visualize.create.explanation.decision_flows import (
     save_decision_flow_visualizations,
 )
 from visualize.create.explanation.multi_patch import save_multi_patch_visualizations
+from visualize.create.patches import save_patch_visualizations
+from visualize.create.tree import save_tree_visualization
 from visualize.prepare.explanations import data_explanations
 from visualize.prepare.matches import node_patch_matches
-from prototree.projection import project_prototypes
-from prototree.prune import prune_unconfident_leaves
-from prototree.train import (
-    train_epoch,
-    get_nonlinear_optimizer,
-    NonlinearOptimParams,
-    NonlinearSchedulerParams,
-    get_nonlinear_scheduler,
-)
-from visualize.create.patches import save_patch_visualizations
-from util.args import get_args
-from util.data import get_dataloaders
-from visualize.create.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -124,14 +122,11 @@ def train_prototree(args: Namespace):
         backbone_name=backbone_name,
         pretrained=pretrained,
     )
-    log.info(
-        f"Max depth {depth}, so {model.tree_section.num_internal_nodes} internal nodes and "
-        f"{model.tree_section.num_leaves} leaves."
-    )
 
     # TRAIN
     log.info("Starting training.")
-
+    trainer = pl.Trainer()
+    trainer.fit(model=model, train_dataloaders=train_loader)
     log.info(f"Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE
@@ -191,18 +186,6 @@ def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
         f"After pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
     )
     log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")
-
-
-def create_proto_tree(
-    h_proto: int,
-    w_proto: int,
-    channels_proto: int,
-    num_classes: int,
-    depth: int,
-    backbone_net="resnet50_inat",
-    pretrained=True,
-):
-    return tree
 
 
 def get_device(disable_cuda=False):
