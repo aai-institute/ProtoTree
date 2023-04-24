@@ -1,13 +1,16 @@
 import logging
+from dataclasses import dataclass
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
 import torch.optim
 import torch.utils.data
+from torch.nn import Parameter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.models import ProtoTree
+from prototree.models import ProtoTree, TreeSection, ProtoBase
 
 log = logging.getLogger(__name__)
 
@@ -60,3 +63,92 @@ def train_epoch(
         "loss": avg_loss,
         "train_accuracy": avg_acc,
     }
+
+
+@dataclass
+class NonlinearOptimParams:
+    optim_type: Literal["SGD", "Adam", "AdamW"]
+    backbone: str
+    momentum: float
+    weight_decay: float
+    lr: float
+    lr_block: float
+    lr_backbone: float
+    dataset: str  # TODO: We shouldn't have dataset specific stuff here.
+
+
+def get_nonlinear_optimizer(
+    model: ProtoTree, optim_params: NonlinearOptimParams
+) -> tuple[torch.optim.Optimizer, list[Parameter], list[Parameter]]:
+    """
+    :return: the optimizer, parameter set that can be frozen, and parameter set of the net that will be trained
+    """
+    params_to_freeze = []
+    params_to_train = []
+
+    dist_params = []
+    for name, param in model.named_parameters():
+        # TODO: what is this?
+        if "dist_params" in name:
+            dist_params.append(param)
+
+    # set up optimizer
+    if "resnet50_inat" in optim_params.backbone or (
+        "resnet50" in optim_params.backbone and optim_params.dataset == "CARS"
+    ):
+        # TODO: Seems to defeat the point of encapsulation if we're accessing the backbone directly.
+        for name, param in model.proto_base.backbone.named_parameters():
+            # TODO: improve this logic
+            if "layer4.2" not in name:
+                params_to_freeze.append(param)
+            else:
+                params_to_train.append(param)
+
+        param_list = [
+            {
+                "params": params_to_freeze,
+                "lr": optim_params.lr_backbone,
+                "weight_decay_rate": optim_params.weight_decay,
+            },
+            {
+                "params": params_to_train,
+                "lr": optim_params.lr_block,
+                "weight_decay_rate": optim_params.weight_decay,
+            },
+            {
+                # TODO: Seems to defeat the point of encapsulation if we're accessing the add_on directly.
+                "params": model.proto_base.add_on.parameters(),
+                "lr": optim_params.lr_block,
+                "weight_decay_rate": optim_params.weight_decay,
+            },
+            {
+                # TODO: Seems to defeat the point of encapsulation if we're accessing the prototype_layer directly.
+                "params": model.proto_base.prototype_layer.parameters(),
+                "lr": optim_params.lr,
+                "weight_decay_rate": 0,
+            },
+        ]
+
+    if optim_params.optim_type == "SGD":
+        # TODO: why no momentum for the prototype layer?
+        # add momentum to the first three entries of paramlist
+        for i in range(3):
+            param_list[i]["momentum"] = optim_params.momentum
+        # TODO: why pass momentum here explicitly again? Which one is taken?
+        optimizer = torch.optim.SGD(
+            param_list, lr=optim_params.lr, momentum=optim_params.momentum
+        )
+    elif optim_params.optim_type == "Adam":
+        optimizer = torch.optim.Adam(param_list, lr=optim_params.lr, eps=1e-07)
+    elif optim_params.optim_type == "AdamW":
+        optimizer = torch.optim.AdamW(
+            param_list,
+            lr=optim_params.lr,
+            eps=1e-07,
+            weight_decay=optim_params.weight_decay,
+        )
+    else:
+        raise ValueError(
+            f"Unknown optimizer type: {optim_params.optim_type}. Supported optimizers are SGD, Adam, and AdamW."
+        )
+    return optimizer, params_to_freeze, params_to_train

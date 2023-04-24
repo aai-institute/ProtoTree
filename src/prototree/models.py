@@ -15,7 +15,7 @@ from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, BASE_ARCHITECTURE_TO_FEATURES
 
 
-class PrototypeBase(nn.Module):
+class ProtoBase(nn.Module):
     def __init__(
         self,
         num_prototypes: int,
@@ -109,10 +109,8 @@ class PrototypeBase(nn.Module):
         self.add_on.apply(_xavier_on_conv)
 
 
-class ProtoPNet(PrototypeBase):
-    def __init__(
-        self, num_classes: int, num_prototypes: int, proto_base: PrototypeBase
-    ):
+class ProtoPNet(ProtoBase):
+    def __init__(self, num_classes: int, num_prototypes: int, proto_base: ProtoBase):
         self.proto_base = proto_base
 
         # TODO: Use dependency injection for the second half of the model?
@@ -184,7 +182,7 @@ class ProtoTree(nn.Module):
         # TODO: Use dependency injection here?
         backbone = BASE_ARCHITECTURE_TO_FEATURES[backbone_net](pretrained=pretrained)
         num_prototypes = 2**depth - 1
-        self.proto_base = PrototypeBase(
+        self.proto_base = ProtoBase(
             num_prototypes=num_prototypes,
             prototype_shape=(channels_proto, w_proto, h_proto),
             backbone=backbone,
@@ -363,6 +361,10 @@ class TreeSection(nn.Module):
         }
         self.leaf_pruning_threshold = leaf_pruning_threshold
         self.leaf_opt_ewma_alpha = leaf_opt_ewma_alpha
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer
 
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)

@@ -16,9 +16,9 @@ from visualize.prepare.explanations import data_explanations
 from visualize.prepare.matches import node_patch_matches
 from prototree.projection import project_prototypes
 from prototree.prune import prune_unconfident_leaves
-from prototree.train import train_epoch
+from prototree.train import train_epoch, get_nonlinear_optimizer, NonlinearOptimParams
 from visualize.create.patches import save_patch_visualizations
-from util.args import get_args, get_optimizer
+from util.args import get_args
 from util.data import get_dataloaders
 from visualize.create.tree import save_tree_visualization
 
@@ -108,18 +108,18 @@ def train_prototree(args: Namespace):
     log.info(f"Running on {device=}")
     model = model.to(device)
 
-    # PREPARE OPTIMIZER AND SCHEDULER
-    optimizer, params_to_freeze, params_to_train = get_optimizer(
-        model,
-        optim_type,
-        backbone,
-        dataset,
-        momentum,
-        weight_decay,
-        lr,
-        lr_block,
-        lr_net,
+    nonlinear_optim_params = NonlinearOptimParams(
+        optim_type=optim_type,
+        backbone=backbone,
+        momentum=momentum,
+        weight_decay=weight_decay,
+        lr=lr,
+        lr_block=lr_block,
+        lr_backbone=lr_net,
+        dataset=dataset,
     )
+    # PREPARE OPTIMIZER AND SCHEDULER
+    optimizer, params_to_freeze, params_to_train = get_nonlinear_optimizer(model, nonlinear_optim_params)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=milestones, gamma=gamma
     )
@@ -229,13 +229,13 @@ def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
 
 
 def create_proto_tree(
-    h_proto: int,
-    w_proto: int,
-    channels_proto: int,
-    num_classes: int,
-    depth: int,
-    backbone_net="resnet50_inat",
-    pretrained=True,
+        h_proto: int,
+        w_proto: int,
+        channels_proto: int,
+        num_classes: int,
+        depth: int,
+        backbone_net="resnet50_inat",
+        pretrained=True,
 ):
     return tree
 
