@@ -5,7 +5,7 @@ This will probably be turned into a Python package and moved to a new repository
 
 ## Setup
 ### For all datasets
-1. Create a Python >=3.10 environment.
+1. Create a Python >=3.11 environment.
 2. Install requirements from `requirements.txt` and `datasources/requirements-download.txt` (e.g. `pip install -r requirements.txt`).
 3. Install [Graphviz](https://graphviz.org/). With the current code you need to be able to call `dot` from the terminal.
 4. You can train the tree model and see its performance on the test set with `python train_prototree.py`. 
