@@ -209,6 +209,7 @@ class ProtoTree(pl.LightningModule):
             if current_epoch > 0:
                 nonlinear_scheduler.step()
 
+            # TODO: https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.BaseFinetuning.html ?
             if freeze_epochs > 0:
                 if current_epoch == 0:
                     log.info(f"Freezing network for {freeze_epochs} epochs.")
