@@ -68,7 +68,7 @@ def train_epoch(
 @dataclass
 class NonlinearOptimParams:
     optim_type: Literal["SGD", "Adam", "AdamW"]
-    backbone: str
+    backbone_name: str
     momentum: float
     weight_decay: float
     lr: float
@@ -93,8 +93,8 @@ def get_nonlinear_optimizer(
             dist_params.append(param)
 
     # set up optimizer
-    if "resnet50_inat" in optim_params.backbone or (
-        "resnet50" in optim_params.backbone and optim_params.dataset == "CARS"
+    if "resnet50_inat" in optim_params.backbone_name or (
+        "resnet50" in optim_params.backbone_name and optim_params.dataset == "CARS"
     ):
         # TODO: Seems to defeat the point of encapsulation if we're accessing the backbone directly.
         for name, param in model.proto_base.backbone.named_parameters():

@@ -12,7 +12,7 @@ from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
 from prototree.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
-from util.net import default_add_on_layers, BASE_ARCHITECTURE_TO_FEATURES
+from util.net import default_add_on_layers, NAME_TO_NET
 
 
 class ProtoBase(nn.Module):
@@ -164,7 +164,7 @@ class ProtoTree(nn.Module):
         depth: int,
         leaf_pruning_threshold: float,
         leaf_opt_ewma_alpha: float,
-        backbone_net="resnet50_inat",
+        backbone_name="resnet50_inat",
         pretrained=True,
     ):
         """
@@ -174,13 +174,13 @@ class ProtoTree(nn.Module):
             coincides with the output channels of the net+add_on layers, prior to prototype layers.
         :param num_classes:
         :param depth: depth of tree, will result in 2^depth leaves and 2^depth-1 internal nodes
-        :param backbone_net: name of backbone, e.g. resnet18
+        :param backbone_name: name of backbone, e.g. resnet18
         :param pretrained:
         """
         super().__init__()
 
         # TODO: Use dependency injection here?
-        backbone = BASE_ARCHITECTURE_TO_FEATURES[backbone_net](pretrained=pretrained)
+        backbone = NAME_TO_NET[backbone_name](pretrained=pretrained)
         num_prototypes = 2**depth - 1
         self.proto_base = ProtoBase(
             num_prototypes=num_prototypes,

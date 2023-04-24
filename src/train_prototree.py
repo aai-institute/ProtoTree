@@ -59,7 +59,7 @@ def train_prototree(args: Namespace):
     leaf_pruning_multiplier = args.leaf_pruning_multiplier
 
     # Architecture args
-    backbone = args.backbone
+    backbone_name = args.backbone
     pretrained = not args.disable_pretrained
     h_proto = args.H1
     w_proto = args.W1
@@ -99,7 +99,7 @@ def train_prototree(args: Namespace):
         depth=depth,
         leaf_pruning_threshold=leaf_pruning_threshold,
         leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
-        backbone_net=backbone,
+        backbone_name=backbone_name,
         pretrained=pretrained,
     )
     log.info(
@@ -110,7 +110,7 @@ def train_prototree(args: Namespace):
 
     nonlinear_optim_params = NonlinearOptimParams(
         optim_type=optim_type,
-        backbone=backbone,
+        backbone_name=backbone_name,
         momentum=momentum,
         weight_decay=weight_decay,
         lr=lr,

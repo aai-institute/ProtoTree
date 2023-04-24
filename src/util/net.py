@@ -2,7 +2,7 @@ from features.densenet_features import *
 from features.resnet_features import *
 from features.vgg_features import *
 
-BASE_ARCHITECTURE_TO_FEATURES = {
+NAME_TO_NET = {
     "resnet18": resnet18_features,
     "resnet34": resnet34_features,
     "resnet50": resnet50_features,
