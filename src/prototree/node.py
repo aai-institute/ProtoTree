@@ -269,6 +269,7 @@ class Leaf(Node):
         self.dist_params: nn.Parameter = nn.Parameter(
             torch.zeros(num_classes), requires_grad=False
         )
+        self.dist_param_update_count = 0
 
     def to(self, *args, **kwargs):
         self.dist_params = self.dist_params.to(*args, **kwargs)

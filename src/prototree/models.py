@@ -608,8 +608,11 @@ class TreeSection(nn.Module):
 
         # This exponentially weighted moving average is designed to ensure stability of the leaf class probability
         # distributions (leaf.dist_params), by lowpass filtering out noise from minibatching in the optimization.
-        leaf.dist_params.mul_(1.0 - self.leaf_opt_ewma_alpha)
-        leaf.dist_params.add_(dist_update)
+        leaf.dist_param_update_count += 1
+        count_alpha = 1 / leaf.dist_param_update_count
+        alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
+        leaf.dist_params.mul_(1.0 - alpha)
+        leaf.dist_params.add_(alpha * dist_update)
 
     def log_leaves_properties(self):
         """
