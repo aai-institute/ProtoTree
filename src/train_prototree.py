@@ -87,6 +87,9 @@ def train_prototree(args: Namespace):
     # TODO: Perhaps we should instead tune this threshold with a search algorithm.
     leaf_pruning_threshold = leaf_pruning_multiplier / num_classes
 
+    n_training_batches = len(train_loader)
+    leaf_opt_ewma_alpha = 1 / n_training_batches
+
     # PREPARE MODEL
     model = ProtoTree(
         h_proto=h_proto,
@@ -95,6 +98,7 @@ def train_prototree(args: Namespace):
         num_classes=num_classes,
         depth=depth,
         leaf_pruning_threshold=leaf_pruning_threshold,
+        leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
         backbone_net=backbone,
         pretrained=pretrained,
     )

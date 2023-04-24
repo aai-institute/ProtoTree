@@ -173,6 +173,7 @@ class ProtoTree(nn.Module):
                  num_classes: int,
                  depth: int,
                  leaf_pruning_threshold: float,
+                 leaf_opt_ewma_alpha: float,
                  backbone_net="resnet50_inat",
                  pretrained=True,
                  ):
@@ -197,7 +198,7 @@ class ProtoTree(nn.Module):
             backbone=backbone
         )
         self.proto_base.apply_xavier()
-        self.tree_section = TreeSection(num_classes=num_classes, depth=depth, leaf_pruning_threshold=leaf_pruning_threshold)
+        self.tree_section = TreeSection(num_classes=num_classes, depth=depth, leaf_pruning_threshold=leaf_pruning_threshold, leaf_opt_ewma_alpha=leaf_opt_ewma_alpha)
 
     def forward(
         self,
@@ -352,7 +353,8 @@ class TreeSection(nn.Module):
         self,
         num_classes: int,
         depth: int,
-        leaf_pruning_threshold: float
+        leaf_pruning_threshold: float,
+        leaf_opt_ewma_alpha: float
     ):
         super().__init__()
 
@@ -363,6 +365,7 @@ class TreeSection(nn.Module):
             for idx, node in enumerate(self.tree_root.descendant_internal_nodes)
         }
         self.leaf_pruning_threshold = leaf_pruning_threshold
+        self.leaf_opt_ewma_alpha = leaf_opt_ewma_alpha
 
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
@@ -515,14 +518,12 @@ class TreeSection(nn.Module):
         self,
         y_true: torch.Tensor,
         logits: torch.Tensor,
-        node_to_prob: dict[Node, NodeProbabilities],
-        smoothing_factor: float,
+        node_to_prob: dict[Node, NodeProbabilities]
     ):
         """
         :param y_true: shape (batch_size)
         :param logits: shape (batch_size, num_classes)
         :param node_to_prob:
-        :param smoothing_factor:
         """
         batch_size, num_classes = logits.shape
 
@@ -530,23 +531,20 @@ class TreeSection(nn.Module):
         y_true_logits = torch.log(y_true_one_hot)
 
         for leaf in self.leaves:
-            TreeSection._update_leaf_distribution(leaf, node_to_prob, logits, y_true_logits, smoothing_factor)
+            self._update_leaf_distribution(leaf, node_to_prob, logits, y_true_logits)
 
-    @staticmethod
     def _update_leaf_distribution(
+        self,
         leaf: Leaf,
         node_to_prob: dict[Node, NodeProbabilities],
         logits: torch.Tensor,
-        y_true_logits: torch.Tensor,
-        smoothing_factor: float,
+        y_true_logits: torch.Tensor
     ):
         """
         :param leaf:
         :param node_to_prob:
         :param logits: of shape (batch_size, num_classes)
         :param y_true_logits: of shape (batch_size, num_classes)
-        :param smoothing_factor:
-        :return:
         """
         # shape (batch_size, 1)
         log_p_arrival = node_to_prob[leaf].log_p_arrival.unsqueeze(1)
@@ -563,12 +561,11 @@ class TreeSection(nn.Module):
 
         dist_update = torch.exp(log_dist_update)
 
-        # This scaling (subtraction of `-1/n_batches * c` in the ProtoTree paper) seems to be a form of exponentially
-        # weighted moving average, designed to ensure stability of the leaf class probability distributions (
-        # leaf.dist_params), by filtering out noise from minibatching in the optimization.
-        leaf.dist_params.mul_(smoothing_factor)
+        # This exponentially weighted moving average is designed to ensure stability of the leaf class probability
+        # distributions (leaf.dist_params), by lowpass filtering out noise from minibatching in the optimization.
+        leaf.dist_params.mul_(1.0 - self.leaf_opt_ewma_alpha)
 
-        leaf.dist_params.add_(dist_update)
+        leaf.dist_params.add_(dist_update * self.leaf_opt_ewma_alpha)
 
     def log_leaves_properties(self):
         """

@@ -38,10 +38,7 @@ def train_epoch(
         loss.backward()
         optimizer.step()
 
-        smoothing_factor = 1 - 1 / n_batches
-        model.tree_section.update_leaf_distributions(
-            y, logits.detach(), node_to_prob, smoothing_factor
-        )
+        model.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
         model.eval()
         y_pred = torch.argmax(logits, dim=1)
