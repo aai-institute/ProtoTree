@@ -227,9 +227,7 @@ def get_optimizer(
             dist_params.append(param)
 
     # set up optimizer
-    if "resnet50_inat" in net or (
-        "resnet50" in net and dataset == "CARS"
-    ):
+    if "resnet50_inat" in net or ("resnet50" in net and dataset == "CARS"):
         # TODO: Seems to defeat the point of encapsulation if we're accessing the backbone directly.
         for name, param in tree.proto_base.backbone.named_parameters():
             # TODO: improve this logic

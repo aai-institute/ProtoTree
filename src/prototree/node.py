@@ -617,5 +617,3 @@ class NodeProbabilities:
     @property
     def batch_size(self) -> int:
         return self.log_p_arrival.shape[0]
-
-

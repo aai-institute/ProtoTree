@@ -38,10 +38,7 @@ class PrototypeBase(nn.Module):
         #  a more principled way of choosing the initialization.
         # NOTE: The paper means std=0.1 when it says N(0.5, 0.1), not var=0.1.
         self.prototype_layer = L2Conv2D(
-            num_prototypes,
-            *prototype_shape,
-            initial_mean=0.5,
-            initial_std=0.1
+            num_prototypes, *prototype_shape, initial_mean=0.5, initial_std=0.1
         )
 
         if isinstance(add_on_layers, nn.Module):
@@ -117,10 +114,7 @@ class PrototypeBase(nn.Module):
 
 class ProtoPNet(PrototypeBase):
     def __init__(
-        self,
-        num_classes: int,
-        num_prototypes: int,
-        proto_base: PrototypeBase
+        self, num_classes: int, num_prototypes: int, proto_base: PrototypeBase
     ):
         self.proto_base = proto_base
 
@@ -166,17 +160,18 @@ class LeafRationalization:
 
 
 class ProtoTree(nn.Module):
-    def __init__(self,
-                 h_proto: int,
-                 w_proto: int,
-                 channels_proto: int,
-                 num_classes: int,
-                 depth: int,
-                 leaf_pruning_threshold: float,
-                 leaf_opt_ewma_alpha: float,
-                 backbone_net="resnet50_inat",
-                 pretrained=True,
-                 ):
+    def __init__(
+        self,
+        h_proto: int,
+        w_proto: int,
+        channels_proto: int,
+        num_classes: int,
+        depth: int,
+        leaf_pruning_threshold: float,
+        leaf_opt_ewma_alpha: float,
+        backbone_net="resnet50_inat",
+        pretrained=True,
+    ):
         """
         :param h_proto: height of prototype
         :param w_proto: width of prototype
@@ -191,14 +186,19 @@ class ProtoTree(nn.Module):
 
         # TODO: Use dependency injection here?
         backbone = BASE_ARCHITECTURE_TO_FEATURES[backbone_net](pretrained=pretrained)
-        num_prototypes = 2 ** depth - 1
+        num_prototypes = 2**depth - 1
         self.proto_base = PrototypeBase(
             num_prototypes=num_prototypes,
             prototype_shape=(channels_proto, w_proto, h_proto),
-            backbone=backbone
+            backbone=backbone,
         )
         self.proto_base.apply_xavier()
-        self.tree_section = TreeSection(num_classes=num_classes, depth=depth, leaf_pruning_threshold=leaf_pruning_threshold, leaf_opt_ewma_alpha=leaf_opt_ewma_alpha)
+        self.tree_section = TreeSection(
+            num_classes=num_classes,
+            depth=depth,
+            leaf_pruning_threshold=leaf_pruning_threshold,
+            leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
+        )
 
     def forward(
         self,
@@ -354,7 +354,7 @@ class TreeSection(nn.Module):
         num_classes: int,
         depth: int,
         leaf_pruning_threshold: float,
-        leaf_opt_ewma_alpha: float
+        leaf_opt_ewma_alpha: float,
     ):
         super().__init__()
 
@@ -373,7 +373,9 @@ class TreeSection(nn.Module):
             leaf.to(*args, **kwargs)
         return self
 
-    def get_node_to_log_p_right(self, similarities: torch.Tensor) -> dict[Node, torch.Tensor]:
+    def get_node_to_log_p_right(
+        self, similarities: torch.Tensor
+    ) -> dict[Node, torch.Tensor]:
         return {node: -similarities[:, i] for node, i in self.node_to_proto_idx.items()}
 
     @staticmethod
@@ -426,7 +428,9 @@ class TreeSection(nn.Module):
         add_strict_descendants(root)
         return result
 
-    def get_node_to_probs(self, similarities: torch.Tensor) -> dict[Node, NodeProbabilities]:
+    def get_node_to_probs(
+        self, similarities: torch.Tensor
+    ) -> dict[Node, NodeProbabilities]:
         """
         Computes the log probabilities (left, right, arrival) for all nodes for the input x.
 
@@ -508,7 +512,9 @@ class TreeSection(nn.Module):
         :param node_to_probs: see `ProtoTree.get_node_to_probs`
         :return: list of leaves of length `node_to_probs.batch_size`
         """
-        log_p_arrivals = [node_to_probs[leaf].log_p_arrival.unsqueeze(1) for leaf in leaves]
+        log_p_arrivals = [
+            node_to_probs[leaf].log_p_arrival.unsqueeze(1) for leaf in leaves
+        ]
         log_p_arrivals = torch.cat(log_p_arrivals, dim=1)  # shape: (bs, n_leaves)
         predicting_leaf_idx = torch.argmax(log_p_arrivals, dim=1).long()  # shape: (bs,)
         return [leaves[i.item()] for i in predicting_leaf_idx]
@@ -518,7 +524,7 @@ class TreeSection(nn.Module):
         self,
         y_true: torch.Tensor,
         logits: torch.Tensor,
-        node_to_prob: dict[Node, NodeProbabilities]
+        node_to_prob: dict[Node, NodeProbabilities],
     ):
         """
         :param y_true: shape (batch_size)
@@ -538,7 +544,7 @@ class TreeSection(nn.Module):
         leaf: Leaf,
         node_to_prob: dict[Node, NodeProbabilities],
         logits: torch.Tensor,
-        y_true_logits: torch.Tensor
+        y_true_logits: torch.Tensor,
     ):
         """
         :param leaf:

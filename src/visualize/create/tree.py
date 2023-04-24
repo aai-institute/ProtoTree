@@ -24,7 +24,10 @@ INTERNAL_NODE_IMG_GAP = 4
 
 @torch.no_grad()
 def save_tree_visualization(
-    tree: TreeSection, patches_dir: os.PathLike, tree_dir: os.PathLike, class_names: tuple
+    tree: TreeSection,
+    patches_dir: os.PathLike,
+    tree_dir: os.PathLike,
+    class_names: tuple,
 ):
     """
     Saves visualization as a DOT file and png.

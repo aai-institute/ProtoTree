@@ -237,7 +237,6 @@ def create_proto_tree(
     backbone_net="resnet50_inat",
     pretrained=True,
 ):
-
     return tree
 
 
