@@ -240,7 +240,7 @@ class ProtoTree(pl.LightningModule):
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
-        self.log("Training loss", loss)
+        self.log("Training loss", loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -251,11 +251,11 @@ class ProtoTree(pl.LightningModule):
         y_pred = torch.argmax(logits, dim=1)
         batch_acc = (y_pred == y).sum().item() / len(y)
         self.validation_step_outputs.append(batch_acc)
-        self.log("Validation acc", batch_acc)
+        self.log("Validation acc", batch_acc, prog_bar=True)
 
     def on_validation_epoch_end(self):
         avg_acc = mean(self.validation_step_outputs)
-        self.log("Validation avg acc", avg_acc)
+        self.log("Validation avg acc", avg_acc, prog_bar=True)
         print(f"\nValidation avg acc: {avg_acc}")
         self.validation_step_outputs.clear()
 
