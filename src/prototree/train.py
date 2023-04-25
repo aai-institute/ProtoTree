@@ -37,6 +37,9 @@ def get_nonlinear_scheduler(model, params: NonlinearSchedulerParams):
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=params.milestones, gamma=params.gamma
     )
+
+    # TODO(Hack): It's difficult to add these extra items in a way that Lightning will accept them. Do we need to
+    #  extend the scheduler class?
     scheduler.freeze_epochs = params.optim_params.freeze_epochs
 
     return [optimizer], [scheduler]
@@ -117,6 +120,8 @@ def get_nonlinear_optimizer(
             f"Unknown optimizer type: {optim_params.optim_type}. Supported optimizers are SGD, Adam, and AdamW."
         )
 
+    # TODO(Hack): It's difficult to add these extra items in a way that Lightning will accept them. Do we need to
+    #  extend the Optimizer class?
     optimizer.params_to_freeze = params_to_freeze
     optimizer.params_to_train = params_to_train
     return optimizer
