@@ -223,11 +223,11 @@ class ProtoTree(pl.LightningModule):
                     for param in nonlinear_optim.params_to_freeze:
                         param.requires_grad = True
 
-        nonlinear_optim.zero_grad()
         logits, node_to_prob, predicting_leaves = self.forward(x)
         # TODO (critical bug): Becomes nan after a while, why has this only happened after refactoring to use PyTorch
         #  Lightning? It was working fine before this.
         loss = F.nll_loss(logits, y)
+        nonlinear_optim.zero_grad()
         self.manual_backward(loss)
         nonlinear_optim.step()
 

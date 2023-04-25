@@ -3,6 +3,7 @@
 data
 src/features/state_dicts
 runs
+lightning_logs
 
 ### Python template
 # Byte-compiled / optimized / DLL files
