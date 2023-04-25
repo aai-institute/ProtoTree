@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import math
 from typing import List, Literal, Optional, Union
 
 import lightning.pytorch as pl
@@ -152,7 +153,7 @@ class LeafRationalization:
         ancestor_children = [
             ancestor_similarity.internal_node
             for ancestor_similarity in self.ancestor_similarities[1:]
-        ] + [self.leaf]
+        ] + [self.leaf]  # TODO: Convince PyCharm there's no type mismatch.
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
@@ -224,8 +225,6 @@ class ProtoTree(pl.LightningModule):
                         param.requires_grad = True
 
         logits, node_to_prob, predicting_leaves = self.forward(x)
-        # TODO (critical bug): Becomes nan after a while, why has this only happened after refactoring to use PyTorch
-        #  Lightning? It was working fine before this.
         loss = F.nll_loss(logits, y)
         nonlinear_optim.zero_grad()
         self.manual_backward(loss)

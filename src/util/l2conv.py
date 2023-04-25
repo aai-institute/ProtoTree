@@ -75,4 +75,11 @@ class L2Conv2D(nn.Module):
         xs_conv = F.conv2d(x, weight=self.prototype_tensors)
 
         distances_sq = xs_squared_l2 - 2 * xs_conv + ps_squared_l2.view(-1, 1, 1)
-        return torch.sqrt(distances_sq + 1e-9)  # TODO: Pick good eps.
+        distances_sq_plus_eps = distances_sq + 1e-14
+        if torch.any(distances_sq_plus_eps < 0.0):
+            abc = 1
+
+        # TODO: Figure out why a seemingly insignificant change (just refactoring with no intended change to the
+        #  numerical calculations) means that we now have to clamp instead of just being able to add an epsilon.
+        distances_sq_clamped = torch.clamp(distances_sq, min=1e-14)
+        return torch.sqrt(distances_sq_clamped)  # TODO: Pick good eps.
