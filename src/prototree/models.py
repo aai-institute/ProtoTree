@@ -112,6 +112,7 @@ class ProtoBase(nn.Module):
 
 class ProtoPNet(ProtoBase):
     def __init__(self, num_classes: int, num_prototypes: int, proto_base: ProtoBase):
+        super().__init__()
         self.proto_base = proto_base
 
         # TODO: Use dependency injection for the second half of the model?
