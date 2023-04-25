@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+import logging
 import math
+from statistics import mean
 from typing import List, Literal, Optional, Union
 
 import lightning.pytorch as pl
@@ -15,6 +17,10 @@ from prototree.train import NonlinearSchedulerParams, get_nonlinear_scheduler
 from prototree.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, NAME_TO_NET
+
+
+logging.getLogger("lightning.pytorch").setLevel(logging.INFO)
+log = logging.getLogger("lightning.pytorch.core")
 
 
 class ProtoBase(nn.Module):
@@ -202,6 +208,8 @@ class ProtoTree(pl.LightningModule):
         self.nonlinear_scheduler_params = nonlinear_scheduler_params
         self.automatic_optimization = False
 
+        self.validation_step_outputs = []
+
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
         nonlinear_scheduler = self.lr_schedulers()
@@ -232,7 +240,24 @@ class ProtoTree(pl.LightningModule):
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
-        log.info(f"{loss=}, epoch={self.trainer.current_epoch}, {batch_idx=}")
+        self.log("Training loss", loss)
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+
+        logits, _, predicting_leaves = self.forward(
+            x, sampling_strategy="distributed"
+        )
+        y_pred = torch.argmax(logits, dim=1)
+        batch_acc = (y_pred == y).sum().item() / len(y)
+        self.validation_step_outputs.append(batch_acc)
+        self.log("Validation acc", batch_acc)
+
+    def on_validation_epoch_end(self):
+        avg_acc = mean(self.validation_step_outputs)
+        self.log("Validation avg acc", avg_acc)
+        print(f"\nValidation avg acc: {avg_acc}")
+        self.validation_step_outputs.clear()
 
     def configure_optimizers(self):
         return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
