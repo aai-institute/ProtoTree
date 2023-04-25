@@ -125,7 +125,7 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     log.info("Starting training.")
-    trainer = pl.Trainer(detect_anomaly=True)
+    trainer = pl.Trainer(detect_anomaly=True, max_epochs=epochs)
     trainer.fit(model=model, train_dataloaders=train_loader)
     log.info(f"Finished training.")
 
