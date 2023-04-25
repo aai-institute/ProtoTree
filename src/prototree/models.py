@@ -224,6 +224,8 @@ class ProtoTree(pl.LightningModule):
 
         nonlinear_optim.zero_grad()
         logits, node_to_prob, predicting_leaves = self.forward(x)
+        # TODO (critical bug): Becomes nan after a while, why has this only happened after refactoring to use PyTorch
+        #  Lightning? It was working fine before this.
         loss = F.nll_loss(logits, y)
         loss.backward()
         nonlinear_optim.step()
@@ -401,10 +403,6 @@ class TreeSection(nn.Module):
         }
         self.leaf_pruning_threshold = leaf_pruning_threshold
         self.leaf_opt_ewma_alpha = leaf_opt_ewma_alpha
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
 
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
@@ -608,11 +606,12 @@ class TreeSection(nn.Module):
 
         # This exponentially weighted moving average is designed to ensure stability of the leaf class probability
         # distributions (leaf.dist_params), by lowpass filtering out noise from minibatching in the optimization.
+        # TODO: Work out how best to initialize the EWMA to avoid a long "burn-in".
         leaf.dist_param_update_count += 1
-        count_alpha = 1 / leaf.dist_param_update_count
-        alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
-        leaf.dist_params.mul_(1.0 - alpha)
-        leaf.dist_params.add_(alpha * dist_update)
+        #count_alpha = 1 / leaf.dist_param_update_count
+        #alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
+        leaf.dist_params.mul_(1.0 - self.leaf_opt_ewma_alpha)
+        leaf.dist_params.add_(dist_update)
 
     def log_leaves_properties(self):
         """

@@ -75,4 +75,4 @@ class L2Conv2D(nn.Module):
         xs_conv = F.conv2d(x, weight=self.prototype_tensors)
 
         distances_sq = xs_squared_l2 - 2 * xs_conv + ps_squared_l2.view(-1, 1, 1)
-        return torch.sqrt(distances_sq + 1e-14)
+        return torch.sqrt(distances_sq + 1e-9)  # TODO: Pick good eps.
