@@ -228,7 +228,7 @@ class ProtoTree(pl.LightningModule):
         # TODO (critical bug): Becomes nan after a while, why has this only happened after refactoring to use PyTorch
         #  Lightning? It was working fine before this.
         loss = F.nll_loss(logits, y)
-        loss.backward()
+        self.manual_backward(loss)
         nonlinear_optim.step()
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
