@@ -79,7 +79,7 @@ class L2Conv2D(nn.Module):
         #      1. Figure out why seemingly insignificant changes (e.g. refactors with no intended change to the
         #         numerical calculations, smaller batches, bumping library versions) cause negative numbers to start
         #         appearing, or appear more quickly.
-        #      2. What numerical instabilities are causing such negative numbers here?
+        #      2. What numerical instabilities are causing negative numbers that are so far below 0?
         #      3. Should we just compute ||xs - ps ||^2 instead of expanding to ||xs||^2 + ||ps||^2 - 2 * xs * ps ?
         distances_sq = xs_squared_l2 - 2 * xs_conv + ps_squared_l2.view(-1, 1, 1)
         distances_sq_clamped = torch.clamp(distances_sq, min=1e-14)
