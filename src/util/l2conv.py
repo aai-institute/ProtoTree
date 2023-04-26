@@ -74,8 +74,8 @@ class L2Conv2D(nn.Module):
         # Shape: (bs, num_prototypes, w_in, h_in)
         xs_conv = F.conv2d(x, weight=self.prototype_tensors)
 
-        # TODO: Negative numbers can appear here, so we have to clamp. Adding an epsilon could be done, but it would
-        #  need to be quite large to be reliable, e.g. >> -1e-7.
+        # TODO: Negative numbers can appear here, so we have to clamp to an epsilon. Adding the epsilon is a viable
+        #  alternative, but it would need to be quite large to be reliable, e.g. >> -1e-7.
         #      1. Figure out why seemingly insignificant changes (e.g. refactors with no intended change to the
         #         numerical calculations, smaller batches, bumping library versions) cause negative numbers to start
         #         appearing, or appear more quickly.
