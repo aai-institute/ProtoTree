@@ -31,9 +31,7 @@ class NonlinearSchedulerParams:
 
 
 def get_nonlinear_scheduler(model, params: NonlinearSchedulerParams):
-    optimizer = get_nonlinear_optimizer(
-        model, params.optim_params
-    )
+    optimizer = get_nonlinear_optimizer(model, params.optim_params)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=params.milestones, gamma=params.gamma
     )

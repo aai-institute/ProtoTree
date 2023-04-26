@@ -35,9 +35,7 @@ def eval_model(
 
     for batch_num, (x, y) in enumerate(tqdm_loader):
         x, y = x.to(tree.device), y.to(tree.device)
-        logits, _, predicting_leaves = tree.forward(
-            x, sampling_strategy=sampling_strategy
-        )
+        logits, _, predicting_leaves = tree.forward(x, strategy=sampling_strategy)
         y_pred = torch.argmax(logits, dim=1)
         batch_acc = (y_pred == y).sum().item() / len(y)
         tqdm_loader.set_postfix_str(f"batch: acc={batch_acc:.5f}")
@@ -96,8 +94,8 @@ def eval_fidelity(
     for x, y in tqdm(data_loader, desc="Evaluating fidelity", ncols=0):
         x, y = x.to(tree.device), y.to(tree.device)
 
-        y_pred_reference = tree.predict(x, sampling_strategy=ref_sampling_strategy)
-        y_pred_test = tree.predict(x, sampling_strategy=test_sampling_strategy)
+        y_pred_reference = tree.predict(x, strategy=ref_sampling_strategy)
+        y_pred_test = tree.predict(x, strategy=test_sampling_strategy)
         batch_fidelity = torch.sum(y_pred_reference == y_pred_test)
         avg_fidelity += batch_fidelity / (len(y) * n_batches)
 

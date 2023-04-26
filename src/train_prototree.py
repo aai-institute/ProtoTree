@@ -125,9 +125,15 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     log.info("Starting training.")
-    trainer = pl.Trainer(detect_anomaly=False, max_epochs=epochs, limit_val_batches=25)
+    trainer = pl.Trainer(
+        detect_anomaly=False,
+        max_epochs=epochs,
+        limit_val_batches=n_training_batches // 25,
+    )
     # TODO: The original code used the test set as the validation set! We need to fix this.
-    trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=test_loader)
+    trainer.fit(
+        model=model, train_dataloaders=train_loader, val_dataloaders=test_loader
+    )
     log.info(f"Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE

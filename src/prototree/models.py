@@ -159,7 +159,9 @@ class LeafRationalization:
         ancestor_children = [
             ancestor_similarity.internal_node
             for ancestor_similarity in self.ancestor_similarities[1:]
-        ] + [self.leaf]  # TODO: Convince PyCharm there's no type mismatch.
+        ] + [
+            self.leaf
+        ]  # TODO: Convince PyCharm there's no type mismatch.
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
@@ -208,7 +210,7 @@ class ProtoTree(pl.LightningModule):
         self.nonlinear_scheduler_params = nonlinear_scheduler_params
         self.automatic_optimization = False
 
-        self.validation_step_outputs = []
+        self.train_step_outputs, self.val_step_outputs = [], []
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
@@ -224,7 +226,9 @@ class ProtoTree(pl.LightningModule):
             # TODO: https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.BaseFinetuning.html ?
             if nonlinear_scheduler.freeze_epochs > 0:
                 if current_epoch == 0:
-                    log.info(f"Freezing network for {nonlinear_scheduler.freeze_epochs} epochs.")
+                    log.info(
+                        f"Freezing network for {nonlinear_scheduler.freeze_epochs} epochs."
+                    )
                     for param in nonlinear_optim.params_to_freeze:
                         param.requires_grad = False
                 elif current_epoch == nonlinear_scheduler.freeze_epochs + 1:
@@ -234,30 +238,39 @@ class ProtoTree(pl.LightningModule):
 
         logits, node_to_prob, predicting_leaves = self.forward(x)
         loss = F.nll_loss(logits, y)
+        if math.isnan(loss.item()):
+            raise ValueError("Loss is NaN, cannot proceed any further.")
         nonlinear_optim.zero_grad()
         self.manual_backward(loss)
         nonlinear_optim.step()
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
+        y_pred = logits.argmax(dim=1)
+        acc = (y_pred == y).sum().item() / len(y)
+        self.train_step_outputs.append((acc, loss))
+        self.log("Train acc", acc, prog_bar=True)
         self.log("Training loss", loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
 
-        logits, _, predicting_leaves = self.forward(
-            x, sampling_strategy="distributed"
-        )
-        y_pred = torch.argmax(logits, dim=1)
-        batch_acc = (y_pred == y).sum().item() / len(y)
-        self.validation_step_outputs.append(batch_acc)
-        self.log("Validation acc", batch_acc, prog_bar=True)
+        y_pred = self.predict(x, strategy="distributed")
+        acc = (y_pred == y).sum().item() / len(y)
+        self.val_step_outputs.append(acc)
+        self.log("Validation acc", acc, prog_bar=True)
+
+    def on_train_epoch_end(self):
+        avg_acc = mean([item[0] for item in self.train_step_outputs])
+        avg_loss = mean([item[1] for item in self.train_step_outputs])
+        self.log("Training avg acc", avg_acc, prog_bar=True)
+        self.log("Training avg loss", avg_loss, prog_bar=True)
+        self.train_step_outputs.clear()
 
     def on_validation_epoch_end(self):
-        avg_acc = mean(self.validation_step_outputs)
+        avg_acc = mean(self.val_step_outputs)
         self.log("Validation avg acc", avg_acc, prog_bar=True)
-        print(f"\nValidation avg acc: {avg_acc}")
-        self.validation_step_outputs.clear()
+        self.val_step_outputs.clear()
 
     def configure_optimizers(self):
         return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
@@ -265,7 +278,7 @@ class ProtoTree(pl.LightningModule):
     def forward(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrat = "distributed",
+        strategy: SamplingStrat = "distributed",
     ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
         Produces predictions for input images.
@@ -275,7 +288,7 @@ class ProtoTree(pl.LightningModule):
         in this case, predicting_leaves is a list of leaves of length `batch_size`.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
-        :param sampling_strategy:
+        :param strategy:
 
         :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves
         """
@@ -284,19 +297,19 @@ class ProtoTree(pl.LightningModule):
         node_to_probs = self.tree_section.get_node_to_probs(similarities)
 
         # TODO: Find a better approach for this branching logic (https://martinfowler.com/bliki/FlagArgument.html).
-        match self.training, sampling_strategy:
+        match self.training, strategy:
             case _, "distributed":
                 predicting_leaves = None
                 logits = self.tree_section.tree_root.forward(node_to_probs)
             case False, "sample_max" | "greedy":
                 predicting_leaves = TreeSection.get_predicting_leaves(
-                    self.tree_section.tree_root, node_to_probs, sampling_strategy
+                    self.tree_section.tree_root, node_to_probs, strategy
                 )
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
             case _:
                 raise ValueError(
-                    f"Invalid train/test and sampling strategy combination: {self.training=}, {sampling_strategy=}"
+                    f"Invalid train/test and sampling strategy combination: {self.training=}, {strategy=}"
                 )
 
         return logits, node_to_probs, predicting_leaves
@@ -304,7 +317,7 @@ class ProtoTree(pl.LightningModule):
     def explain(
         self,
         x: torch.Tensor,
-        sampling_strategy: SingleLeafStrat = "sample_max",
+        strategy: SingleLeafStrat = "sample_max",
     ) -> tuple[
         Tensor,
         dict[Node, NodeProbabilities],
@@ -320,13 +333,11 @@ class ProtoTree(pl.LightningModule):
         rationalizations.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
-        :param sampling_strategy:
+        :param strategy:
 
         :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations
         """
-        logits, node_to_probs, predicting_leaves = self.forward(
-            x, sampling_strategy=sampling_strategy
-        )
+        logits, node_to_probs, predicting_leaves = self.forward(x, strategy=strategy)
         leaf_explanations = self.rationalize(x, predicting_leaves)
         return logits, node_to_probs, predicting_leaves, leaf_explanations
 
@@ -383,17 +394,24 @@ class ProtoTree(pl.LightningModule):
     def predict(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrat = "sample_max",
+        strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
-        logits = self.forward(x, sampling_strategy)[0]
+        logits = self.predict_logits(x, strategy=strategy)
         return logits.argmax(dim=1)
+
+    def predict_logits(
+        self,
+        x: torch.Tensor,
+        strategy: SamplingStrat = "sample_max",
+    ) -> torch.Tensor:
+        return self.forward(x, strategy=strategy)[0]
 
     def predict_probs(
         self,
         x: torch.Tensor,
         strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
-        logits = self.forward(x, strategy)[0]
+        logits = self.predict_logits(x, strategy=strategy)
         return logits.softmax(dim=1)
 
     def log_state(self):
@@ -633,8 +651,8 @@ class TreeSection(nn.Module):
         # distributions (leaf.dist_params), by lowpass filtering out noise from minibatching in the optimization.
         # TODO: Work out how best to initialize the EWMA to avoid a long "burn-in".
         leaf.dist_param_update_count += 1
-        #count_alpha = 1 / leaf.dist_param_update_count
-        #alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
+        # count_alpha = 1 / leaf.dist_param_update_count
+        # alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
         leaf.dist_params.mul_(1.0 - self.leaf_opt_ewma_alpha)
         leaf.dist_params.add_(dist_update)
 
