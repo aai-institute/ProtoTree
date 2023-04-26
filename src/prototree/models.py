@@ -248,7 +248,7 @@ class ProtoTree(pl.LightningModule):
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
-        self.train_step_outputs.append((acc, loss))
+        self.train_step_outputs.append((acc, loss.item()))
         self.log("Train acc", acc, prog_bar=True)
         self.log("Training loss", loss, prog_bar=True)
 
