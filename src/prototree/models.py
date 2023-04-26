@@ -651,9 +651,9 @@ class TreeSection(nn.Module):
         # distributions (leaf.dist_params), by lowpass filtering out noise from minibatching in the optimization.
         # TODO: Work out how best to initialize the EWMA to avoid a long "burn-in".
         leaf.dist_param_update_count += 1
-        # count_alpha = 1 / leaf.dist_param_update_count
-        # alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
-        leaf.dist_params.mul_(1.0 - self.leaf_opt_ewma_alpha)
+        count_alpha = 1 / leaf.dist_param_update_count  # Stops the first updates having too large an impact.
+        alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
+        leaf.dist_params.mul_(1.0 - alpha)
         leaf.dist_params.add_(dist_update)
 
     def log_leaves_properties(self):
