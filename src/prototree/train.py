@@ -37,7 +37,7 @@ def get_nonlinear_scheduler(model, params: NonlinearSchedulerParams):
     )
 
     # TODO(Hack): It's difficult to add these extra items in a way that Lightning will accept them. Do we need to
-    #  extend the scheduler class?
+    #  extend the scheduler class? That would be quite a lot of boilerplate/abstraction to do something so simple.
     scheduler.freeze_epochs = params.optim_params.freeze_epochs
 
     return [optimizer], [scheduler]
@@ -119,7 +119,7 @@ def get_nonlinear_optimizer(
         )
 
     # TODO(Hack): It's difficult to add these extra items in a way that Lightning will accept them. Do we need to
-    #  extend the Optimizer class?
+    #  extend the optimizer class?  That would be quite a lot of boilerplate/abstraction to do something so simple.
     optimizer.params_to_freeze = params_to_freeze
     optimizer.params_to_train = params_to_train
     return optimizer

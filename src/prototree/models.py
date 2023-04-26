@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import logging
-import math
+from math import isnan
 from statistics import mean
 from typing import List, Literal, Optional, Union
 
@@ -238,7 +238,7 @@ class ProtoTree(pl.LightningModule):
 
         logits, node_to_prob, predicting_leaves = self.forward(x)
         loss = F.nll_loss(logits, y)
-        if math.isnan(loss.item()):
+        if isnan(loss.item()):
             raise ValueError("Loss is NaN, cannot proceed any further.")
         nonlinear_optim.zero_grad()
         self.manual_backward(loss)

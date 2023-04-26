@@ -74,12 +74,14 @@ class L2Conv2D(nn.Module):
         # Shape: (bs, num_prototypes, w_in, h_in)
         xs_conv = F.conv2d(x, weight=self.prototype_tensors)
 
+        # TODO: Negative numbers can appear here, so we have to clamp (adding an epsilon could be done, but it would
+        #  need to be quite large to be reliable).
+        #      1. Figure out why seemingly insignificant changes (e.g. refactors with no intended change to the
+        #         numerical calculations, smaller batches, bumping library versions) cause negative numbers to start
+        #         appearing, or appear more quickly.
+        #      2. What numerical instabilities are causing such negative numbers here? (e.g. -1e-7)
+        #      3. Should we just compute ||xs - ps ||^2 instead of expanding to ||xs||^2 + ||ps||^2 - 2 * xs * ps ?
         distances_sq = xs_squared_l2 - 2 * xs_conv + ps_squared_l2.view(-1, 1, 1)
-        distances_sq_plus_eps = distances_sq + 1e-14
-        if torch.any(distances_sq_plus_eps < 0.0):
-            abc = 1
-
-        # TODO: Figure out why a seemingly insignificant change (just refactoring with no intended change to the
-        #  numerical calculations) means that we now have to clamp instead of just being able to add an epsilon.
         distances_sq_clamped = torch.clamp(distances_sq, min=1e-14)
+
         return torch.sqrt(distances_sq_clamped)  # TODO: Pick good eps.
