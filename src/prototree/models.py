@@ -118,7 +118,13 @@ class ProtoBase(nn.Module):
 
 
 class ProtoPNet(ProtoBase):
-    def __init__(self, num_classes: int, num_prototypes: int, proto_base: ProtoBase):
+    def __init__(
+        self,
+        num_classes: int,
+        num_prototypes: int,
+        proto_base: ProtoBase,
+        nonlinear_scheduler_params: NonlinearSchedulerParams,
+    ):
         super().__init__()
         self.proto_base = proto_base
 
@@ -127,8 +133,13 @@ class ProtoPNet(ProtoBase):
         # TODO: The paper specifies no bias, why?
         self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
 
+        self.nonlinear_scheduler_params = nonlinear_scheduler_params
+
     def training_step(self, batch, batch_idx):
         pass
+
+    def configure_optimizers(self):
+        return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.proto_base.forward(x)
@@ -656,7 +667,9 @@ class TreeSection(nn.Module):
         # distributions (leaf.dist_params), by lowpass filtering out noise from minibatching in the optimization.
         # TODO: Work out how best to initialize the EWMA to avoid a long "burn-in".
         leaf.dist_param_update_count += 1
-        count_alpha = 1 / leaf.dist_param_update_count  # Stops the first updates having too large an impact.
+        count_alpha = (
+            1 / leaf.dist_param_update_count
+        )  # Stops the first updates having too large an impact.
         alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
         leaf.dist_params.mul_(1.0 - alpha)
         leaf.dist_params.add_(dist_update)
