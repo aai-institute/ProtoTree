@@ -134,6 +134,9 @@ class ProtoPNet(ProtoBase):
         self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
 
         self.nonlinear_scheduler_params = nonlinear_scheduler_params
+        self.automatic_optimization = False
+
+        self.train_step_outputs, self.val_step_outputs = [], []
 
     def training_step(self, batch, batch_idx):
         pass
@@ -172,12 +175,12 @@ class LeafRationalization:
         prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
         the leaf is a right child.
         """
-        ancestor_children = [
+        internal_children: list[Node] = [
             ancestor_similarity.internal_node
             for ancestor_similarity in self.ancestor_similarities[1:]
-        ] + [
-            self.leaf
-        ]  # TODO: Convince PyCharm there's no type mismatch.
+        ]
+        leaf_single_list: list[Node] = [self.leaf]
+        ancestor_children = internal_children + leaf_single_list
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
