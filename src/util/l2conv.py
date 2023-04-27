@@ -63,6 +63,7 @@ class L2Conv2D(nn.Module):
         """
         prototypes = self.prototype_tensors if proto_indices is None else self.prototype_tensors[proto_indices]
 
+        assert (proto_indices is None) or torch.equal(prototypes[2, ...], self.prototype_tensors[proto_indices[2, :]])
 
         # Adapted from ProtoPNet
         # ||xs - ps ||^2 = ||xs||^2 + ||ps||^2 - 2 * xs * ps
