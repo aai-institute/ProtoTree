@@ -5,9 +5,9 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.img_similarity import ImageProtoSimilarity, img_proto_similarity
-from prototree.models import TreeSection
-from prototree.node import InternalNode
+from proto.img_similarity import ImageProtoSimilarity, img_proto_similarity
+from proto.models import TreeSection
+from proto.node import InternalNode
 
 
 @torch.no_grad()

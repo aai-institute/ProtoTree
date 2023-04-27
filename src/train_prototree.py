@@ -6,12 +6,12 @@ from random import randint
 import lightning.pytorch as pl
 import torch
 
-from prototree.eval import eval_model, single_leaf_eval
-from prototree.models import ProtoTree
-from prototree.node import InternalNode
-from prototree.projection import project_prototypes
-from prototree.prune import prune_unconfident_leaves
-from prototree.train import (
+from proto.eval import eval_model, single_leaf_eval
+from proto.models import ProtoTree
+from proto.node import InternalNode
+from proto.projection import project_prototypes
+from proto.prune import prune_unconfident_leaves
+from proto.train import (
     NonlinearOptimParams,
     NonlinearSchedulerParams,
 )

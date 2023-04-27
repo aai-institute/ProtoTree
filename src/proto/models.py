@@ -11,15 +11,15 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
 
-from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
-from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
-from prototree.train import (
+from proto.img_similarity import img_proto_similarity, ImageProtoSimilarity
+from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
+from proto.train import (
     NonlinearSchedulerParams,
     get_nonlinear_scheduler,
     maybe_freeze,
     freezable_step,
 )
-from prototree.types import SamplingStrat, SingleLeafStrat
+from proto.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, NAME_TO_NET
 

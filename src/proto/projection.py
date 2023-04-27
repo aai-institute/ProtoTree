@@ -1,8 +1,8 @@
 import torch
 
-from prototree.img_similarity import ImageProtoSimilarity
-from prototree.models import TreeSection
-from prototree.node import Node
+from proto.img_similarity import ImageProtoSimilarity
+from proto.models import TreeSection
+from proto.node import Node
 
 
 @torch.no_grad()

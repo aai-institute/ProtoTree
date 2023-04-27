@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import torch
 
-from prototree.node import InternalNode
+from proto.node import InternalNode
 
 
 @dataclass
