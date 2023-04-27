@@ -23,18 +23,17 @@ from proto.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, NAME_TO_NET
 
-
 logging.getLogger("lightning.pytorch").setLevel(logging.INFO)
 log = logging.getLogger("lightning.pytorch.core")
 
 
 class ProtoBase(nn.Module):
     def __init__(
-        self,
-        num_prototypes: int,
-        prototype_shape: tuple[int, int, int],
-        backbone: torch.nn.Module,
-        add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
+            self,
+            num_prototypes: int,
+            prototype_shape: tuple[int, int, int],
+            backbone: torch.nn.Module,
+            add_on_layers: Optional[Union[nn.Module, Literal["default"]]] = "default",
     ):
         """
         :param prototype_shape: shape of the prototypes. (channels, height, width)
@@ -78,21 +77,16 @@ class ProtoBase(nn.Module):
         features = self.extract_features(x)
         return features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
 
-    def distances(self, x: torch.Tensor) -> torch.Tensor:
+    def distances(self, x: torch.Tensor, proto_indices: torch.Tensor = None) -> torch.Tensor:
         """
         Computes the minimal distances between the prototypes and the input.
         The output has the shape (batch_size, num_prototypes, n_patches_w, n_patches_h)
         """
         x = self.extract_features(x)
-        return self.prototype_layer(x)
+        return self.prototype_layer(x, proto_indices=proto_indices)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Computes the minimal distances between the prototypes and the input.
-        The input has the shape (batch_size, num_channels, H, W).
-        The output has the shape (batch_size, num_prototypes).
-        """
-        x = self.distances(x)
+    def forward(self, x: torch.Tensor, proto_indices: torch.Tensor = None) -> torch.Tensor:
+        x = self.distances(x, proto_indices=proto_indices)
         return torch.amin(x, dim=(2, 3))
 
     @property
@@ -124,19 +118,20 @@ class ProtoBase(nn.Module):
 
 class ProtoPNet(pl.LightningModule):
     def __init__(
-        self,
-        h_proto: int,
-        w_proto: int,
-        channels_proto: int,
-        num_classes: int,
-        num_prototypes: int,
-        nonlinear_scheduler_params: NonlinearSchedulerParams,
-        backbone_name="resnet50_inat",
-        pretrained=True,
+            self,
+            h_proto: int,
+            w_proto: int,
+            channels_proto: int,
+            num_classes: int,
+            prototypes_per_class: int,
+            nonlinear_scheduler_params: NonlinearSchedulerParams,
+            backbone_name="resnet50_inat",
+            pretrained=True,
     ):
         super().__init__()
         # TODO: Dependency injection?
 
+        num_prototypes = num_classes * prototypes_per_class
         backbone = NAME_TO_NET[backbone_name](pretrained=pretrained)
         self.proto_base = ProtoBase(
             num_prototypes=num_prototypes,
@@ -144,6 +139,7 @@ class ProtoPNet(pl.LightningModule):
             backbone=backbone,
         )
         self.proto_base.apply_xavier()
+        self.class_proto_lookup = torch.reshape(torch.arange(0, num_prototypes), (num_classes, prototypes_per_class))
 
         # TODO: The paper specifies no bias, why?
         self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
@@ -167,6 +163,11 @@ class ProtoPNet(pl.LightningModule):
             )
 
         logits = self.forward(x)
+
+        proto_indices = self.class_proto_lookup[y, :]
+        min_in_class_dists = self.proto_base.forward(x, proto_indices=proto_indices)
+
+
         loss = F.nll_loss(logits, y)
         if isnan(loss.item()):
             raise ValueError("Loss is NaN, cannot proceed any further.")
@@ -209,8 +210,8 @@ class ProtoPNet(pl.LightningModule):
         return F.log_softmax(x, dim=1)
 
     def predict_probs(
-        self,
-        x: torch.Tensor,
+            self,
+            x: torch.Tensor,
     ) -> torch.Tensor:
         """
         Computes the probabilities of the classes for the input.
@@ -246,17 +247,17 @@ class LeafRationalization:
 
 class ProtoTree(pl.LightningModule):
     def __init__(
-        self,
-        h_proto: int,
-        w_proto: int,
-        channels_proto: int,
-        num_classes: int,
-        depth: int,
-        leaf_pruning_threshold: float,
-        leaf_opt_ewma_alpha: float,
-        nonlinear_scheduler_params: NonlinearSchedulerParams,
-        backbone_name="resnet50_inat",
-        pretrained=True,
+            self,
+            h_proto: int,
+            w_proto: int,
+            channels_proto: int,
+            num_classes: int,
+            depth: int,
+            leaf_pruning_threshold: float,
+            leaf_opt_ewma_alpha: float,
+            nonlinear_scheduler_params: NonlinearSchedulerParams,
+            backbone_name="resnet50_inat",
+            pretrained=True,
     ):
         """
         :param h_proto: height of prototype
@@ -272,7 +273,7 @@ class ProtoTree(pl.LightningModule):
 
         # TODO: Use dependency injection here?
         backbone = NAME_TO_NET[backbone_name](pretrained=pretrained)
-        num_prototypes = 2**depth - 1
+        num_prototypes = 2 ** depth - 1
         self.proto_base = ProtoBase(
             num_prototypes=num_prototypes,
             prototype_shape=(channels_proto, w_proto, h_proto),
@@ -344,9 +345,9 @@ class ProtoTree(pl.LightningModule):
         return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
 
     def forward(
-        self,
-        x: torch.Tensor,
-        strategy: SamplingStrat = "distributed",
+            self,
+            x: torch.Tensor,
+            strategy: SamplingStrat = "distributed",
     ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
         Produces predictions for input images.
@@ -383,9 +384,9 @@ class ProtoTree(pl.LightningModule):
         return logits, node_to_probs, predicting_leaves
 
     def explain(
-        self,
-        x: torch.Tensor,
-        strategy: SingleLeafStrat = "sample_max",
+            self,
+            x: torch.Tensor,
+            strategy: SingleLeafStrat = "sample_max",
     ) -> tuple[
         Tensor,
         dict[Node, NodeProbabilities],
@@ -411,7 +412,7 @@ class ProtoTree(pl.LightningModule):
 
     @torch.no_grad()
     def rationalize(
-        self, x: torch.Tensor, predicting_leaves: list[Leaf]
+            self, x: torch.Tensor, predicting_leaves: list[Leaf]
     ) -> list[LeafRationalization]:
         # TODO: Lots of overlap with img_similarity.patch_match_candidates, so there's potential for extracting out
         #  commonality. However, we also need to beware of premature abstraction.
@@ -438,7 +439,7 @@ class ProtoTree(pl.LightningModule):
 
         rationalizations = []
         for x_i, predicting_leaf, dists_i, patches_i in zip(
-            x, predicting_leaves, dists, patches
+                x, predicting_leaves, dists, patches
         ):
             leaf_ancestors = predicting_leaf.ancestors
             ancestor_similarities: list[ImageProtoSimilarity] = []
@@ -460,24 +461,24 @@ class ProtoTree(pl.LightningModule):
         return rationalizations
 
     def predict(
-        self,
-        x: torch.Tensor,
-        strategy: SamplingStrat = "sample_max",
+            self,
+            x: torch.Tensor,
+            strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
         logits = self.predict_logits(x, strategy=strategy)
         return logits.argmax(dim=1)
 
     def predict_logits(
-        self,
-        x: torch.Tensor,
-        strategy: SamplingStrat = "sample_max",
+            self,
+            x: torch.Tensor,
+            strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
         return self.forward(x, strategy=strategy)[0]
 
     def predict_probs(
-        self,
-        x: torch.Tensor,
-        strategy: SamplingStrat = "sample_max",
+            self,
+            x: torch.Tensor,
+            strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
         logits = self.predict_logits(x, strategy=strategy)
         return logits.softmax(dim=1)
@@ -498,11 +499,11 @@ class ProtoTree(pl.LightningModule):
 
 class TreeSection(nn.Module):
     def __init__(
-        self,
-        num_classes: int,
-        depth: int,
-        leaf_pruning_threshold: float,
-        leaf_opt_ewma_alpha: float,
+            self,
+            num_classes: int,
+            depth: int,
+            leaf_pruning_threshold: float,
+            leaf_opt_ewma_alpha: float,
     ):
         super().__init__()
 
@@ -522,13 +523,13 @@ class TreeSection(nn.Module):
         return self
 
     def get_node_to_log_p_right(
-        self, similarities: torch.Tensor
+            self, similarities: torch.Tensor
     ) -> dict[Node, torch.Tensor]:
         return {node: -similarities[:, i] for node, i in self.node_to_proto_idx.items()}
 
     @staticmethod
     def _node_to_probs_from_p_right(
-        node_to_log_p_right: dict[Node, torch.Tensor], root: InternalNode
+            node_to_log_p_right: dict[Node, torch.Tensor], root: InternalNode
     ):
         """
         This method was separated out from get_node_to_probs to
@@ -577,7 +578,7 @@ class TreeSection(nn.Module):
         return result
 
     def get_node_to_probs(
-        self, similarities: torch.Tensor
+            self, similarities: torch.Tensor
     ) -> dict[Node, NodeProbabilities]:
         """
         Computes the log probabilities (left, right, arrival) for all nodes for the input x.
@@ -610,9 +611,9 @@ class TreeSection(nn.Module):
 
     @staticmethod
     def get_predicting_leaves(
-        root: InternalNode,
-        node_to_probs: dict[Node, NodeProbabilities],
-        sampling_strategy: SingleLeafStrat,
+            root: InternalNode,
+            node_to_probs: dict[Node, NodeProbabilities],
+            sampling_strategy: SingleLeafStrat,
     ) -> List[Leaf]:
         """
         Selects one leaf for each entry of the batch covered in node_to_probs.
@@ -627,7 +628,7 @@ class TreeSection(nn.Module):
 
     @staticmethod
     def _get_predicting_leaves_greedily(
-        root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
+            root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
     ) -> List[Leaf]:
         """
         Selects one leaf for each entry of the batch covered in node_to_probs.
@@ -651,7 +652,7 @@ class TreeSection(nn.Module):
 
     @staticmethod
     def _get_max_p_arrival_leaves(
-        leaves: List[Leaf], node_to_probs: dict[Node, NodeProbabilities]
+            leaves: List[Leaf], node_to_probs: dict[Node, NodeProbabilities]
     ) -> List[Leaf]:
         """
         Selects one leaf for each entry of the batch covered in node_to_probs.
@@ -669,10 +670,10 @@ class TreeSection(nn.Module):
 
     @torch.no_grad()
     def update_leaf_distributions(
-        self,
-        y_true: torch.Tensor,
-        logits: torch.Tensor,
-        node_to_prob: dict[Node, NodeProbabilities],
+            self,
+            y_true: torch.Tensor,
+            logits: torch.Tensor,
+            node_to_prob: dict[Node, NodeProbabilities],
     ):
         """
         :param y_true: shape (batch_size)
@@ -688,11 +689,11 @@ class TreeSection(nn.Module):
             self._update_leaf_distribution(leaf, node_to_prob, logits, y_true_logits)
 
     def _update_leaf_distribution(
-        self,
-        leaf: Leaf,
-        node_to_prob: dict[Node, NodeProbabilities],
-        logits: torch.Tensor,
-        y_true_logits: torch.Tensor,
+            self,
+            leaf: Leaf,
+            node_to_prob: dict[Node, NodeProbabilities],
+            logits: torch.Tensor,
+            y_true_logits: torch.Tensor,
     ):
         """
         :param leaf:
@@ -720,7 +721,7 @@ class TreeSection(nn.Module):
         # TODO: Work out how best to initialize the EWMA to avoid a long "burn-in".
         leaf.dist_param_update_count += 1
         count_alpha = (
-            1 / leaf.dist_param_update_count
+                1 / leaf.dist_param_update_count
         )  # Stops the first updates having too large an impact.
         alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
         leaf.dist_params.mul_(1.0 - alpha)

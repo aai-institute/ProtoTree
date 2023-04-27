@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -43,7 +45,7 @@ class L2Conv2D(nn.Module):
             prototype_initial_values, requires_grad=True
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, proto_indices: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Efficiently compute the squared L2 distance for all prototypes and patches simultaneously by using
         convolutions.
@@ -59,6 +61,9 @@ class L2Conv2D(nn.Module):
                    notation from the paper, the shape of x is `(batch_size, D, W, H)`.
         :return: a tensor of shape `(batch_size, num_prototypes, n_patches_w, n_patches_h)`.
         """
+        prototypes = self.prototype_tensors if proto_indices is None else self.prototype_tensors[proto_indices]
+
+
         # Adapted from ProtoPNet
         # ||xs - ps ||^2 = ||xs||^2 + ||ps||^2 - 2 * xs * ps
 

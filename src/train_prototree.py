@@ -129,7 +129,7 @@ def train_prototree(args: Namespace):
             w_proto=w_proto,
             channels_proto=channels_proto,
             num_classes=num_classes,
-            num_prototypes=num_classes * 10,
+            prototypes_per_class=10,
             nonlinear_scheduler_params=nonlinear_scheduler_params,
             backbone_name=backbone_name,
             pretrained=pretrained,
