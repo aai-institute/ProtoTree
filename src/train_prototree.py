@@ -7,7 +7,7 @@ import lightning.pytorch as pl
 import torch
 
 from proto.eval import eval_model, single_leaf_eval
-from proto.models import ProtoTree
+from proto.models import ProtoTree, ProtoPNet
 from proto.node import InternalNode
 from proto.projection import project_prototypes
 from proto.prune import prune_unconfident_leaves
@@ -110,18 +110,30 @@ def train_prototree(args: Namespace):
     )
 
     # PREPARE MODEL
-    model = ProtoTree(
-        h_proto=h_proto,
-        w_proto=w_proto,
-        channels_proto=channels_proto,
-        num_classes=num_classes,
-        depth=depth,
-        leaf_pruning_threshold=leaf_pruning_threshold,
-        leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
-        nonlinear_scheduler_params=nonlinear_scheduler_params,
-        backbone_name=backbone_name,
-        pretrained=pretrained,
-    )
+    if False:
+        model = ProtoTree(
+            h_proto=h_proto,
+            w_proto=w_proto,
+            channels_proto=channels_proto,
+            num_classes=num_classes,
+            depth=depth,
+            leaf_pruning_threshold=leaf_pruning_threshold,
+            leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
+            nonlinear_scheduler_params=nonlinear_scheduler_params,
+            backbone_name=backbone_name,
+            pretrained=pretrained,
+        )
+    else:
+        model = ProtoPNet(
+            h_proto=h_proto,
+            w_proto=w_proto,
+            channels_proto=channels_proto,
+            num_classes=num_classes,
+            num_prototypes=num_classes * 10,
+            nonlinear_scheduler_params=nonlinear_scheduler_params,
+            backbone_name=backbone_name,
+            pretrained=pretrained,
+        )
 
     # TRAIN
     log.info("Starting training.")

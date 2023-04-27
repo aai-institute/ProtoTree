@@ -122,18 +122,27 @@ class ProtoBase(nn.Module):
         self.add_on.apply(_xavier_on_conv)
 
 
-class ProtoPNet(ProtoBase):
+class ProtoPNet(pl.LightningModule):
     def __init__(
         self,
+        h_proto: int,
+        w_proto: int,
+        channels_proto: int,
         num_classes: int,
         num_prototypes: int,
-        proto_base: ProtoBase,
         nonlinear_scheduler_params: NonlinearSchedulerParams,
+        backbone_name="resnet50_inat",
+        pretrained=True,
     ):
         super().__init__()
         # TODO: Dependency injection?
 
-        self.proto_base = proto_base
+        backbone = NAME_TO_NET[backbone_name](pretrained=pretrained)
+        self.proto_base = ProtoBase(
+            num_prototypes=num_prototypes,
+            prototype_shape=(channels_proto, w_proto, h_proto),
+            backbone=backbone,
+        )
         self.proto_base.apply_xavier()
 
         # TODO: The paper specifies no bias, why?
@@ -164,6 +173,32 @@ class ProtoPNet(ProtoBase):
         nonlinear_optim.zero_grad()
         self.manual_backward(loss)
         nonlinear_optim.step()  # Doesn't include classifier layer.
+
+        y_pred = logits.argmax(dim=1)
+        acc = (y_pred == y).sum().item() / len(y)
+        self.train_step_outputs.append((acc, loss.item()))
+        self.log("Train acc", acc, prog_bar=True)
+        self.log("Training loss", loss, prog_bar=True)
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+
+        y_pred = self.predict(x)
+        acc = (y_pred == y).sum().item() / len(y)
+        self.val_step_outputs.append(acc)
+        self.log("Validation acc", acc, prog_bar=True)
+
+    def on_train_epoch_end(self):
+        avg_acc = mean([item[0] for item in self.train_step_outputs])
+        avg_loss = mean([item[1] for item in self.train_step_outputs])
+        self.log("Training avg acc", avg_acc, prog_bar=True)
+        self.log("Training avg loss", avg_loss, prog_bar=True)
+        self.train_step_outputs.clear()
+
+    def on_validation_epoch_end(self):
+        avg_acc = mean(self.val_step_outputs)
+        self.log("Validation avg acc", avg_acc, prog_bar=True)
+        self.val_step_outputs.clear()
 
     def configure_optimizers(self):
         return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
