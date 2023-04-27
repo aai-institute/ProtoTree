@@ -150,6 +150,21 @@ class ProtoPNet(ProtoBase):
 
         x, y = batch
 
+        if batch_idx == 0:
+            freezable_step(
+                nonlinear_scheduler,
+                self.trainer.current_epoch,
+                nonlinear_optim.params_to_freeze,
+            )
+
+        logits = self.forward(x)
+        loss = F.nll_loss(logits, y)
+        if isnan(loss.item()):
+            raise ValueError("Loss is NaN, cannot proceed any further.")
+        nonlinear_optim.zero_grad()
+        self.manual_backward(loss)
+        nonlinear_optim.step()  # Doesn't include classifier layer.
+
     def configure_optimizers(self):
         return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
 
