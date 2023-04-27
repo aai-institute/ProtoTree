@@ -31,7 +31,8 @@ def default_add_on_layers(feature_convnet: nn.Module, out_channels: int):
         kernel_size=1,
         bias=False,
     )
-    # TODO: allow other activations
+    # TODO: Should we allow other activations? Why does this have to be a sigmoid? Forcing [0, 1] due to relatively few
+    #  layers after this one?
     return nn.Sequential(conv_layer, nn.Sigmoid())
 
 
