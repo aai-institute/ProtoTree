@@ -61,15 +61,15 @@ class L2Conv2D(nn.Module):
                    notation from the paper, the shape of x is `(batch_size, D, W, H)`.
         :return: a tensor of shape `(batch_size, num_prototypes, n_patches_w, n_patches_h)`.
         """
-        prototypes = self.prototype_tensors if proto_indices is None else self.prototype_tensors[proto_indices]
+        prototypes = self.prototype_tensors if proto_indices is None else torch.transpose(self.prototype_tensors[proto_indices], 0, 1).transpose(1, 2).transpose(2, 3).transpose(3, 4)
 
-        assert (proto_indices is None) or torch.equal(prototypes[2, ...], self.prototype_tensors[proto_indices[2, :]])
+        #assert (proto_indices is None) or torch.equal(prototypes[2, ...], self.prototype_tensors[proto_indices[2, :]])
 
         # Adapted from ProtoPNet
         # ||xs - ps ||^2 = ||xs||^2 + ||ps||^2 - 2 * xs * ps
 
         # ||xs||^2 for all patches simultaneously by convolving with ones
-        _ones = torch.ones_like(self.prototype_tensors, device=x.device)
+        _ones = torch.ones_like(prototypes)
         # Shape: (bs, num_prototypes, w_in - w + 1, h_in - h + 1)
         xs_squared_l2 = F.conv2d(x**2, weight=_ones)
 
