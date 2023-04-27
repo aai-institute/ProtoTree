@@ -166,15 +166,15 @@ class ProtoPNet(pl.LightningModule):
                 nonlinear_optim.params_to_freeze,
             )
 
-        logits = self.forward(x)
-        loss = F.nll_loss(logits, y)
+        unnormed_logits = self.forward(x)
+        loss = F.cross_entropy(unnormed_logits, y)
         if isnan(loss.item()):
             raise ValueError("Loss is NaN, cannot proceed any further.")
         nonlinear_optim.zero_grad()
         self.manual_backward(loss)
         nonlinear_optim.step()  # Doesn't include classifier layer.
 
-        y_pred = logits.argmax(dim=1)
+        y_pred = unnormed_logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
         self.train_step_outputs.append((acc, loss.item()))
         self.log("Train acc", acc, prog_bar=True)
