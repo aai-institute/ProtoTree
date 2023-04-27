@@ -6,6 +6,8 @@ import torch
 import torch.optim
 import torch.utils.data
 from torch.nn import Parameter
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import MultiStepLR
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +32,9 @@ class NonlinearSchedulerParams:
     gamma: float
 
 
-def get_nonlinear_scheduler(model, params: NonlinearSchedulerParams):
+def get_nonlinear_scheduler(
+    model, params: NonlinearSchedulerParams
+) -> tuple[list[Optimizer], list[MultiStepLR]]:
     optimizer = get_nonlinear_optimizer(model, params.optim_params)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer, milestones=params.milestones, gamma=params.gamma
@@ -96,8 +100,8 @@ def get_nonlinear_optimizer(
         ]
 
     if optim_params.optim_type == "SGD":
-        # TODO: why no momentum for the prototype layer?
-        # add momentum to the first three entries of paramlist
+        # TODO: Why no momentum for the prototype layer?
+        #  Add momentum to the first three entries of paramlist
         for i in range(3):
             param_list[i]["momentum"] = optim_params.momentum
         # TODO: why pass momentum here explicitly again? Which one is taken?
@@ -123,3 +127,25 @@ def get_nonlinear_optimizer(
     optimizer.params_to_freeze = params_to_freeze
     optimizer.params_to_train = params_to_train
     return optimizer
+
+
+def freezable_step(scheduler: MultiStepLR, current_epoch: int, params_to_freeze: list):
+    # TODO: Extend the scheduler class and make this a method? It seems hard to do this generically in a way that
+    #  doesn't conflict with the restrictive Lightning API.
+    if current_epoch > 0:
+        scheduler.step()
+
+    maybe_freeze(scheduler.freeze_epochs, current_epoch, params_to_freeze)
+
+
+def maybe_freeze(freeze_epochs: int, current_epoch: int, params_to_freeze: list):
+    # TODO: https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.BaseFinetuning.html ?
+    if freeze_epochs > 0:
+        if current_epoch == 0:
+            log.info(f"Freezing network for {freeze_epochs} epochs.")
+            for param in params_to_freeze:
+                param.requires_grad = False
+        elif current_epoch == freeze_epochs + 1:
+            log.info(f"Unfreezing network on epoch {current_epoch}.")
+            for param in params_to_freeze:
+                param.requires_grad = True

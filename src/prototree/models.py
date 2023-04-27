@@ -13,7 +13,12 @@ from torch.nn import functional as F
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
-from prototree.train import NonlinearSchedulerParams, get_nonlinear_scheduler
+from prototree.train import (
+    NonlinearSchedulerParams,
+    get_nonlinear_scheduler,
+    maybe_freeze,
+    freezable_step,
+)
 from prototree.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, NAME_TO_NET
@@ -126,9 +131,10 @@ class ProtoPNet(ProtoBase):
         nonlinear_scheduler_params: NonlinearSchedulerParams,
     ):
         super().__init__()
-        self.proto_base = proto_base
+        # TODO: Dependency injection?
 
-        # TODO: Use dependency injection for the second half of the model?
+        self.proto_base = proto_base
+        self.proto_base.apply_xavier()
 
         # TODO: The paper specifies no bias, why?
         self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
@@ -139,7 +145,10 @@ class ProtoPNet(ProtoBase):
         self.train_step_outputs, self.val_step_outputs = [], []
 
     def training_step(self, batch, batch_idx):
-        pass
+        nonlinear_optim = self.optimizers()
+        nonlinear_scheduler = self.lr_schedulers()
+
+        x, y = batch
 
     def configure_optimizers(self):
         return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
@@ -238,22 +247,11 @@ class ProtoTree(pl.LightningModule):
         x, y = batch
 
         if batch_idx == 0:
-            current_epoch = self.trainer.current_epoch
-            if current_epoch > 0:
-                nonlinear_scheduler.step()
-
-            # TODO: https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.BaseFinetuning.html ?
-            if nonlinear_scheduler.freeze_epochs > 0:
-                if current_epoch == 0:
-                    log.info(
-                        f"Freezing network for {nonlinear_scheduler.freeze_epochs} epochs."
-                    )
-                    for param in nonlinear_optim.params_to_freeze:
-                        param.requires_grad = False
-                elif current_epoch == nonlinear_scheduler.freeze_epochs + 1:
-                    log.info(f"Unfreezing network on epoch {current_epoch}.")
-                    for param in nonlinear_optim.params_to_freeze:
-                        param.requires_grad = True
+            freezable_step(
+                nonlinear_scheduler,
+                self.trainer.current_epoch,
+                nonlinear_optim.params_to_freeze,
+            )
 
         logits, node_to_prob, predicting_leaves = self.forward(x)
         loss = F.nll_loss(logits, y)
