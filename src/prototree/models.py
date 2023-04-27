@@ -123,10 +123,15 @@ class ProtoPNet(ProtoBase):
         self.proto_base = proto_base
 
         # TODO: Use dependency injection for the second half of the model?
-        self.classifier = nn.Linear(num_prototypes, num_classes)
+
+        # TODO: The paper specifies no bias, why?
+        self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
+
+    def training_step(self, batch, batch_idx):
+        pass
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = super().forward(x)
+        x = self.proto_base.forward(x)
         return self.classifier(x)
 
     def predict_probs(
