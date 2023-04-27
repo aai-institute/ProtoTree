@@ -66,7 +66,7 @@ class ProtoBase(nn.Module):
 
     def patches(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Get the patches for a given input tensor. This is the same as extract_features, except the output is reshaped to
+        Get the patches for a given input tensor. This is the same as extract_features, except the output is unfolded to
         be (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto).
         """
         w_proto, h_proto = self.prototype_shape[:2]
