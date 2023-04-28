@@ -164,10 +164,29 @@ class ProtoPNet(pl.LightningModule):
 
         logits = self.forward(x)
 
-        proto_indices = self.class_proto_lookup[y, :]
-        min_in_class_dists = self.proto_base.forward(x, proto_indices=proto_indices)
+        def exclusion_range(idx: torch.Tensor, n: torch.Tensor):
+            r = torch.arange(n)
+            return r[r != idx]
 
-        loss = F.nll_loss(logits, y)
+        def select_not_unbatched(t: torch.Tensor, y_single: torch.Tensor):
+            excl = exclusion_range(y_single, t.shape[0])
+            return torch.flatten(t[excl, :])
+
+        def select_not(t: torch.Tensor, y: torch.Tensor):
+            # TODO: Vectorize this if it turns out to be a bottleneck.
+            single_selections = [select_not_unbatched(t, y_single) for y_single in y]
+            return torch.stack(single_selections, dim=0)
+
+        proto_in_class_indices = self.class_proto_lookup[y, :]
+        proto_out_class_indices = select_not(self.class_proto_lookup, y)
+        min_in_class_dists = self.proto_base.forward(x, proto_indices=proto_in_class_indices)
+        min_out_class_dists = self.proto_base.forward(x, proto_indices=proto_out_class_indices)
+        min_in_class_dist = torch.amin(min_in_class_dists, dim=1)
+        min_out_class_dist = torch.amin(min_out_class_dists, dim=1)
+
+        cluster_coeff, sep_coeff = 0.8, -0.08
+        cluster_cost, sep_cost = torch.mean(min_in_class_dist), torch.mean(min_out_class_dist)
+        loss = F.nll_loss(logits, y) + cluster_coeff * cluster_cost + sep_cost * sep_cost
         if isnan(loss.item()):
             raise ValueError("Loss is NaN, cannot proceed any further.")
         nonlinear_optim.zero_grad()
