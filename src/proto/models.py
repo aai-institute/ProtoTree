@@ -186,7 +186,8 @@ class ProtoPNet(pl.LightningModule):
 
         cluster_coeff, sep_coeff = 0.8, -0.08
         cluster_cost, sep_cost = torch.mean(min_in_class_dist), torch.mean(min_out_class_dist)
-        loss = F.nll_loss(logits, y) + cluster_coeff * cluster_cost + sep_cost * sep_cost
+        nll_loss = F.nll_loss(logits, y)
+        loss = nll_loss + cluster_coeff * cluster_cost + sep_cost * sep_cost
         if isnan(loss.item()):
             raise ValueError("Loss is NaN, cannot proceed any further.")
         nonlinear_optim.zero_grad()
@@ -195,8 +196,9 @@ class ProtoPNet(pl.LightningModule):
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
-        self.train_step_outputs.append((acc, loss.item()))
+        self.train_step_outputs.append((acc, nll_loss.item(), loss.item()))
         self.log("Train acc", acc, prog_bar=True)
+        self.log("Training NLL loss", nll_loss, prog_bar=True)
         self.log("Training loss", loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
@@ -209,8 +211,10 @@ class ProtoPNet(pl.LightningModule):
 
     def on_train_epoch_end(self):
         avg_acc = mean([item[0] for item in self.train_step_outputs])
-        avg_loss = mean([item[1] for item in self.train_step_outputs])
+        avg_nll_loss = mean([item[1] for item in self.train_step_outputs])
+        avg_loss = mean([item[2] for item in self.train_step_outputs])
         self.log("Training avg acc", avg_acc, prog_bar=True)
+        self.log("Training avg NLL loss", avg_nll_loss, prog_bar=True)
         self.log("Training avg loss", avg_loss, prog_bar=True)
         self.train_step_outputs.clear()
 
