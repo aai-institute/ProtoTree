@@ -167,7 +167,6 @@ class ProtoPNet(pl.LightningModule):
         proto_indices = self.class_proto_lookup[y, :]
         min_in_class_dists = self.proto_base.forward(x, proto_indices=proto_indices)
 
-
         loss = F.nll_loss(logits, y)
         if isnan(loss.item()):
             raise ValueError("Loss is NaN, cannot proceed any further.")
