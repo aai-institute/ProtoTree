@@ -1,6 +1,3 @@
-from collections import deque
-from typing import Optional
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -31,46 +28,29 @@ class L2Conv2D(nn.Module):
         :param initial_std: Initialize the prototypes with a Gaussian with this standard deviation.
         """
         super().__init__()
-        self.num_prototypes = num_prototypes
+        self.num_protos = num_prototypes
         self.input_channels = input_channels
         self.w = w
         self.h = h
-        self.prototype_shape = (w, h, input_channels)
+        self.proto_shape = (w, h, input_channels)
         # TODO: make consistent ordering!!
-        prototype_shape = (num_prototypes, input_channels, w, h)
+        protos_shape = (num_prototypes, input_channels, w, h)
 
-        prototype_initial_values = (
-                torch.randn(*prototype_shape) * initial_std + initial_mean
+        protos_initial_values = (
+                torch.randn(*protos_shape) * initial_std + initial_mean
         )
-        self.prototype_tensors = nn.Parameter(
-            prototype_initial_values, requires_grad=True
+        self.protos = nn.Parameter(
+            protos_initial_values, requires_grad=True
         )
 
-    def forward(self, x: torch.Tensor, proto_indices: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, proto_indices=None):
         if proto_indices is None:
-            prototypes = self.prototype_tensors
+            return L2Conv2D._dists_multi_im(x, self.protos)
         else:
-            # TODO: This is really inefficient, we're computing the distance for every (image i, prototypes for image j)
-            #  pair in the batch and then taking the diagonal where i == j. If this becomes a bottleneck we should do it
-            #  properly.
-            proto_indices_flat = torch.flatten(proto_indices)
-            prototypes = self.prototype_tensors[proto_indices_flat, ...]
-
-        dists = L2Conv2D._prototype_dists(x, prototypes)
-
-        if proto_indices is None:
-            return dists
-        else:
-            # TODO: Check this reshaping.
-            unflattened_shape = (dists.shape[0], *proto_indices.shape, *dists.shape[2:])
-            unflattened_dists = torch.reshape(dists, unflattened_shape)
-            dists_for_imgs = torch.diagonal(unflattened_dists, dim1=0, dim2=1)
-            permutation = deque(range(len(dists_for_imgs.shape)))
-            permutation.rotate()
-            return torch.permute(dists_for_imgs, tuple(permutation))
+            return L2Conv2D._dists_multi_im_and_proto(x, self.protos[proto_indices])
 
     @staticmethod
-    def _prototype_dists(x: torch.Tensor, prototypes: torch.Tensor):
+    def _dists(x: torch.Tensor, prototypes: torch.Tensor):
         """
         Efficiently compute the squared L2 distance for all prototypes and patches simultaneously by using
         convolutions.
@@ -115,3 +95,6 @@ class L2Conv2D(nn.Module):
         distances_sq_clamped = torch.clamp(distances_sq, min=1e-14)
 
         return torch.sqrt(distances_sq_clamped)  # TODO: Pick good eps.
+
+    _dists_multi_im = staticmethod(torch.func.vmap(_dists, in_dims=(0, None)))
+    _dists_multi_im_and_proto = staticmethod(torch.func.vmap(_dists, in_dims=(0, 0)))

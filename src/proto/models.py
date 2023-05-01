@@ -95,7 +95,7 @@ class ProtoBase(nn.Module):
 
     @property
     def num_prototypes(self):
-        return self.prototype_layer.num_prototypes
+        return self.prototype_layer.num_protos
 
     @property
     def prototype_channels(self):
@@ -103,7 +103,7 @@ class ProtoBase(nn.Module):
 
     @property
     def prototype_shape(self):
-        return self.prototype_layer.prototype_shape
+        return self.prototype_layer.proto_shape
 
     @torch.no_grad()
     def apply_xavier(self):

@@ -17,6 +17,6 @@ def project_prototypes(
     """
     for internal_node, patch_info in node_to_patch_matches.items():
         node_proto_idx = tree.node_to_proto_idx[internal_node]
-        tree.prototype_layer.prototype_tensors.data[
+        tree.prototype_layer.protos.data[
             node_proto_idx
         ] = patch_info.closest_patch.data
