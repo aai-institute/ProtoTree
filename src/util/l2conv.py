@@ -8,14 +8,15 @@ class L2Conv2D(nn.Module):
     Convolutional layer that computes the squared L2 distances for each prototype
     instead of the conventional inner product.
     """
+
     def __init__(
-            self,
-            num_prototypes: int,
-            input_channels: int,
-            w: int,
-            h: int,
-            initial_mean=0.0,
-            initial_std=1.0,
+        self,
+        num_prototypes: int,
+        input_channels: int,
+        w: int,
+        h: int,
+        initial_mean=0.0,
+        initial_std=1.0,
     ):
         """
         Create a new L2Conv2D layer
@@ -35,12 +36,8 @@ class L2Conv2D(nn.Module):
         # TODO: make consistent ordering!!
         protos_shape = (num_prototypes, input_channels, w, h)
 
-        protos_initial_values = (
-                torch.randn(*protos_shape) * initial_std + initial_mean
-        )
-        self.protos = nn.Parameter(
-            protos_initial_values, requires_grad=True
-        )
+        protos_initial_values = torch.randn(*protos_shape) * initial_std + initial_mean
+        self.protos = nn.Parameter(protos_initial_values, requires_grad=True)
 
     def forward(self, x: torch.Tensor, proto_indices=None):
         if proto_indices is None:
@@ -71,10 +68,10 @@ class L2Conv2D(nn.Module):
         # ||xs||^2 for all patches simultaneously by convolving with ones
         _ones = torch.ones_like(prototypes)
         # Shape: (bs, num_prototypes, w_in - w + 1, h_in - h + 1)
-        xs_squared_l2 = F.conv2d(x ** 2, weight=_ones)
+        xs_squared_l2 = F.conv2d(x**2, weight=_ones)
 
         # Shape: (num_prototypes, )
-        ps_squared_l2 = torch.sum(prototypes ** 2, dim=(1, 2, 3))
+        ps_squared_l2 = torch.sum(prototypes**2, dim=(1, 2, 3))
 
         # Compute xs * ps for all patches simultaneously by convolving
         # Shape: (bs, num_prototypes, w_in, h_in)
