@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import logging
 from math import isnan
 from statistics import mean
 from typing import List, Literal, Optional, Union
@@ -16,15 +15,11 @@ from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree,
 from proto.train import (
     NonlinearSchedulerParams,
     get_nonlinear_scheduler,
-    maybe_freeze,
     freezable_step,
 )
 from proto.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, NAME_TO_NET
-
-logging.getLogger("lightning.pytorch").setLevel(logging.INFO)
-log = logging.getLogger("lightning.pytorch.core")
 
 
 class ProtoBase(nn.Module):
