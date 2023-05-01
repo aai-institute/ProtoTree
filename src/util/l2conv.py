@@ -39,7 +39,7 @@ class L2Conv2D(nn.Module):
         protos_initial_values = torch.randn(*protos_shape) * initial_std + initial_mean
         self.protos = nn.Parameter(protos_initial_values, requires_grad=True)
 
-    def forward(self):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Efficiently compute the squared L2 distance for all prototypes and patches simultaneously by using
         convolutions.
