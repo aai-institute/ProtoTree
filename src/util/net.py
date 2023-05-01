@@ -30,8 +30,8 @@ def default_add_on_layers(feature_convnet: nn.Module, out_channels: int):
         out_channels=out_channels,
         kernel_size=1,
     )
-    torch.nn.init.xavier_normal_(
-        conv_layer_1.weight, gain=torch.nn.init.calculate_gain("relu")
+    torch.nn.init.kaiming_normal(
+        conv_layer_1.weight, nonlinearity="relu"
     )
     conv_layer_2 = nn.Conv2d(
         in_channels=out_channels,
