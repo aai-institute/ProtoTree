@@ -180,6 +180,8 @@ class ProtoPNet(pl.LightningModule):
 
         proto_in_class_indices = self.class_proto_lookup[y, :]
         proto_out_class_indices = select_not(self.class_proto_lookup, y)
+
+        # TODO: We've already calculated all the image<--->proto distances, no need to repeatedly recalculate them.
         min_in_class_dists = self.proto_base.forward(
             x, proto_indices=proto_in_class_indices
         )
