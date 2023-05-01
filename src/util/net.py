@@ -25,15 +25,19 @@ NAME_TO_NET = {
 
 
 def default_add_on_layers(feature_convnet: nn.Module, out_channels: int):
-    conv_layer = nn.Conv2d(
+    conv_layer_1 = nn.Conv2d(
         in_channels=num_out_channels(feature_convnet),
         out_channels=out_channels,
         kernel_size=1,
-        bias=False,
     )
-    # TODO: Should we allow other activations? Why does this have to be a sigmoid? Forcing [0, 1] due to relatively few
-    #  layers after this one?
-    return nn.Sequential(conv_layer, nn.Sigmoid())
+    conv_layer_2 = nn.Conv2d(
+        in_channels=out_channels,
+        out_channels=out_channels,
+        kernel_size=1,
+    )
+    # TODO: Should we allow other activations? Why is the 2nd a sigmoid? Forcing [0, 1] due to relatively few layers
+    #  after this one?
+    return nn.Sequential(conv_layer_1, nn.ReLU(), conv_layer_2, nn.Sigmoid())
 
 
 def num_out_channels(convnet: nn.Module):
