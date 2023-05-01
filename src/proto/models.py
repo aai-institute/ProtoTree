@@ -100,16 +100,6 @@ class ProtoBase(nn.Module):
     def prototype_shape(self):
         return self.prototype_layer.proto_shape
 
-    @torch.no_grad()
-    def apply_xavier(self):
-        def _xavier_on_conv(m):
-            if type(m) == torch.nn.Conv2d:
-                torch.nn.init.xavier_normal_(
-                    m.weight, gain=torch.nn.init.calculate_gain("sigmoid")
-                )
-
-        self.add_on.apply(_xavier_on_conv)
-
 
 class ProtoPNet(pl.LightningModule):
     def __init__(
@@ -133,7 +123,6 @@ class ProtoPNet(pl.LightningModule):
             prototype_shape=(channels_proto, w_proto, h_proto),
             backbone=backbone,
         )
-        self.proto_base.apply_xavier()
         self.class_proto_lookup = torch.reshape(
             torch.arange(0, num_prototypes), (num_classes, prototypes_per_class)
         )
