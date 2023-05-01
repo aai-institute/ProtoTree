@@ -8,7 +8,6 @@ class L2Conv2D(nn.Module):
     Convolutional layer that computes the squared L2 distances for each prototype
     instead of the conventional inner product.
     """
-
     def __init__(
             self,
             num_prototypes: int,
