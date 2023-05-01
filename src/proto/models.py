@@ -236,7 +236,13 @@ class ProtoPNet(pl.LightningModule):
         self.val_step_outputs.clear()
 
     def configure_optimizers(self):
-        return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
+        [optimizer], [scheduler] = get_nonlinear_scheduler(
+            self, self.nonlinear_scheduler_params
+        )
+        optimizer.param_groups.append(
+            {"params": list(self.classifier.parameters())} | optimizer.defaults
+        )
+        return [optimizer], [scheduler]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.proto_base.forward(x)
