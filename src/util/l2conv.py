@@ -39,14 +39,7 @@ class L2Conv2D(nn.Module):
         protos_initial_values = torch.randn(*protos_shape) * initial_std + initial_mean
         self.protos = nn.Parameter(protos_initial_values, requires_grad=True)
 
-    def forward(self, x: torch.Tensor, proto_indices=None):
-        if proto_indices is None:
-            return L2Conv2D._dists_multi_im(x, self.protos)
-        else:
-            return L2Conv2D._dists_multi_im_and_proto(x, self.protos[proto_indices])
-
-    @staticmethod
-    def _dists(x: torch.Tensor, prototypes: torch.Tensor):
+    def forward(self):
         """
         Efficiently compute the squared L2 distance for all prototypes and patches simultaneously by using
         convolutions.
@@ -62,6 +55,10 @@ class L2Conv2D(nn.Module):
                    notation from the paper, the shape of x is `(batch_size, D, W, H)`.
         :return: a tensor of shape `(batch_size, num_prototypes, n_patches_w, n_patches_h)`.
         """
+        return L2Conv2D._dists_multi_im(x, self.protos)
+
+    @staticmethod
+    def _dists(x: torch.Tensor, prototypes: torch.Tensor):
         # Adapted from ProtoPNet
         # ||xs - ps ||^2 = ||xs||^2 + ||ps||^2 - 2 * xs * ps
 
@@ -93,4 +90,3 @@ class L2Conv2D(nn.Module):
         return torch.sqrt(distances_sq_clamped)  # TODO: Pick good eps.
 
     _dists_multi_im = staticmethod(torch.func.vmap(_dists, in_dims=(0, None)))
-    _dists_multi_im_and_proto = staticmethod(torch.func.vmap(_dists, in_dims=(0, 0)))

@@ -72,20 +72,16 @@ class ProtoBase(nn.Module):
         features = self.extract_features(x)
         return features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
 
-    def distances(
-        self, x: torch.Tensor, proto_indices: torch.Tensor = None
-    ) -> torch.Tensor:
+    def distances(self, x: torch.Tensor) -> torch.Tensor:
         """
         Computes the minimal distances between the prototypes and the input.
         The output has the shape (batch_size, num_prototypes, n_patches_w, n_patches_h)
         """
         x = self.extract_features(x)
-        return self.prototype_layer(x, proto_indices=proto_indices)
+        return self.prototype_layer(x)
 
-    def forward(
-        self, x: torch.Tensor, proto_indices: torch.Tensor = None
-    ) -> torch.Tensor:
-        x = self.distances(x, proto_indices=proto_indices)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.distances(x)
         return torch.amin(x, dim=(2, 3))
 
     @property
