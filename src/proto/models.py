@@ -163,7 +163,9 @@ class ProtoPNet(pl.LightningModule):
                 nonlinear_optim.params_to_freeze,
             )
 
-        logits = self.forward(x)
+        all_dists = self.proto_base.forward(x)
+        unnormed_logits = self.classifier(all_dists)
+        logits = F.log_softmax(unnormed_logits, dim=1)
 
         def exclusion_range(idx: torch.Tensor, n: torch.Tensor):
             r = torch.arange(n)
@@ -174,20 +176,15 @@ class ProtoPNet(pl.LightningModule):
             return torch.flatten(t[excl, :])
 
         def select_not(t: torch.Tensor, y: torch.Tensor):
-            # TODO: Vectorize this if it turns out to be a bottleneck.
+            # TODO: Vectorize this if it becomes a bottleneck (as of this commit it isn't).
             single_selections = [select_not_unbatched(t, y_single) for y_single in y]
             return torch.stack(single_selections, dim=0)
 
         proto_in_class_indices = self.class_proto_lookup[y, :]
         proto_out_class_indices = select_not(self.class_proto_lookup, y)
 
-        # TODO: We've already calculated all the image<--->proto distances, no need to repeatedly recalculate them.
-        min_in_class_dists = self.proto_base.forward(
-            x, proto_indices=proto_in_class_indices
-        )
-        min_out_class_dists = self.proto_base.forward(
-            x, proto_indices=proto_out_class_indices
-        )
+        min_in_class_dists = torch.gather(all_dists, 1, proto_in_class_indices)
+        min_out_class_dists = torch.gather(all_dists, 1, proto_out_class_indices)
         min_in_class_dist = torch.amin(min_in_class_dists, dim=1)
         min_out_class_dist = torch.amin(min_out_class_dists, dim=1)
 
