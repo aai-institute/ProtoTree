@@ -7,9 +7,8 @@ import lightning.pytorch as pl
 import torch
 
 from proto.eval import eval_model, single_leaf_eval
-from proto.models import ProtoTree, ProtoPNet
+from proto.models import ProtoTree, ProtoPNet, updated_proto_patch_matches
 from proto.node import InternalNode
-from proto.projection import project_prototypes
 from proto.prune import prune_unconfident_leaves
 from proto.train import (
     NonlinearOptimParams,
@@ -24,7 +23,6 @@ from visualize.create.explanation.multi_patch import save_multi_patch_visualizat
 from visualize.create.patches import save_patch_visualizations
 from visualize.create.tree import save_tree_visualization
 from visualize.prepare.explanations import data_explanations
-from visualize.prepare.matches import updated_proto_patch_matches
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -140,6 +138,7 @@ def train_prototree(args: Namespace):
     trainer = pl.Trainer(
         detect_anomaly=False,
         max_epochs=epochs,
+        limit_train_batches=n_training_batches // 25,
         limit_val_batches=n_training_batches // 25,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
     )

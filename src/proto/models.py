@@ -1,7 +1,8 @@
+from copy import copy
 from dataclasses import dataclass
 from math import isnan
 from statistics import mean
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Iterator, Tuple
 
 import lightning.pytorch as pl
 import numpy as np
@@ -12,7 +13,6 @@ from torch.nn import functional as F
 
 from proto.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
-from proto.projection import project_prototypes
 from proto.train import (
     NonlinearSchedulerParams,
     get_nonlinear_scheduler,
@@ -21,7 +21,6 @@ from proto.train import (
 from proto.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, NAME_TO_NET
-from visualize.prepare.matches import updated_proto_patch_matches
 
 
 class ProtoBase(nn.Module):
@@ -101,6 +100,19 @@ class ProtoBase(nn.Module):
     @property
     def prototype_shape(self):
         return self.proto_layer.proto_shape
+
+    @torch.no_grad()
+    def project_prototypes(
+            self, node_to_patch_matches: dict[int, ImageProtoSimilarity]
+    ):
+        """
+        Replaces each prototype with a given patch.
+        Note: This mutates the prototype tensors.
+        TODO: We should probably not be mutating the tree (via the prototypes) after training, as this is making the code
+         less flexible and harder to reason about.
+        """
+        for proto_id, patch_info in node_to_patch_matches.items():
+            self.proto_layer.protos.data[proto_id] = patch_info.closest_patch.data
 
 
 class ProtoPNet(pl.LightningModule):
@@ -206,7 +218,7 @@ class ProtoPNet(pl.LightningModule):
         self.log("Validation acc", acc, prog_bar=True)
 
     def on_train_epoch_end(self):
-        project_prototypes(self.proto_base, self.proto_patch_matches)
+        self.proto_base.project_prototypes(self.proto_patch_matches)
 
         avg_acc = mean([item[0] for item in self.train_step_outputs])
         avg_nll_loss = mean([item[1] for item in self.train_step_outputs])
@@ -774,3 +786,58 @@ class TreeSection(nn.Module):
         class_labels_without_leaf = set(range(num_classes)) - classes_covered
         if class_labels_without_leaf:
             log.info(f"Never predicted classes: {class_labels_without_leaf}")
+
+
+@torch.no_grad()
+def updated_proto_patch_matches(
+    base: ProtoBase, original_matches: dict[int, ImageProtoSimilarity], x: torch.Tensor, y: torch.Tensor
+) -> dict[int, ImageProtoSimilarity]:
+    """
+    Produces a map where each key is a node and the corresponding value is information about the patch (out of all
+    images in the dataset) that is most similar to node's prototype.
+
+    :param base:
+    :param original_matches:
+    :param x:
+    :param y:
+    :return: The map of nodes to best matches.
+    """
+    updated_matches = copy(original_matches)
+    for proto_similarity, label in _patch_match_candidates(base, x, y):
+        proto_id = proto_similarity.proto_id
+        if proto_id in updated_matches:
+            cur_closest = updated_matches[proto_id]
+            if (
+                proto_similarity.closest_patch_distance
+                < cur_closest.closest_patch_distance
+            ):
+                updated_matches[proto_id] = proto_similarity
+        else:
+            updated_matches[proto_id] = proto_similarity
+
+    return updated_matches
+
+
+@torch.no_grad()
+def _patch_match_candidates(
+    base: ProtoBase, x: torch.Tensor, y: torch.Tensor,
+) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
+    # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
+    #  commonality. However, we also need to beware of premature abstraction.
+    """
+    Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
+    the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
+
+    :return: Iterator of (similarity, label)
+    """
+    patches, dists = base.patches(x), base.distances(
+        x
+    )  # Common subexpression elimination possible, if necessary.
+
+    for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
+        for proto_id in range(base.num_prototypes):
+            node_distances = dists_i[proto_id, :, :]
+            similarity = img_proto_similarity(
+                proto_id, x_i, node_distances, patches_i
+            )
+            yield similarity, y_i
