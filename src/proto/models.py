@@ -103,8 +103,8 @@ class ProtoPNet(pl.LightningModule):
         acc = (y_pred == y).sum().item() / len(y)
         self.train_step_outputs.append((acc, nll_loss.item(), loss.item()))
         self.log("Train acc", acc, prog_bar=True)
-        self.log("Training NLL loss", nll_loss, prog_bar=True)
-        self.log("Training loss", loss, prog_bar=True)
+        self.log("Train NLL loss", nll_loss, prog_bar=True)
+        self.log("Train loss", loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -112,7 +112,7 @@ class ProtoPNet(pl.LightningModule):
         y_pred = self.predict(x)
         acc = (y_pred == y).sum().item() / len(y)
         self.val_step_outputs.append(acc)
-        self.log("Validation acc", acc, prog_bar=True)
+        self.log("Val acc", acc, prog_bar=True)
 
     def on_train_epoch_end(self):
         if self.trainer.current_epoch in self.project_epochs:
@@ -121,15 +121,15 @@ class ProtoPNet(pl.LightningModule):
         avg_acc = mean([item[0] for item in self.train_step_outputs])
         avg_nll_loss = mean([item[1] for item in self.train_step_outputs])
         avg_loss = mean([item[2] for item in self.train_step_outputs])
-        self.log("Training avg acc", avg_acc, prog_bar=True)
-        self.log("Training avg NLL loss", avg_nll_loss, prog_bar=True)
-        self.log("Training avg loss", avg_loss, prog_bar=True)
+        self.log("Train avg acc", avg_acc, prog_bar=True)
+        self.log("Train avg NLL loss", avg_nll_loss, prog_bar=True)
+        self.log("Train avg loss", avg_loss, prog_bar=True)
         self.train_step_outputs.clear()
         self.proto_patch_matches.clear()
 
     def on_validation_epoch_end(self):
         avg_acc = mean(self.val_step_outputs)
-        self.log("Validation avg acc", avg_acc, prog_bar=True)
+        self.log("Val avg acc", avg_acc, prog_bar=True)
         self.val_step_outputs.clear()
 
     def configure_optimizers(self):
@@ -261,7 +261,7 @@ class ProtoTree(pl.LightningModule):
         acc = (y_pred == y).sum().item() / len(y)
         self.train_step_outputs.append((acc, loss.item()))
         self.log("Train acc", acc, prog_bar=True)
-        self.log("Training loss", loss, prog_bar=True)
+        self.log("Train loss", loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -269,7 +269,7 @@ class ProtoTree(pl.LightningModule):
         y_pred = self.predict(x, strategy="distributed")
         acc = (y_pred == y).sum().item() / len(y)
         self.val_step_outputs.append(acc)
-        self.log("Validation acc", acc, prog_bar=True)
+        self.log("Val acc", acc, prog_bar=True)
 
     def on_train_epoch_end(self):
         if self.trainer.current_epoch in self.project_epochs:
@@ -277,14 +277,14 @@ class ProtoTree(pl.LightningModule):
 
         avg_acc = mean([item[0] for item in self.train_step_outputs])
         avg_loss = mean([item[1] for item in self.train_step_outputs])
-        self.log("Training avg acc", avg_acc, prog_bar=True)
-        self.log("Training avg loss", avg_loss, prog_bar=True)
+        self.log("Train avg acc", avg_acc, prog_bar=True)
+        self.log("Train avg loss", avg_loss, prog_bar=True)
         self.train_step_outputs.clear()
         self.proto_patch_matches.clear()
 
     def on_validation_epoch_end(self):
         avg_acc = mean(self.val_step_outputs)
-        self.log("Validation avg acc", avg_acc, prog_bar=True)
+        self.log("Val avg acc", avg_acc, prog_bar=True)
         self.val_step_outputs.clear()
 
     def configure_optimizers(self):
