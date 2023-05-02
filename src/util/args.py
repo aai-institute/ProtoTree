@@ -170,6 +170,11 @@ def get_args() -> argparse.Namespace:
         default=5,
         help="Number of ProtoTrees to train and (optionally) use in an ensemble. Used in main_ensemble.py",
     )
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        help="One of 'protopnet' or 'prototree'."
+    )
     args = parser.parse_args()
     args.milestones_list = get_milestones_list(
         args.milestones

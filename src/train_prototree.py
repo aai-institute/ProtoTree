@@ -69,6 +69,8 @@ def train_prototree(args: Namespace):
     channels_proto = args.num_features
     depth = args.depth
 
+    model_type = args.model_type
+
     log.info(f"Training and testing ProtoTree with {args=}.")
 
     # PREPARE DATA
@@ -109,32 +111,35 @@ def train_prototree(args: Namespace):
     )
 
     # PREPARE MODEL
-    if False:
-        model = ProtoTree(
-            h_proto=h_proto,
-            w_proto=w_proto,
-            channels_proto=channels_proto,
-            num_classes=num_classes,
-            depth=depth,
-            leaf_pruning_threshold=leaf_pruning_threshold,
-            leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
-            project_epochs={epochs - 1},
-            nonlinear_scheduler_params=nonlinear_scheduler_params,
-            backbone_name=backbone_name,
-            pretrained=pretrained,
-        )
-    else:
-        model = ProtoPNet(
-            h_proto=h_proto,
-            w_proto=w_proto,
-            channels_proto=channels_proto,
-            num_classes=num_classes,
-            prototypes_per_class=10,
-            project_epochs=set((i for i in range(0, epochs))),
-            nonlinear_scheduler_params=nonlinear_scheduler_params,
-            backbone_name=backbone_name,
-            pretrained=pretrained,
-        )
+    match model_type:
+        case "prototree":
+            model = ProtoTree(
+                h_proto=h_proto,
+                w_proto=w_proto,
+                channels_proto=channels_proto,
+                num_classes=num_classes,
+                depth=depth,
+                leaf_pruning_threshold=leaf_pruning_threshold,
+                leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
+                project_epochs={epochs - 1},
+                nonlinear_scheduler_params=nonlinear_scheduler_params,
+                backbone_name=backbone_name,
+                pretrained=pretrained,
+            )
+        case "protopnet":
+            model = ProtoPNet(
+                h_proto=h_proto,
+                w_proto=w_proto,
+                channels_proto=channels_proto,
+                num_classes=num_classes,
+                prototypes_per_class=10,
+                project_epochs=set((i for i in range(0, epochs))),
+                nonlinear_scheduler_params=nonlinear_scheduler_params,
+                backbone_name=backbone_name,
+                pretrained=pretrained,
+            )
+        case _:
+            raise ValueError(f"Unknown model type {model_type}.")
 
     # TRAIN
     log.info("Starting training.")
