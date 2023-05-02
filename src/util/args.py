@@ -179,7 +179,7 @@ def get_args() -> argparse.Namespace:
         "--project_from_epoch",
         type=int,
         default=-1,
-        help="Project at end of each epoch from this epoch forwards. Value of -1 means no projection."
+        help="Project at end of each epoch from this epoch (0-indexed) forwards. Value of -1 means no projection."
     )
     args = parser.parse_args()
     args.milestones_list = get_milestones_list(

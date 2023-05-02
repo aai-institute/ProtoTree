@@ -124,7 +124,7 @@ def train_prototree(args: Namespace):
                 depth=depth,
                 leaf_pruning_threshold=leaf_pruning_threshold,
                 leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
-                project_epochs={epochs - 1},
+                project_epochs=project_epochs,
                 nonlinear_scheduler_params=nonlinear_scheduler_params,
                 backbone_name=backbone_name,
                 pretrained=pretrained,
