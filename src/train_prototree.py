@@ -24,7 +24,7 @@ from visualize.create.explanation.multi_patch import save_multi_patch_visualizat
 from visualize.create.patches import save_patch_visualizations
 from visualize.create.tree import save_tree_visualization
 from visualize.prepare.explanations import data_explanations
-from visualize.prepare.matches import node_patch_matches
+from visualize.prepare.matches import proto_patch_matches
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -164,7 +164,7 @@ def train_prototree(args: Namespace):
     log.info(
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
-    node_to_patch_matches = node_patch_matches(model, project_loader)
+    node_to_patch_matches = proto_patch_matches(model, project_loader)
     project_prototypes(model, node_to_patch_matches)  # TODO: Assess the impact of this.
     model.log_state()
 

@@ -6,58 +6,41 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from proto.img_similarity import ImageProtoSimilarity, img_proto_similarity
-from proto.models import TreeSection
+from proto.models import TreeSection, ProtoTree, ProtoBase
 from proto.node import InternalNode
 
 
 @torch.no_grad()
-def node_patch_matches(
-    tree: TreeSection,
-    loader: DataLoader,
-    constrain_on_classes=False,
-) -> dict[InternalNode, ImageProtoSimilarity]:
-    # TODO: Generalize to ProtoBase
+def proto_patch_matches(
+    base: ProtoBase, loader: DataLoader
+) -> dict[int, ImageProtoSimilarity]:
     """
     Produces a map where each key is a node and the corresponding value is information about the patch (out of all
     images in the dataset) that is most similar to node's prototype.
 
-    :param tree:
+    :param base:
     :param loader: The dataset.
-    :param constrain_on_classes: Defaults to False. If True, only consider patches from classes that are contained in
-        the prototype's leaves' predictions. Note that if True, node_patch_matches could end up not having all the
-        nodes in its keys, which can lead to problems later on.
     :return: The map of nodes to best matches.
     """
+    proto_id_to_patch_matches: dict[int, ImageProtoSimilarity] = {}
+    for proto_similarity, label in _patch_match_candidates(base, loader):
+        proto_id = proto_similarity.proto_id
+        if proto_id in proto_id_to_patch_matches:
+            cur_closest = proto_id_to_patch_matches[proto_id]
+            if (
+                proto_similarity.closest_patch_distance
+                < cur_closest.closest_patch_distance
+            ):
+                proto_id_to_patch_matches[proto_id] = proto_similarity
+        else:
+            proto_id_to_patch_matches[proto_id] = proto_similarity
 
-    @lru_cache(maxsize=10000)
-    def get_leaf_labels(internal_node: InternalNode):
-        # TODO: Should this be a method on the node? If this weren't an inner function, we'd need to beware of caching
-        #  incorrect results when the leaf logits change.
-        return {leaf.predicted_label() for leaf in internal_node.leaves}
-
-    # TODO: (Minor) Is there a more functional way of doing this?
-    node_to_patch_matches: dict[InternalNode, ImageProtoSimilarity] = {}
-    for proto_similarity, label in _patch_match_candidates(tree, loader):
-        if (not constrain_on_classes) or label in get_leaf_labels(
-            proto_similarity.internal_node
-        ):
-            node = proto_similarity.internal_node
-            if node in node_to_patch_matches:
-                cur_closest = node_to_patch_matches[node]
-                if (
-                    proto_similarity.closest_patch_distance
-                    < cur_closest.closest_patch_distance
-                ):
-                    node_to_patch_matches[node] = proto_similarity
-            else:
-                node_to_patch_matches[node] = proto_similarity
-
-    return node_to_patch_matches
+    return proto_id_to_patch_matches
 
 
 @torch.no_grad()
 def _patch_match_candidates(
-    tree: TreeSection, loader: DataLoader
+    base: ProtoBase, loader: DataLoader
 ) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
     # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
     #  commonality. However, we also need to beware of premature abstraction.
@@ -68,17 +51,14 @@ def _patch_match_candidates(
     :return: Iterator of (similarity, label)
     """
     for x, y in tqdm(loader, desc="Data loader", ncols=0):
-        x, y = x.to(tree.device), y.to(tree.device)
-        patches, dists = tree.patches(x), tree.distances(
+        patches, dists = base.patches(x), base.distances(
             x
         )  # Common subexpression elimination possible, if necessary.
 
         for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
-            for internal_node in tree.internal_nodes:
-                node_proto_idx = tree.node_to_proto_idx[internal_node]
-
-                node_distances = dists_i[node_proto_idx, :, :]
+            for proto_id in range(base.num_prototypes):
+                node_distances = dists_i[proto_id, :, :]
                 similarity = img_proto_similarity(
-                    internal_node, x_i, node_distances, patches_i
+                    proto_id, x_i, node_distances, patches_i
                 )
                 yield similarity, y_i

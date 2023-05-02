@@ -3,8 +3,6 @@ from dataclasses import dataclass
 
 import torch
 
-from proto.node import InternalNode
-
 
 @dataclass
 class ImageProtoSimilarity:
@@ -13,7 +11,7 @@ class ImageProtoSimilarity:
     """
     Stores the similarities between each patch of an image and a node's prototype.
     """
-    internal_node: InternalNode
+    proto_id: int
     transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
     closest_patch: torch.Tensor
     closest_patch_distance: float
@@ -38,7 +36,7 @@ class ImageProtoSimilarity:
 
 @torch.no_grad()
 def img_proto_similarity(
-    internal_node: InternalNode,
+    proto_id: int,
     transformed_image: torch.Tensor,
     sample_patches_distances: torch.Tensor,
     sample_patches: torch.Tensor,
@@ -52,7 +50,7 @@ def img_proto_similarity(
     closest_patch_distance = sample_patches_distances.min().item()
 
     return ImageProtoSimilarity(
-        internal_node=internal_node,
+        proto_id=proto_id,
         transformed_image=transformed_image,
         closest_patch=closest_patch,
         closest_patch_distance=closest_patch_distance,
