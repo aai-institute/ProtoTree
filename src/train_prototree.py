@@ -147,6 +147,7 @@ def train_prototree(args: Namespace):
     # TRAIN
     log.info("Starting training.")
     trainer = pl.Trainer(
+        accelerator="cpu",
         detect_anomaly=False,
         max_epochs=epochs,
     #    limit_train_batches=n_training_batches // 250,
