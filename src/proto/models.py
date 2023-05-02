@@ -19,6 +19,7 @@ from proto.train import (
     freezable_step,
 )
 from proto.types import SamplingStrat, SingleLeafStrat
+from util.indexing import select_not
 from util.net import NAME_TO_NET
 
 
@@ -74,22 +75,8 @@ class ProtoPNet(pl.LightningModule):
         unnormed_logits = self.classifier(all_dists)
         logits = F.log_softmax(unnormed_logits, dim=1)
 
-        def exclusion_range(idx: torch.Tensor, n: torch.Tensor):
-            r = torch.arange(n)
-            return r[r != idx]
-
-        def select_not_unbatched(t: torch.Tensor, y_single: torch.Tensor):
-            excl = exclusion_range(y_single, t.shape[0])
-            return torch.flatten(t[excl, :])
-
-        def select_not(t: torch.Tensor, y: torch.Tensor):
-            # TODO: Vectorize this if it becomes a bottleneck (as of this commit it isn't).
-            single_selections = [select_not_unbatched(t, y_single) for y_single in y]
-            return torch.stack(single_selections, dim=0)
-
         proto_in_class_indices = self.class_proto_lookup[y, :]
         proto_out_class_indices = select_not(self.class_proto_lookup, y)
-
         min_in_class_dists = torch.gather(all_dists, 1, proto_in_class_indices)
         min_out_class_dists = torch.gather(all_dists, 1, proto_out_class_indices)
         min_in_class_dist = torch.amin(min_in_class_dists, dim=1)
