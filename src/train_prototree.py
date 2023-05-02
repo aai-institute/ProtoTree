@@ -149,30 +149,17 @@ def train_prototree(args: Namespace):
     trainer.fit(
         model=model, train_dataloaders=train_loader, val_dataloaders=test_loader
     )
-    log.info(f"Finished training.")
+    log.info("Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE
     model = model.eval()
-
     model.log_state()
 
     _prune_tree(model.tree_root, leaf_pruning_threshold)
-
+    pruned_acc = eval_model(model, test_loader)
+    log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
     model.log_state()
-    pruned_acc = eval_model(model, test_loader, desc="Pruned only")
-    log.info(f"\nTest acc. after pruning only: {pruned_acc:.3f}")
-
-    # PROJECT
-    log.info(
-        "Projecting prototypes to nearest training patch (with class restrictions)."
-    )
-    proto_to_patch_matches = updated_proto_patch_matches(model, project_loader)
-    project_prototypes(model, proto_to_patch_matches)  # TODO: Assess the impact of this.
-    model.log_state()
-
-    pruned_and_proj_acc = eval_model(model, test_loader)
-    log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
-    single_leaf_eval(model, test_loader, "Pruned and projected")
+    single_leaf_eval(model, test_loader, "Pruned")
 
     def explanations_provider():
         return data_explanations(
