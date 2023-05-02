@@ -175,6 +175,12 @@ def get_args() -> argparse.Namespace:
         type=str,
         help="One of 'protopnet' or 'prototree'."
     )
+    parser.add_argument(
+        "--project_from_epoch",
+        type=int,
+        default=-1,
+        help="Project at end of each epoch from this epoch forwards. Value of -1 means no projection."
+    )
     args = parser.parse_args()
     args.milestones_list = get_milestones_list(
         args.milestones

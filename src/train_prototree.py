@@ -53,23 +53,26 @@ def train_prototree(args: Namespace):
     # Training loop args
     disable_cuda = args.disable_cuda
     epochs = args.epochs
-    evaluate_each_epoch = 5
     # NOTE: after this, part of the net becomes unfrozen and loaded to GPU,
     # which may cause surprising memory errors after the training was already running for a while
     freeze_epochs = args.freeze_epochs
+
+    if args.project_from_epoch >= 0:
+        project_epochs = set((i for i in range(args.project_from_epoch, epochs)))
+    else:
+        project_epochs = {}
 
     # prototree specifics
     leaf_pruning_multiplier = args.leaf_pruning_multiplier
 
     # Architecture args
+    model_type = args.model_type
     backbone_name = args.backbone
     pretrained = not args.disable_pretrained
     h_proto = args.H1
     w_proto = args.W1
     channels_proto = args.num_features
     depth = args.depth
-
-    model_type = args.model_type
 
     log.info(f"Training and testing ProtoTree with {args=}.")
 
@@ -133,7 +136,7 @@ def train_prototree(args: Namespace):
                 channels_proto=channels_proto,
                 num_classes=num_classes,
                 prototypes_per_class=10,
-                project_epochs=set((i for i in range(0, epochs))),
+                project_epochs=project_epochs,
                 nonlinear_scheduler_params=nonlinear_scheduler_params,
                 backbone_name=backbone_name,
                 pretrained=pretrained,
