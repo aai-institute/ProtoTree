@@ -7,7 +7,8 @@ import lightning.pytorch as pl
 import torch
 
 from proto.eval import eval_model, single_leaf_eval
-from proto.models import ProtoTree, ProtoPNet, updated_proto_patch_matches
+from proto.models import ProtoTree, ProtoPNet
+from proto.base import updated_proto_patch_matches
 from proto.node import InternalNode
 from proto.prune import prune_unconfident_leaves
 from proto.train import (
@@ -138,8 +139,8 @@ def train_prototree(args: Namespace):
     trainer = pl.Trainer(
         detect_anomaly=False,
         max_epochs=epochs,
-        limit_train_batches=n_training_batches // 25,
-        limit_val_batches=n_training_batches // 25,
+        limit_train_batches=n_training_batches // 250,
+        limit_val_batches=n_training_batches // 250,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
     )
     # TODO: The original code used the test set as the validation set! We need to fix this.
