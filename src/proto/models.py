@@ -31,6 +31,7 @@ class ProtoPNet(pl.LightningModule):
         channels_proto: int,
         num_classes: int,
         prototypes_per_class: int,
+        project_epochs: set[int],
         nonlinear_scheduler_params: NonlinearSchedulerParams,
         backbone_name="resnet50_inat",
         pretrained=True,
@@ -52,6 +53,7 @@ class ProtoPNet(pl.LightningModule):
         # TODO: The paper specifies no bias, why?
         self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
 
+        self.project_epochs = project_epochs
         self.nonlinear_scheduler_params = nonlinear_scheduler_params
         self.automatic_optimization = False
 
@@ -94,7 +96,8 @@ class ProtoPNet(pl.LightningModule):
         self.manual_backward(loss)
         nonlinear_optim.step()
 
-        self.proto_patch_matches = updated_proto_patch_matches(self.proto_base, self.proto_patch_matches, x, y)
+        if self.trainer.current_epoch in self.project_epochs:
+            self.proto_patch_matches = updated_proto_patch_matches(self.proto_base, self.proto_patch_matches, x, y)
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -112,7 +115,8 @@ class ProtoPNet(pl.LightningModule):
         self.log("Validation acc", acc, prog_bar=True)
 
     def on_train_epoch_end(self):
-        self.proto_base.project_prototypes(self.proto_patch_matches)
+        if self.trainer.current_epoch in self.project_epochs:
+            self.proto_base.project_prototypes(self.proto_patch_matches)
 
         avg_acc = mean([item[0] for item in self.train_step_outputs])
         avg_nll_loss = mean([item[1] for item in self.train_step_outputs])
@@ -188,6 +192,7 @@ class ProtoTree(pl.LightningModule):
         depth: int,
         leaf_pruning_threshold: float,
         leaf_opt_ewma_alpha: float,
+        project_epochs: set[int],
         nonlinear_scheduler_params: NonlinearSchedulerParams,
         backbone_name="resnet50_inat",
         pretrained=True,
@@ -212,7 +217,6 @@ class ProtoTree(pl.LightningModule):
             prototype_shape=(channels_proto, w_proto, h_proto),
             backbone=backbone,
         )
-        self.proto_base.apply_xavier()
         self.tree_section = TreeSection(
             num_classes=num_classes,
             depth=depth,
@@ -220,10 +224,12 @@ class ProtoTree(pl.LightningModule):
             leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
         )
 
+        self.project_epochs = project_epochs
         self.nonlinear_scheduler_params = nonlinear_scheduler_params
         self.automatic_optimization = False
 
         self.train_step_outputs, self.val_step_outputs = [], []
+        self.proto_patch_matches = {}
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
@@ -248,6 +254,9 @@ class ProtoTree(pl.LightningModule):
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
+        if self.trainer.current_epoch in self.project_epochs:
+            self.proto_patch_matches = updated_proto_patch_matches(self.proto_base, self.proto_patch_matches, x, y)
+
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
         self.train_step_outputs.append((acc, loss.item()))
@@ -263,11 +272,15 @@ class ProtoTree(pl.LightningModule):
         self.log("Validation acc", acc, prog_bar=True)
 
     def on_train_epoch_end(self):
+        if self.trainer.current_epoch in self.project_epochs:
+            self.proto_base.project_prototypes(self.proto_patch_matches)
+
         avg_acc = mean([item[0] for item in self.train_step_outputs])
         avg_loss = mean([item[1] for item in self.train_step_outputs])
         self.log("Training avg acc", avg_acc, prog_bar=True)
         self.log("Training avg loss", avg_loss, prog_bar=True)
         self.train_step_outputs.clear()
+        self.proto_patch_matches.clear()
 
     def on_validation_epoch_end(self):
         avg_acc = mean(self.val_step_outputs)
