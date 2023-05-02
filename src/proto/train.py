@@ -93,7 +93,7 @@ def get_nonlinear_optimizer(
             },
             {
                 # TODO: Seems to defeat the point of encapsulation if we're accessing the prototype_layer directly.
-                "params": model.proto_base.prototype_layer.parameters(),
+                "params": model.proto_base.proto_layer.parameters(),
                 "lr": optim_params.lr,
                 "weight_decay_rate": 0,
             },

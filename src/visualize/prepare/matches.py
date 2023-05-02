@@ -1,3 +1,4 @@
+from copy import copy
 from functools import lru_cache
 from typing import Iterator, Tuple
 
@@ -11,36 +12,38 @@ from proto.node import InternalNode
 
 
 @torch.no_grad()
-def proto_patch_matches(
-    base: ProtoBase, loader: DataLoader
+def updated_proto_patch_matches(
+    base: ProtoBase, original_matches: dict[int, ImageProtoSimilarity], x: torch.Tensor, y: torch.Tensor
 ) -> dict[int, ImageProtoSimilarity]:
     """
     Produces a map where each key is a node and the corresponding value is information about the patch (out of all
     images in the dataset) that is most similar to node's prototype.
 
     :param base:
-    :param loader: The dataset.
+    :param original_matches:
+    :param x:
+    :param y:
     :return: The map of nodes to best matches.
     """
-    proto_id_to_patch_matches: dict[int, ImageProtoSimilarity] = {}
-    for proto_similarity, label in _patch_match_candidates(base, loader):
+    updated_matches = copy(original_matches)
+    for proto_similarity, label in _patch_match_candidates(base, x, y):
         proto_id = proto_similarity.proto_id
-        if proto_id in proto_id_to_patch_matches:
-            cur_closest = proto_id_to_patch_matches[proto_id]
+        if proto_id in updated_matches:
+            cur_closest = updated_matches[proto_id]
             if (
                 proto_similarity.closest_patch_distance
                 < cur_closest.closest_patch_distance
             ):
-                proto_id_to_patch_matches[proto_id] = proto_similarity
+                updated_matches[proto_id] = proto_similarity
         else:
-            proto_id_to_patch_matches[proto_id] = proto_similarity
+            updated_matches[proto_id] = proto_similarity
 
-    return proto_id_to_patch_matches
+    return updated_matches
 
 
 @torch.no_grad()
 def _patch_match_candidates(
-    base: ProtoBase, loader: DataLoader
+    base: ProtoBase, x: torch.Tensor, y: torch.Tensor,
 ) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
     # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
     #  commonality. However, we also need to beware of premature abstraction.
@@ -50,15 +53,14 @@ def _patch_match_candidates(
 
     :return: Iterator of (similarity, label)
     """
-    for x, y in tqdm(loader, desc="Data loader", ncols=0):
-        patches, dists = base.patches(x), base.distances(
-            x
-        )  # Common subexpression elimination possible, if necessary.
+    patches, dists = base.patches(x), base.distances(
+        x
+    )  # Common subexpression elimination possible, if necessary.
 
-        for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
-            for proto_id in range(base.num_prototypes):
-                node_distances = dists_i[proto_id, :, :]
-                similarity = img_proto_similarity(
-                    proto_id, x_i, node_distances, patches_i
-                )
-                yield similarity, y_i
+    for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
+        for proto_id in range(base.num_prototypes):
+            node_distances = dists_i[proto_id, :, :]
+            similarity = img_proto_similarity(
+                proto_id, x_i, node_distances, patches_i
+            )
+            yield similarity, y_i

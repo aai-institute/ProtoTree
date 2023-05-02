@@ -12,6 +12,7 @@ from torch.nn import functional as F
 
 from proto.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
+from proto.projection import project_prototypes
 from proto.train import (
     NonlinearSchedulerParams,
     get_nonlinear_scheduler,
@@ -20,6 +21,7 @@ from proto.train import (
 from proto.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers, NAME_TO_NET
+from visualize.prepare.matches import updated_proto_patch_matches
 
 
 class ProtoBase(nn.Module):
@@ -41,7 +43,7 @@ class ProtoBase(nn.Module):
         #  average-looking latent patch (which is a good start point for the prototypes), but it would be nice if we had
         #  a more principled way of choosing the initialization.
         # NOTE: The paper means std=0.1 when it says N(0.5, 0.1), not var=0.1.
-        self.prototype_layer = L2Conv2D(
+        self.proto_layer = L2Conv2D(
             num_prototypes, *prototype_shape, initial_mean=0.5, initial_std=0.1
         )
 
@@ -78,7 +80,7 @@ class ProtoBase(nn.Module):
         The output has the shape (batch_size, num_prototypes, n_patches_w, n_patches_h)
         """
         x = self.extract_features(x)
-        return self.prototype_layer(x)
+        return self.proto_layer(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.distances(x)
@@ -90,15 +92,15 @@ class ProtoBase(nn.Module):
 
     @property
     def num_prototypes(self):
-        return self.prototype_layer.num_protos
+        return self.proto_layer.num_protos
 
     @property
     def prototype_channels(self):
-        return self.prototype_layer.input_channels
+        return self.proto_layer.input_channels
 
     @property
     def prototype_shape(self):
-        return self.prototype_layer.proto_shape
+        return self.proto_layer.proto_shape
 
 
 class ProtoPNet(pl.LightningModule):
@@ -134,6 +136,7 @@ class ProtoPNet(pl.LightningModule):
         self.automatic_optimization = False
 
         self.train_step_outputs, self.val_step_outputs = [], []
+        self.proto_patch_matches = {}
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
@@ -183,7 +186,9 @@ class ProtoPNet(pl.LightningModule):
             raise ValueError("Loss is NaN, cannot proceed any further.")
         nonlinear_optim.zero_grad()
         self.manual_backward(loss)
-        nonlinear_optim.step()  # Doesn't include classifier layer.
+        nonlinear_optim.step()
+
+        self.proto_patch_matches = updated_proto_patch_matches(self.proto_base, self.proto_patch_matches, x, y)
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -201,6 +206,8 @@ class ProtoPNet(pl.LightningModule):
         self.log("Validation acc", acc, prog_bar=True)
 
     def on_train_epoch_end(self):
+        project_prototypes(self.proto_base, self.proto_patch_matches)
+
         avg_acc = mean([item[0] for item in self.train_step_outputs])
         avg_nll_loss = mean([item[1] for item in self.train_step_outputs])
         avg_loss = mean([item[2] for item in self.train_step_outputs])
@@ -208,6 +215,7 @@ class ProtoPNet(pl.LightningModule):
         self.log("Training avg NLL loss", avg_nll_loss, prog_bar=True)
         self.log("Training avg loss", avg_loss, prog_bar=True)
         self.train_step_outputs.clear()
+        self.proto_patch_matches.clear()
 
     def on_validation_epoch_end(self):
         avg_acc = mean(self.val_step_outputs)
