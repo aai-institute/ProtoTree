@@ -48,7 +48,7 @@ class ProtoPNet(pl.LightningModule):
         )
         print(self.proto_base.device)
         self.class_proto_lookup = torch.reshape(
-            torch.arange(0, num_prototypes, device=self.proto_base.device),
+            torch.arange(0, num_prototypes),
             (num_classes, prototypes_per_class),
         )
 
@@ -440,16 +440,6 @@ class ProtoTree(pl.LightningModule):
     def log_state(self):
         self.tree_section.log_leaves_properties()
 
-    def to(self, *args, **kwargs):
-        super().to(*args, **kwargs)
-        self.proto_base.to(*args, **kwargs)
-        self.tree_section.to(*args, **kwargs)
-        return self
-
-    @property
-    def device(self):
-        return self.proto_base.device
-
 
 class TreeSection(nn.Module):
     def __init__(
@@ -469,12 +459,6 @@ class TreeSection(nn.Module):
         }
         self.leaf_pruning_threshold = leaf_pruning_threshold
         self.leaf_opt_ewma_alpha = leaf_opt_ewma_alpha
-
-    def to(self, *args, **kwargs):
-        super().to(*args, **kwargs)
-        for leaf in self.tree_root.leaves:
-            leaf.to(*args, **kwargs)
-        return self
 
     def get_node_to_log_p_right(
         self, similarities: torch.Tensor
@@ -497,9 +481,7 @@ class TreeSection(nn.Module):
         root_log_p_right = node_to_log_p_right[root]
 
         root_probs = NodeProbabilities(
-            log_p_arrival=torch.zeros_like(
-                root_log_p_right, device=root_log_p_right.device
-            ),
+            log_p_arrival=torch.zeros_like(root_log_p_right),
             log_p_right=root_log_p_right,
         )
         result = {root: root_probs}

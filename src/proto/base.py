@@ -72,10 +72,6 @@ class ProtoBase(nn.Module):
         return torch.amin(x, dim=(2, 3))
 
     @property
-    def device(self):
-        return next(self.parameters()).device
-
-    @property
     def num_prototypes(self):
         return self.proto_layer.num_protos
 
