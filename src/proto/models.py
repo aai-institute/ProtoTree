@@ -45,7 +45,7 @@ class ProtoPNet(pl.LightningModule):
             num_prototypes=num_prototypes,
             prototype_shape=(channels_proto, w_proto, h_proto),
             backbone=backbone,
-        ).type_as(self)
+        )
         self.class_proto_lookup = torch.reshape(
             torch.arange(0, num_prototypes),
             (num_classes, prototypes_per_class),
