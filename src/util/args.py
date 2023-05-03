@@ -171,15 +171,13 @@ def get_args() -> argparse.Namespace:
         help="Number of ProtoTrees to train and (optionally) use in an ensemble. Used in main_ensemble.py",
     )
     parser.add_argument(
-        "--model_type",
-        type=str,
-        help="One of 'protopnet' or 'prototree'."
+        "--model_type", type=str, help="One of 'protopnet' or 'prototree'."
     )
     parser.add_argument(
         "--project_from_epoch",
         type=int,
         default=-1,
-        help="Project at end of each epoch from this epoch (0-indexed) forwards. Value of -1 means no projection."
+        help="Project at end of each epoch from this epoch (0-indexed) forwards. Value of -1 means no projection.",
     )
     args = parser.parse_args()
     args.milestones_list = get_milestones_list(

@@ -89,7 +89,7 @@ class ProtoBase(nn.Module):
 
     @torch.no_grad()
     def project_prototypes(
-            self, node_to_patch_matches: dict[int, ImageProtoSimilarity]
+        self, node_to_patch_matches: dict[int, ImageProtoSimilarity]
     ):
         """
         Replaces each prototype with a given patch.
@@ -103,7 +103,10 @@ class ProtoBase(nn.Module):
 
 @torch.no_grad()
 def updated_proto_patch_matches(
-    base: ProtoBase, original_matches: dict[int, ImageProtoSimilarity], x: torch.Tensor, y: torch.Tensor
+    base: ProtoBase,
+    original_matches: dict[int, ImageProtoSimilarity],
+    x: torch.Tensor,
+    y: torch.Tensor,
 ) -> dict[int, ImageProtoSimilarity]:
     """
     Produces a map where each key is a node and the corresponding value is information about the patch (out of all
@@ -133,7 +136,9 @@ def updated_proto_patch_matches(
 
 @torch.no_grad()
 def _patch_match_candidates(
-    base: ProtoBase, x: torch.Tensor, y: torch.Tensor,
+    base: ProtoBase,
+    x: torch.Tensor,
+    y: torch.Tensor,
 ) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
     # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
     #  commonality. However, we also need to beware of premature abstraction.
@@ -150,7 +155,5 @@ def _patch_match_candidates(
     for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
         for proto_id in range(base.num_prototypes):
             node_distances = dists_i[proto_id, :, :]
-            similarity = img_proto_similarity(
-                proto_id, x_i, node_distances, patches_i
-            )
+            similarity = img_proto_similarity(proto_id, x_i, node_distances, patches_i)
             yield similarity, y_i

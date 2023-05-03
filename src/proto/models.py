@@ -47,7 +47,8 @@ class ProtoPNet(pl.LightningModule):
             backbone=backbone,
         )
         self.class_proto_lookup = torch.reshape(
-            torch.arange(0, num_prototypes, device=self.proto_base.device), (num_classes, prototypes_per_class)
+            torch.arange(0, num_prototypes, device=self.proto_base.device),
+            (num_classes, prototypes_per_class),
         )
 
         # TODO: The paper specifies no bias, why?
@@ -99,7 +100,9 @@ class ProtoPNet(pl.LightningModule):
         nonlinear_optim.step()
 
         if self.trainer.current_epoch in self.project_epochs:
-            self.proto_patch_matches = updated_proto_patch_matches(self.proto_base, self.proto_patch_matches, x, y)
+            self.proto_patch_matches = updated_proto_patch_matches(
+                self.proto_base, self.proto_patch_matches, x, y
+            )
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -257,7 +260,9 @@ class ProtoTree(pl.LightningModule):
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
         if self.trainer.current_epoch in self.project_epochs:
-            self.proto_patch_matches = updated_proto_patch_matches(self.proto_base, self.proto_patch_matches, x, y)
+            self.proto_patch_matches = updated_proto_patch_matches(
+                self.proto_base, self.proto_patch_matches, x, y
+            )
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
