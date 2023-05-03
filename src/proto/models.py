@@ -47,7 +47,7 @@ class ProtoPNet(pl.LightningModule):
             backbone=backbone,
         )
         self.class_proto_lookup = torch.reshape(
-            torch.arange(0, num_prototypes), (num_classes, prototypes_per_class)
+            torch.arange(0, num_prototypes, device=self.proto_base.device), (num_classes, prototypes_per_class)
         )
 
         # TODO: The paper specifies no bias, why?
