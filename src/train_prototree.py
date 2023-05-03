@@ -146,6 +146,7 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     log.info("Starting training.")
+    torch.set_num_threads(6)
     trainer = pl.Trainer(
         accelerator="cpu",
         detect_anomaly=False,
