@@ -7,7 +7,10 @@ def exclusion_range(idx: torch.Tensor, n: torch.Tensor):
 
 
 def select_not_unbatched(t: torch.Tensor, y_single: torch.Tensor):
+    print(t.device)
+    print(y_single.device)
     excl = exclusion_range(y_single, t.shape[0])
+    print(excl.device)
     return torch.flatten(t[excl, :])
 
 
