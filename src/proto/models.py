@@ -45,14 +45,14 @@ class ProtoPNet(pl.LightningModule):
             num_prototypes=num_prototypes,
             prototype_shape=(channels_proto, w_proto, h_proto),
             backbone=backbone,
-        ).to(device=self.device)
+        )
         self.class_proto_lookup = torch.reshape(
             torch.arange(0, num_prototypes),
             (num_classes, prototypes_per_class),
-        ).to(device=self.device)
+        )
 
         # TODO: The paper specifies no bias, why?
-        self.classifier = nn.Linear(num_prototypes, num_classes, bias=False).to(device=self.device)
+        self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
 
         self.project_epochs = project_epochs
         self.nonlinear_scheduler_params = nonlinear_scheduler_params
@@ -78,7 +78,7 @@ class ProtoPNet(pl.LightningModule):
         unnormed_logits = self.classifier(all_dists)
         logits = F.log_softmax(unnormed_logits, dim=1)
 
-        proto_in_class_indices = self.class_proto_lookup[y, :]
+        proto_in_class_indices = self.class_proto_lookup.to(device=self.device)[y, :]
         proto_out_class_indices = select_not(self.class_proto_lookup, y)
         min_in_class_dists = torch.gather(all_dists, 1, proto_in_class_indices)
         min_out_class_dists = torch.gather(all_dists, 1, proto_out_class_indices)
