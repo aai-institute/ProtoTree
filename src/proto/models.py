@@ -40,19 +40,19 @@ class ProtoPNet(pl.LightningModule):
         # TODO: Dependency injection?
 
         num_prototypes = num_classes * prototypes_per_class
-        backbone = NAME_TO_NET[backbone_name](pretrained=pretrained)
+        backbone = NAME_TO_NET[backbone_name](pretrained=pretrained).type_as(self)
         self.proto_base = ProtoBase(
             num_prototypes=num_prototypes,
             prototype_shape=(channels_proto, w_proto, h_proto),
             backbone=backbone,
-        )
+        ).type_as(self)
         self.class_proto_lookup = torch.reshape(
             torch.arange(0, num_prototypes),
             (num_classes, prototypes_per_class),
-        )
+        ).type_as(self)
 
         # TODO: The paper specifies no bias, why?
-        self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
+        self.classifier = nn.Linear(num_prototypes, num_classes, bias=False).type_as(self)
 
         self.project_epochs = project_epochs
         self.nonlinear_scheduler_params = nonlinear_scheduler_params
