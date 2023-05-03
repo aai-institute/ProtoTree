@@ -77,6 +77,8 @@ class ProtoPNet(pl.LightningModule):
         unnormed_logits = self.classifier(all_dists)
         logits = F.log_softmax(unnormed_logits, dim=1)
 
+        print(self.class_proto_lookup.device)
+        print(y.device)
         proto_in_class_indices = self.class_proto_lookup[y, :]
         proto_out_class_indices = select_not(self.class_proto_lookup, y)
         min_in_class_dists = torch.gather(all_dists, 1, proto_in_class_indices)
