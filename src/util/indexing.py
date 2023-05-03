@@ -2,7 +2,7 @@ import torch
 
 
 def exclusion_range(idx: torch.Tensor, n: torch.Tensor):
-    r = torch.arange(n, device=idx.device)
+    r = torch.arange(n)
     return r[r != idx]
 
 
