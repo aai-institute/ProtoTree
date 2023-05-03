@@ -148,7 +148,7 @@ def train_prototree(args: Namespace):
     log.info("Starting training.")
     torch.set_num_threads(6)
     trainer = pl.Trainer(
-        # accelerator="cpu",
+        accelerator="gpu",
         detect_anomaly=False,
         max_epochs=epochs,
         #    limit_train_batches=n_training_batches // 250,
