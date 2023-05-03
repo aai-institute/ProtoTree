@@ -40,7 +40,7 @@ class ProtoPNet(pl.LightningModule):
         # TODO: Dependency injection?
 
         num_prototypes = num_classes * prototypes_per_class
-        backbone = NAME_TO_NET[backbone_name](pretrained=pretrained).type_as(self)
+        backbone = NAME_TO_NET[backbone_name](pretrained=pretrained)
         self.proto_base = ProtoBase(
             num_prototypes=num_prototypes,
             prototype_shape=(channels_proto, w_proto, h_proto),
