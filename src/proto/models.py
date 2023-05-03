@@ -46,7 +46,6 @@ class ProtoPNet(pl.LightningModule):
             prototype_shape=(channels_proto, w_proto, h_proto),
             backbone=backbone,
         )
-        print(self.proto_base.device)
         self.class_proto_lookup = torch.reshape(
             torch.arange(0, num_prototypes),
             (num_classes, prototypes_per_class),
@@ -79,8 +78,6 @@ class ProtoPNet(pl.LightningModule):
         unnormed_logits = self.classifier(all_dists)
         logits = F.log_softmax(unnormed_logits, dim=1)
 
-        print(self.class_proto_lookup.device)
-        print(y.device)
         proto_in_class_indices = self.class_proto_lookup[y, :]
         proto_out_class_indices = select_not(self.class_proto_lookup, y)
         min_in_class_dists = torch.gather(all_dists, 1, proto_in_class_indices)
