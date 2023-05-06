@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torchvision.transforms as transforms
 from matplotlib import pyplot as plt
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torchvision.datasets import ImageFolder
 
 from config import project_dir, test_dir, train_dir
@@ -68,10 +68,12 @@ def get_data(
 
     # TODO: relax hard-configured datasets, make this into a generic loader
     # TODO 2: we actually train on the corners, why? Is this to reveal biases?
+    idx = [i for i in range(4 * 16)]
     train_set = ImageFolder(train_dir, transform=train_transform)
     project_set = ImageFolder(project_dir, transform=base_transform)
     test_set = ImageFolder(test_dir, transform=base_transform)
-    return train_set, project_set, test_set
+    test_set_small = Subset(test_set, idx)
+    return train_set, project_set, test_set_small
 
 
 def save_img(img: np.ndarray, filepath: os.PathLike):

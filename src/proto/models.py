@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from math import isnan
 from statistics import mean
@@ -20,9 +21,10 @@ from proto.train import (
     freezable_step,
 )
 from proto.types import SamplingStrat, SingleLeafStrat
-from train_prototree import log
 from util.indexing import select_not
 from util.net import NAME_TO_NET
+
+log = logging.getLogger(__name__)
 
 
 class ProtoPNet(pl.LightningModule):

@@ -6,8 +6,8 @@ from random import randint
 import lightning.pytorch as pl
 import torch
 
+from proto.models import ProtoTree, ProtoPNet
 from proto.eval import eval_model, single_leaf_eval
-from proto.models import ProtoTree, ProtoPNet, prune
 from proto.train import (
     NonlinearOptimParams,
     NonlinearSchedulerParams,
@@ -162,7 +162,7 @@ def train_prototree(args: Namespace):
 
     if model_type == "prototree":
         model.log_state()
-        prune(model.tree_section.root, leaf_pruning_threshold)
+        model.prune(leaf_pruning_threshold)
         pruned_acc = eval_model(model, test_loader)
         log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
         model.log_state()
