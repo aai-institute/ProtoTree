@@ -102,10 +102,10 @@ class ProtoPNet(pl.LightningModule):
         self.manual_backward(loss)
         nonlinear_optim.step()
 
-        if self.trainer.current_epoch in self.project_epochs:
-            self.proto_patch_matches = updated_proto_patch_matches(
-                self.proto_base, self.proto_patch_matches, x, y
-            )
+        # It's useful to compute this for visualizations, even if we're not projecting.
+        self.proto_patch_matches = updated_proto_patch_matches(
+            self.proto_base, self.proto_patch_matches, x, y
+        )
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -133,7 +133,6 @@ class ProtoPNet(pl.LightningModule):
         self.log("Train avg NLL loss", avg_nll_loss, prog_bar=True)
         self.log("Train avg loss", avg_loss, prog_bar=True)
         self.train_step_outputs.clear()
-        self.proto_patch_matches.clear()
 
     def on_validation_epoch_end(self):
         avg_acc = mean(self.val_step_outputs)
@@ -262,10 +261,10 @@ class ProtoTree(pl.LightningModule):
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
-        if self.trainer.current_epoch in self.project_epochs:
-            self.proto_patch_matches = updated_proto_patch_matches(
-                self.proto_base, self.proto_patch_matches, x, y
-            )
+        # It's useful to compute this for visualizations, even if we're not projecting.
+        self.proto_patch_matches = updated_proto_patch_matches(
+            self.proto_base, self.proto_patch_matches, x, y
+        )
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -290,7 +289,6 @@ class ProtoTree(pl.LightningModule):
         self.log("Train avg acc", avg_acc, prog_bar=True)
         self.log("Train avg loss", avg_loss, prog_bar=True)
         self.train_step_outputs.clear()
-        self.proto_patch_matches.clear()
 
     def on_validation_epoch_end(self):
         avg_acc = mean(self.val_step_outputs)

@@ -5,7 +5,7 @@ import pydot
 import torch
 from PIL import Image, ImageOps
 
-from proto.models import TreeSection
+from proto.models import ProtoTree
 from proto.node import InternalNode, Leaf, Node
 from visualize.create.dot import (
     FONT,
@@ -24,7 +24,7 @@ INTERNAL_NODE_IMG_GAP = 4
 
 @torch.no_grad()
 def save_tree_visualization(
-    tree: TreeSection,
+    model: ProtoTree,
     patches_dir: os.PathLike,
     tree_dir: os.PathLike,
     class_names: tuple,
@@ -37,7 +37,7 @@ def save_tree_visualization(
     node_imgs_dir = tree_dir / "node_imgs"
     node_imgs_dir.mkdir(parents=True, exist_ok=True)
 
-    pydot_tree = _pydot_tree(tree.root, patches_dir, node_imgs_dir, class_names)
+    pydot_tree = _pydot_tree(model.tree_section.root, patches_dir, node_imgs_dir, class_names)
     _save_pydot(pydot_tree, tree_dir)
 
 

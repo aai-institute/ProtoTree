@@ -47,13 +47,13 @@ YELLOW_RGB: ColorRgb = ColorRgb(255, 255, 0)
 
 @torch.no_grad()
 def save_patch_visualizations(
-    node_to_patch_matches: dict[InternalNode, ImageProtoSimilarity],
+    proto_patch_matches: dict[int, ImageProtoSimilarity],
     save_dir: os.PathLike,
     img_size=(224, 224),
 ):
     # Adapted from ProtoPNet
     """
-    :param node_to_patch_matches:
+    :param proto_patch_matches:
     :param save_dir:
     :param img_size: size of images that were used to train the model, i.e. the input to `resize` in the transforms.
         Will be used to create the inverse transform.
@@ -64,7 +64,7 @@ def save_patch_visualizations(
     latent_to_pixel = get_latent_to_pixel(img_size)
 
     log.info(f"Saving prototype patch visualizations to {save_dir}.")
-    for node, image_proto_similarity in node_to_patch_matches.items():
+    for idx, image_proto_similarity in proto_patch_matches.items():
         (
             im_closest_patch,
             im_original,
@@ -73,11 +73,11 @@ def save_patch_visualizations(
         ) = closest_patch_imgs(image_proto_similarity, inv_transform, latent_to_pixel)
 
         # TODO: These filenames should come from config (same for the other py files).
-        save_img(im_closest_patch, save_dir / f"{node.index}_closest_patch.png")
+        save_img(im_closest_patch, save_dir / f"{idx}_closest_patch.png")
         save_img(
-            im_with_bbox, save_dir / f"{node.index}_bounding_box_closest_patch.png"
+            im_with_bbox, save_dir / f"{idx}_bounding_box_closest_patch.png"
         )
-        save_img(im_with_heatmap, save_dir / f"{node.index}_heatmap_original_image.png")
+        save_img(im_with_heatmap, save_dir / f"{idx}_heatmap_original_image.png")
 
 
 @torch.no_grad()
