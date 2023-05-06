@@ -13,12 +13,14 @@ from torch.nn import functional as F
 from proto.base import ProtoBase, updated_proto_patch_matches
 from proto.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
+from proto.prune import prune_unconfident_leaves
 from proto.train import (
     NonlinearSchedulerParams,
     get_nonlinear_scheduler,
     freezable_step,
 )
 from proto.types import SamplingStrat, SingleLeafStrat
+from train_prototree import log
 from util.indexing import select_not
 from util.net import NAME_TO_NET
 
@@ -321,10 +323,10 @@ class ProtoTree(pl.LightningModule):
         match self.training, strategy:
             case _, "distributed":
                 predicting_leaves = None
-                logits = self.tree_section.tree_root.forward(node_to_probs)
+                logits = self.tree_section.root.forward(node_to_probs)
             case False, "sample_max" | "greedy":
                 predicting_leaves = TreeSection.get_predicting_leaves(
-                    self.tree_section.tree_root, node_to_probs, strategy
+                    self.tree_section.root, node_to_probs, strategy
                 )
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
@@ -450,10 +452,10 @@ class TreeSection(nn.Module):
         super().__init__()
 
         self.num_classes = num_classes
-        self.tree_root = create_tree(depth, num_classes)
+        self.root = create_tree(depth, num_classes)
         self.node_to_proto_idx = {
             node: idx
-            for idx, node in enumerate(self.tree_root.descendant_internal_nodes)
+            for idx, node in enumerate(self.root.descendant_internal_nodes)
         }
         self.leaf_pruning_threshold = leaf_pruning_threshold
         self.leaf_opt_ewma_alpha = leaf_opt_ewma_alpha
@@ -521,27 +523,27 @@ class TreeSection(nn.Module):
         :return: dictionary mapping each node to a dataclass containing tensors of shape (batch_size,)
         """
         node_to_log_p_right = self.get_node_to_log_p_right(similarities)
-        return self._node_to_probs_from_p_right(node_to_log_p_right, self.tree_root)
+        return self._node_to_probs_from_p_right(node_to_log_p_right, self.root)
 
     @property
     def all_nodes(self) -> set:
-        return self.tree_root.descendants
+        return self.root.descendants
 
     @property
     def internal_nodes(self):
-        return self.tree_root.descendant_internal_nodes
+        return self.root.descendant_internal_nodes
 
     @property
     def leaves(self):
-        return self.tree_root.leaves
+        return self.root.leaves
 
     @property
     def num_internal_nodes(self):
-        return self.tree_root.num_internal_nodes
+        return self.root.num_internal_nodes
 
     @property
     def num_leaves(self):
-        return self.tree_root.num_leaves
+        return self.root.num_leaves
 
     @staticmethod
     def get_predicting_leaves(
@@ -681,3 +683,18 @@ class TreeSection(nn.Module):
         class_labels_without_leaf = set(range(num_classes)) - classes_covered
         if class_labels_without_leaf:
             log.info(f"Never predicted classes: {class_labels_without_leaf}")
+
+    def prune(self, leaf_pruning_threshold: float):
+        log.info(
+            f"Before pruning: {self.root.num_internal_nodes} internal_nodes and {self.root.num_leaves} leaves"
+        )
+        num_nodes_before = len(self.root.descendant_internal_nodes)
+
+        # all work happens here, the rest is just logging
+        prune_unconfident_leaves(self.root, leaf_pruning_threshold)
+
+        frac_nodes_pruned = 1 - len(self.root.descendant_internal_nodes) / num_nodes_before
+        log.info(
+            f"After pruning: {self.root.num_internal_nodes} internal_nodes and {self.root.num_leaves} leaves"
+        )
+        log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")

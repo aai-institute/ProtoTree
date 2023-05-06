@@ -7,10 +7,7 @@ import lightning.pytorch as pl
 import torch
 
 from proto.eval import eval_model, single_leaf_eval
-from proto.models import ProtoTree, ProtoPNet
-from proto.base import updated_proto_patch_matches
-from proto.node import InternalNode
-from proto.prune import prune_unconfident_leaves
+from proto.models import ProtoTree, ProtoPNet, prune
 from proto.train import (
     NonlinearOptimParams,
     NonlinearSchedulerParams,
@@ -165,7 +162,7 @@ def train_prototree(args: Namespace):
     model.log_state()
 
     if model_type == "prototree":
-        _prune_tree(model.tree_section.tree_root, leaf_pruning_threshold)
+        prune(model.tree_section.root, leaf_pruning_threshold)
         pruned_acc = eval_model(model, test_loader)
         log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
         model.log_state()
@@ -188,22 +185,6 @@ def train_prototree(args: Namespace):
             save_decision_flow_visualizations(
                 explanations_provider(), patches_dir, vis_dir / "explanations"
             )
-
-
-def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
-    log.info(
-        f"Before pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
-    )
-    num_nodes_before = len(root.descendant_internal_nodes)
-
-    # all work happens here, the rest is just logging
-    prune_unconfident_leaves(root, leaf_pruning_threshold)
-
-    frac_nodes_pruned = 1 - len(root.descendant_internal_nodes) / num_nodes_before
-    log.info(
-        f"After pruning: {root.num_internal_nodes} internal_nodes and {root.num_leaves} leaves"
-    )
-    log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")
 
 
 def get_device(disable_cuda=False):
