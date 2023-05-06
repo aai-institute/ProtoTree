@@ -159,9 +159,9 @@ def train_prototree(args: Namespace):
 
     # EVALUATE AND ANALYSE TRAINED TREE
     model = model.eval()
-    model.log_state()
 
     if model_type == "prototree":
+        model.log_state()
         prune(model.tree_section.root, leaf_pruning_threshold)
         pruned_acc = eval_model(model, test_loader)
         log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
@@ -175,16 +175,16 @@ def train_prototree(args: Namespace):
 
         model.tree_root.print_tree()
 
-        # SAVE VISUALIZATIONS
-        vis_dir = output_dir / "visualizations"
-        patches_dir = vis_dir / "patches"
-        save_patch_visualizations(proto_to_patch_matches, patches_dir)
-        if model_type == "prototree":
-            save_tree_visualization(model, patches_dir, vis_dir / "tree", class_names)
-            save_multi_patch_visualizations(explanations_provider(), vis_dir / "explanations")
-            save_decision_flow_visualizations(
-                explanations_provider(), patches_dir, vis_dir / "explanations"
-            )
+    # SAVE VISUALIZATIONS
+    vis_dir = output_dir / "visualizations"
+    patches_dir = vis_dir / "patches"
+    save_patch_visualizations(model.proto_patch_matches, patches_dir)
+    if model_type == "prototree":
+        save_tree_visualization(model, patches_dir, vis_dir / "tree", class_names)
+        save_multi_patch_visualizations(explanations_provider(), vis_dir / "explanations")
+        save_decision_flow_visualizations(
+            explanations_provider(), patches_dir, vis_dir / "explanations"
+        )
 
 
 def get_device(disable_cuda=False):
