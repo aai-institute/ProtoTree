@@ -150,8 +150,8 @@ def train_prototree(args: Namespace):
     trainer = pl.Trainer(
         detect_anomaly=False,
         max_epochs=epochs,
-        #    limit_train_batches=n_training_batches // 250,
-        limit_val_batches=n_training_batches // 25,
+        limit_train_batches=n_training_batches // 250,
+        limit_val_batches=n_training_batches // 250,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
     )
     # TODO: The original code used the test set as the validation set! We need to fix this.
@@ -164,30 +164,30 @@ def train_prototree(args: Namespace):
     model = model.eval()
     model.log_state()
 
-    _prune_tree(model.tree_root, leaf_pruning_threshold)
-    pruned_acc = eval_model(model, test_loader)
-    log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
-    model.log_state()
-    single_leaf_eval(model, test_loader, "Pruned")
+    if model_type == "prototree":
+        _prune_tree(model.tree_section.tree_root, leaf_pruning_threshold)
+        pruned_acc = eval_model(model, test_loader)
+        log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
+        model.log_state()
+        single_leaf_eval(model, test_loader, "Pruned")
 
-    def explanations_provider():
-        return data_explanations(
-            model, test_loader, class_names
-        )  # This is lazy to enable iterator reuse.
+        def explanations_provider():
+            return data_explanations(
+                model, test_loader, class_names
+            )  # This is lazy to enable iterator reuse.
 
-    model.tree_root.print_tree()
+        model.tree_root.print_tree()
 
-    # SAVE VISUALIZATIONS
-    vis_dir = output_dir / "visualizations"
-    patches_dir = vis_dir / "patches"
-    save_patch_visualizations(proto_to_patch_matches, patches_dir)
-    save_tree_visualization(model, patches_dir, vis_dir / "tree", class_names)
-    save_multi_patch_visualizations(explanations_provider(), vis_dir / "explanations")
-    save_decision_flow_visualizations(
-        explanations_provider(), patches_dir, vis_dir / "explanations"
-    )
-
-    return model
+        # SAVE VISUALIZATIONS
+        vis_dir = output_dir / "visualizations"
+        patches_dir = vis_dir / "patches"
+        save_patch_visualizations(proto_to_patch_matches, patches_dir)
+        if model_type == "prototree":
+            save_tree_visualization(model, patches_dir, vis_dir / "tree", class_names)
+            save_multi_patch_visualizations(explanations_provider(), vis_dir / "explanations")
+            save_decision_flow_visualizations(
+                explanations_provider(), patches_dir, vis_dir / "explanations"
+            )
 
 
 def _prune_tree(root: InternalNode, leaf_pruning_threshold: float):
