@@ -173,7 +173,7 @@ def train_prototree(args: Namespace):
                 model, test_loader, class_names
             )  # This is lazy to enable iterator reuse.
 
-        model.tree_root.print_tree()
+        model.print()
 
     # SAVE VISUALIZATIONS
     vis_dir = output_dir / "visualizations"

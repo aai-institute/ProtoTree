@@ -439,6 +439,13 @@ class ProtoTree(pl.LightningModule):
         logits = self.predict_logits(x, strategy=strategy)
         return logits.softmax(dim=1)
 
+    def prune(self, leaf_pruning_threshold: float):
+        self.tree_section.prune(leaf_pruning_threshold)
+
+    def print(self):
+        # TODO: Make this return a string?
+        self.tree_section.root.print_tree()
+
     def log_state(self):
         self.tree_section.log_leaves_properties()
 
