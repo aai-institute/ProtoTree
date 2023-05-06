@@ -147,7 +147,7 @@ def train_prototree(args: Namespace):
     trainer = pl.Trainer(
         detect_anomaly=False,
         max_epochs=epochs,
-        limit_train_batches=n_training_batches // 250,
+        limit_train_batches=n_training_batches // 100,
         limit_val_batches=n_training_batches // 250,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
     )
