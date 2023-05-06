@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import torchvision.transforms as transforms
-from matplotlib import pyplot, pyplot as plt
+from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
