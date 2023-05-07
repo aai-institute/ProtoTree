@@ -1,7 +1,6 @@
 import logging
 from argparse import Namespace
 from pathlib import Path
-from random import randint
 
 import lightning.pytorch as pl
 import torch

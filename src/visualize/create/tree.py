@@ -122,10 +122,10 @@ def _pydot_nodes_internal(
         shape="box",
     )
     l_descendants = _pydot_nodes(
-        subtree_root.left, patches_dir, node_imgs_dir, class_names
+        subtree_root.left, node_to_proto_idx, patches_dir, node_imgs_dir, class_names
     )
     r_descendants = _pydot_nodes(
-        subtree_root.right, patches_dir, node_imgs_dir, class_names
+        subtree_root.right, node_to_proto_idx, patches_dir, node_imgs_dir, class_names
     )
     return [pydot_node] + l_descendants + r_descendants
 
