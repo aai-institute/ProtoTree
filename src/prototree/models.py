@@ -178,6 +178,7 @@ class ProtoPNet(pl.LightningModule):
 @dataclass
 class LeafRationalization:
     ancestor_similarities: list[ImageProtoSimilarity]
+    ancestors: list[InternalNode]
     leaf: Leaf
 
     @property
@@ -187,12 +188,7 @@ class LeafRationalization:
         prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
         the leaf is a right child.
         """
-        internal_children: list[Node] = [
-            ancestor_similarity.internal_node
-            for ancestor_similarity in self.ancestor_similarities[1:]
-        ]
-        leaf_single_list: list[Node] = [self.leaf]
-        ancestor_children = internal_children + leaf_single_list
+        ancestor_children: list[Node] = self.ancestors[1:] + [self.leaf]
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
@@ -411,12 +407,13 @@ class ProtoTree(pl.LightningModule):
 
                 node_distances = dists_i[node_proto_idx, :, :]
                 similarity = img_proto_similarity(
-                    leaf_ancestor, x_i, node_distances, patches_i
+                    node_proto_idx, x_i, node_distances, patches_i
                 )
                 ancestor_similarities.append(similarity)
 
             rationalization = LeafRationalization(
                 ancestor_similarities,
+                leaf_ancestors,
                 predicting_leaf,
             )
             rationalizations.append(rationalization)
