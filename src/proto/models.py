@@ -39,6 +39,8 @@ class ProtoPNet(pl.LightningModule):
         nonlinear_scheduler_params: NonlinearSchedulerParams,
         backbone_name="resnet50_inat",
         pretrained=True,
+        cluster_coeff=0.8,
+        sep_coeff=-0.08,
     ):
         super().__init__()
         # TODO: Dependency injection?
@@ -54,6 +56,7 @@ class ProtoPNet(pl.LightningModule):
             torch.arange(0, num_prototypes),
             (num_classes, prototypes_per_class),
         )
+        self.cluster_coeff, self.sep_coeff = cluster_coeff, sep_coeff
 
         # TODO: The paper specifies no bias, why?
         self.classifier = nn.Linear(num_prototypes, num_classes, bias=False)
@@ -63,7 +66,7 @@ class ProtoPNet(pl.LightningModule):
         self.automatic_optimization = False
 
         self.train_step_outputs, self.val_step_outputs = [], []
-        self.proto_patch_matches = {}
+        self.proto_patch_matches: dict[int, ImageProtoSimilarity] = {}
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
@@ -81,23 +84,11 @@ class ProtoPNet(pl.LightningModule):
         all_dists = self.proto_base.forward(x)
         unnormed_logits = self.classifier(all_dists)
         logits = F.log_softmax(unnormed_logits, dim=1)
-
-        self.class_proto_lookup = self.class_proto_lookup.to(device=self.device)
-        proto_in_class_indices = self.class_proto_lookup[y, :]
-        proto_out_class_indices = select_not(self.class_proto_lookup, y)
-        min_in_class_dists = torch.gather(all_dists, 1, proto_in_class_indices)
-        min_out_class_dists = torch.gather(all_dists, 1, proto_out_class_indices)
-        min_in_class_dist = torch.amin(min_in_class_dists, dim=1)
-        min_out_class_dist = torch.amin(min_out_class_dists, dim=1)
-
-        cluster_coeff, sep_coeff = 0.8, -0.08
-        cluster_cost, sep_cost = torch.mean(min_in_class_dist), torch.mean(
-            min_out_class_dist
-        )
         nll_loss = F.nll_loss(logits, y)
-        loss = nll_loss + cluster_coeff * cluster_cost + sep_cost * sep_cost
+        loss = nll_loss + self._proto_costs(all_dists, y)
         if isnan(loss.item()):
             raise ValueError("Loss is NaN, cannot proceed any further.")
+
         nonlinear_optim.zero_grad()
         self.manual_backward(loss)
         nonlinear_optim.step()
@@ -113,6 +104,20 @@ class ProtoPNet(pl.LightningModule):
         self.log("Train acc", acc, prog_bar=True)
         self.log("Train NLL loss", nll_loss, prog_bar=True)
         self.log("Train loss", loss, prog_bar=True)
+
+    def _proto_costs(self, all_dists: torch.Tensor, y: torch.Tensor):
+        self.class_proto_lookup = self.class_proto_lookup.to(device=self.device)
+        proto_in_class_indices = self.class_proto_lookup[y, :]
+        proto_out_class_indices = select_not(self.class_proto_lookup, y)
+        min_in_class_dists = torch.gather(all_dists, 1, proto_in_class_indices)
+        min_out_class_dists = torch.gather(all_dists, 1, proto_out_class_indices)
+        min_in_class_dist = torch.amin(min_in_class_dists, dim=1)
+        min_out_class_dist = torch.amin(min_out_class_dists, dim=1)
+
+        cluster_cost, sep_cost = torch.mean(min_in_class_dist), torch.mean(
+            min_out_class_dist
+        )
+        return self.cluster_coeff * cluster_cost + self.sep_coeff * sep_cost
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -236,7 +241,7 @@ class ProtoTree(pl.LightningModule):
         self.automatic_optimization = False
 
         self.train_step_outputs, self.val_step_outputs = [], []
-        self.proto_patch_matches = {}
+        self.proto_patch_matches: dict[int, ImageProtoSimilarity] = {}
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
@@ -461,8 +466,7 @@ class TreeSection(nn.Module):
         self.num_classes = num_classes
         self.root = create_tree(depth, num_classes)
         self.node_to_proto_idx = {
-            node: idx
-            for idx, node in enumerate(self.root.descendant_internal_nodes)
+            node: idx for idx, node in enumerate(self.root.descendant_internal_nodes)
         }
         self.leaf_pruning_threshold = leaf_pruning_threshold
         self.leaf_opt_ewma_alpha = leaf_opt_ewma_alpha
@@ -700,7 +704,9 @@ class TreeSection(nn.Module):
         # all work happens here, the rest is just logging
         prune_unconfident_leaves(self.root, leaf_pruning_threshold)
 
-        frac_nodes_pruned = 1 - len(self.root.descendant_internal_nodes) / num_nodes_before
+        frac_nodes_pruned = (
+            1 - len(self.root.descendant_internal_nodes) / num_nodes_before
+        )
         log.info(
             f"After pruning: {self.root.num_internal_nodes} internal_nodes and {self.root.num_leaves} leaves"
         )

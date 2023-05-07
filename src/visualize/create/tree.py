@@ -37,7 +37,13 @@ def save_tree_visualization(
     node_imgs_dir = tree_dir / "node_imgs"
     node_imgs_dir.mkdir(parents=True, exist_ok=True)
 
-    pydot_tree = _pydot_tree(model.tree_section.root, patches_dir, node_imgs_dir, class_names)
+    pydot_tree = _pydot_tree(
+        model.tree_section.root,
+        model.proto_patch_matches,
+        patches_dir,
+        node_imgs_dir,
+        class_names,
+    )
     _save_pydot(pydot_tree, tree_dir)
 
 
