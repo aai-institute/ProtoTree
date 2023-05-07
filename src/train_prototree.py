@@ -74,12 +74,7 @@ def train_prototree(args: Namespace):
     log.info(f"Training and testing ProtoTree with {args=}.")
 
     # PREPARE DATA
-    device = get_device(disable_cuda)
-    pin_memory = "cuda" in device.type
-    train_loader, project_loader, test_loader = get_dataloaders(
-        pin_memory=pin_memory,
-        batch_size=batch_size,
-    )
+    train_loader, project_loader, test_loader = get_dataloaders(batch_size=batch_size)
 
     class_names = train_loader.dataset.classes
     num_classes = len(class_names)
@@ -187,15 +182,6 @@ def train_prototree(args: Namespace):
         save_decision_flow_visualizations(
             explanations_provider(), patches_dir, vis_dir / "explanations"
         )
-
-
-def get_device(disable_cuda=False):
-    if not disable_cuda and torch.cuda.is_available():
-        num_cudas = torch.cuda.device_count()
-        device_str = f"cuda:{randint(0, num_cudas - 1)}"  # TODO: Do this properly.
-    else:
-        device_str = "cpu"
-    return torch.device(device_str)
 
 
 if __name__ == "__main__":

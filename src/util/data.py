@@ -26,10 +26,10 @@ def get_dataloaders(
     """
     train_set, project_set, test_set = get_data()
 
-    def get_loader(dataset: ImageFolder, batch_size=batch_size):
+    def get_loader(dataset: ImageFolder, loader_batch_size=batch_size):
         return DataLoader(
             dataset,
-            batch_size=batch_size,
+            batch_size=loader_batch_size,
             shuffle=True,
             pin_memory=pin_memory,
             **kwargs
@@ -37,7 +37,7 @@ def get_dataloaders(
 
     train_loader = get_loader(train_set)
     # make batch size smaller to prevent out of memory errors during projection
-    project_loader = get_loader(project_set, batch_size=batch_size // 4)
+    project_loader = get_loader(project_set, loader_batch_size=batch_size // 4)
     test_loader = get_loader(test_set)
     return train_loader, project_loader, test_loader
 
