@@ -11,16 +11,16 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
 
-from proto.base import ProtoBase, updated_proto_patch_matches
-from proto.img_similarity import img_proto_similarity, ImageProtoSimilarity
-from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
-from proto.prune import prune_unconfident_leaves
-from proto.optim import (
+from prototree.base import ProtoBase, updated_proto_patch_matches
+from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
+from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
+from prototree.prune import prune_unconfident_leaves
+from prototree.optim import (
     NonlinearSchedulerParams,
     get_nonlinear_scheduler,
     freezable_step,
 )
-from proto.types import SamplingStrat, SingleLeafStrat
+from prototree.types import SamplingStrat, SingleLeafStrat
 from util.indexing import select_not
 from util.net import NAME_TO_NET
 

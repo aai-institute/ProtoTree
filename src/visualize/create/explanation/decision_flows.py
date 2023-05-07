@@ -8,9 +8,9 @@ import pydot
 import torch
 from tqdm import tqdm
 
-from proto.img_similarity import ImageProtoSimilarity
-from proto.models import LeafRationalization
-from proto.node import Node, InternalNode
+from prototree.img_similarity import ImageProtoSimilarity
+from prototree.models import LeafRationalization
+from prototree.node import Node, InternalNode
 from util.data import save_img
 from util.image import get_latent_to_pixel, get_inverse_arr_transform
 from visualize.create.dot import _node_name, gen_leaf, graph_with_components

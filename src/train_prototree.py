@@ -6,9 +6,9 @@ from random import randint
 import lightning.pytorch as pl
 import torch
 
-from proto.models import ProtoTree, ProtoPNet
-from proto.eval import eval_model, single_leaf_eval
-from proto.optim import (
+from prototree.models import ProtoTree, ProtoPNet
+from prototree.eval import eval_model, single_leaf_eval
+from prototree.optim import (
     NonlinearOptimParams,
     NonlinearSchedulerParams,
 )

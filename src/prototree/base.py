@@ -4,7 +4,7 @@ from typing import Optional, Union, Literal, Iterator, Tuple
 import torch
 from torch import nn as nn
 
-from proto.img_similarity import ImageProtoSimilarity, img_proto_similarity
+from prototree.img_similarity import ImageProtoSimilarity, img_proto_similarity
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers
 

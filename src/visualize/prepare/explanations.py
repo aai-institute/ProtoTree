@@ -3,7 +3,7 @@ from typing import Iterator
 import torch
 from torch.utils.data import DataLoader
 
-from proto.models import TreeSection, LeafRationalization
+from prototree.models import TreeSection, LeafRationalization
 
 
 @torch.no_grad()
