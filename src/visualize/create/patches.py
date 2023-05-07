@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 import torch
 
-from prototree.node import InternalNode
 from prototree.img_similarity import ImageProtoSimilarity
 from util.data import save_img
 from util.image import get_latent_to_pixel, get_inverse_arr_transform
