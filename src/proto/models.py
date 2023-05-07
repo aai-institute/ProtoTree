@@ -105,7 +105,7 @@ class ProtoPNet(pl.LightningModule):
         self.log("Train NLL loss", nll_loss, prog_bar=True)
         self.log("Train loss", loss, prog_bar=True)
 
-    def _proto_costs(self, all_dists: torch.Tensor, y: torch.Tensor):
+    def _proto_costs(self, all_dists: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         self.class_proto_lookup = self.class_proto_lookup.to(device=self.device)
         proto_in_class_indices = self.class_proto_lookup[y, :]
         proto_out_class_indices = select_not(self.class_proto_lookup, y)
