@@ -8,7 +8,7 @@ import torch
 
 from proto.models import ProtoTree, ProtoPNet
 from proto.eval import eval_model, single_leaf_eval
-from proto.train import (
+from proto.optim import (
     NonlinearOptimParams,
     NonlinearSchedulerParams,
 )

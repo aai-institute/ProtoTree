@@ -15,7 +15,7 @@ from proto.base import ProtoBase, updated_proto_patch_matches
 from proto.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
 from proto.prune import prune_unconfident_leaves
-from proto.train import (
+from proto.optim import (
     NonlinearSchedulerParams,
     get_nonlinear_scheduler,
     freezable_step,
