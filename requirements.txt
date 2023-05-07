@@ -1,5 +1,6 @@
-lightning~=2.0.1
-lovely-tensors~=0.1.14
+bidict~=0.22.1
+lightning~=2.0.2
+lovely-tensors~=0.1.15
 matplotlib~=3.7.1
 numpy~=1.24.2
 opencv-python-headless~=4.7.0.72
