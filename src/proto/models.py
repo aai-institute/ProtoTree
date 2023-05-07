@@ -13,7 +13,7 @@ from torch.nn import functional as F
 
 from proto.base import ProtoBase, updated_proto_patch_matches
 from proto.img_similarity import img_proto_similarity, ImageProtoSimilarity
-from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree, log
+from proto.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
 from proto.prune import prune_unconfident_leaves
 from proto.train import (
     NonlinearSchedulerParams,
@@ -28,6 +28,8 @@ log = logging.getLogger(__name__)
 
 
 class ProtoPNet(pl.LightningModule):
+    # TODO: We could abstract this and ProtoTree into a superclass. However, perhaps we should wait for the rule of 3 to
+    #  help us choose the right abstraction.
     def __init__(
         self,
         h_proto: int,
@@ -195,6 +197,8 @@ class LeafRationalization:
 
 
 class ProtoTree(pl.LightningModule):
+    # TODO: We could abstract this and ProtoPNet into a superclass. However, perhaps we should wait for the rule of 3 to
+    #  help us choose the right abstraction.
     def __init__(
         self,
         h_proto: int,
