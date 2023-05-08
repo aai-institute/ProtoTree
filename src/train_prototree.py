@@ -137,7 +137,7 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     log.info("Starting training.")
-    torch.set_num_threads(6)
+    torch.set_num_threads(4)
     trainer = pl.Trainer(
         accelerator="cpu" if disable_cuda else "auto",
         detect_anomaly=False,
