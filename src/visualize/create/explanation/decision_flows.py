@@ -90,12 +90,14 @@ def _decision_flow_dag(
     """
 
     proto_subgraphs, decision_pydot_edges = [], []
-    for ancestor_similarity, proto_present in zip(
+    for ancestor_similarity, ancestor, proto_present in zip(
         leaf_rationalization.ancestor_similarities,
+        leaf_rationalization.ancestors,
         leaf_rationalization.proto_presents,
     ):
         proto_subgraph, decision_edge = _proto_node_components(
             ancestor_similarity,
+            ancestor,
             proto_present,
             inv_transform,
             latent_to_pixel,
@@ -132,6 +134,7 @@ def _assemble_flow_dag(
 
 def _proto_node_components(
     ancestor_similarity: ImageProtoSimilarity,
+    ancestor: InternalNode,
     proto_present: bool,
     inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
@@ -143,17 +146,16 @@ def _proto_node_components(
     the tree. This consists of a subgraph of {prototype visualization, (optional) bounding box for the matching patch on
     the image, (optional) edge connecting the two images}, and an edge leading to the next node in the tree.
     """
-    proto_node = ancestor_similarity.internal_node
-    proto_file = patches_dir / f"{proto_node.index}_closest_patch.png"
+    proto_file = patches_dir / f"{ancestor.index}_closest_patch.png"
 
-    proto_subgraph = pydot.Subgraph(f"proto_subgraph_{proto_node.depth}", rank="same")
+    proto_subgraph = pydot.Subgraph(f"proto_subgraph_{ancestor.depth}", rank="same")
 
-    proto_pydot_node = _img_pydot_node(_node_name(proto_node), proto_file, 1.5)
+    proto_pydot_node = _img_pydot_node(_node_name(ancestor), proto_file, 1.5)
     proto_subgraph.add_node(proto_pydot_node)
     if proto_present:
         bbox_pydot_node, bbox_pydot_edge = _bbox_components(
             ancestor_similarity,
-            proto_node,
+            ancestor,
             inv_transform,
             latent_to_pixel,
             decision_flow_dir,
@@ -162,7 +164,7 @@ def _proto_node_components(
         proto_subgraph.add_edge(bbox_pydot_edge)
 
     decision_edge = _decision_edge(
-        proto_node, proto_present, ancestor_similarity.highest_patch_similarity
+        ancestor, proto_present, ancestor_similarity.highest_patch_similarity
     )
     return proto_subgraph, decision_edge
 
