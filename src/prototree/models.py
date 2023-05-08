@@ -161,20 +161,26 @@ class ProtoPNet(PrototypeBase):
 
 
 @dataclass
+class NodeSimilarity:
+    similarity: ImageProtoSimilarity
+    node: InternalNode
+
+
+@dataclass
 class LeafRationalization:
-    ancestor_similarities: list[ImageProtoSimilarity]
+    ancestor_sims: list[ImageProtoSimilarity]
     leaf: Leaf
 
     @property
     def proto_presents(self) -> list[bool]:
         """
-        Returns a list of bools the same length as ancestor_similarities, where each item indicates whether the
+        Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
         prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
         the leaf is a right child.
         """
         ancestor_children = [
-            ancestor_similarity.internal_node
-            for ancestor_similarity in self.ancestor_similarities[1:]
+            ancestor_sim.internal_node
+            for ancestor_sim in self.ancestor_sims[1:]
         ] + [self.leaf]
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
@@ -380,7 +386,7 @@ class ProtoTree(PrototypeBase):
             x, predicting_leaves, dists, patches
         ):
             leaf_ancestors = predicting_leaf.ancestors
-            ancestor_similarities: list[ImageProtoSimilarity] = []
+            ancestor_sims: list[ImageProtoSimilarity] = []
             for leaf_ancestor in leaf_ancestors:
                 node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
 
@@ -388,10 +394,10 @@ class ProtoTree(PrototypeBase):
                 similarity = img_proto_similarity(
                     leaf_ancestor, x_i, node_distances, patches_i
                 )
-                ancestor_similarities.append(similarity)
+                ancestor_sims.append(similarity)
 
             rationalization = LeafRationalization(
-                ancestor_similarities,
+                ancestor_sims,
                 predicting_leaf,
             )
             rationalizations.append(rationalization)

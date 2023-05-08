@@ -68,7 +68,7 @@ def _save_multi_patch_vis(
     Saves the original image and copies of it with {an average heatmap, all bounding boxes from patches, bounding boxes
     from patches that were similar enough to be considered present}.
     """
-    ancestor_sims = leaf_rationalization.ancestor_similarities
+    ancestor_sims = leaf_rationalization.ancestor_sims
     transformed_orig = ancestor_sims[0].transformed_image
     im_original = inv_transform(transformed_orig)
 
