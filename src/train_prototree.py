@@ -141,8 +141,7 @@ def train_prototree(args: Namespace):
     trainer = pl.Trainer(
         detect_anomaly=False,
         max_epochs=epochs,
-        limit_train_batches=n_training_batches // 100,
-        limit_val_batches=n_training_batches // 250,
+        limit_val_batches=n_training_batches // 25,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
     )
     # TODO: The original code used the test set as the validation set! We need to fix this.
