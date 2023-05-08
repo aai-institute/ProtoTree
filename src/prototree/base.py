@@ -1,4 +1,3 @@
-from copy import copy
 from typing import Optional, Union, Literal, Iterator, Tuple
 
 import torch
@@ -98,23 +97,22 @@ class ProtoBase(nn.Module):
 
 
 @torch.no_grad()
-def updated_proto_patch_matches(
+def update_proto_patch_matches(
     base: ProtoBase,
-    original_matches: dict[int, ImageProtoSimilarity],
+    updated_matches: dict[int, ImageProtoSimilarity],
     x: torch.Tensor,
     y: torch.Tensor,
-) -> dict[int, ImageProtoSimilarity]:
+):
     """
     Produces a map where each key is a node and the corresponding value is information about the patch (out of all
     images in the dataset) that is most similar to node's prototype.
 
     :param base:
-    :param original_matches:
+    :param updated_matches:
     :param x:
     :param y:
     :return: The map of nodes to best matches.
     """
-    updated_matches = copy(original_matches)
     for proto_similarity, label in _patch_match_candidates(base, x, y):
         proto_id = proto_similarity.proto_id
         if proto_id in updated_matches:
@@ -126,8 +124,6 @@ def updated_proto_patch_matches(
                 updated_matches[proto_id] = proto_similarity
         else:
             updated_matches[proto_id] = proto_similarity
-
-    return updated_matches
 
 
 @torch.no_grad()

@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
 
-from prototree.base import ProtoBase, updated_proto_patch_matches
+from prototree.base import ProtoBase, update_proto_patch_matches
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
 from prototree.prune import prune_unconfident_leaves
@@ -96,7 +96,7 @@ class ProtoPNet(pl.LightningModule):
         nonlinear_optim.step()
 
         # It's useful to compute this for visualizations, even if we're not projecting.
-        self.proto_patch_matches = updated_proto_patch_matches(
+        update_proto_patch_matches(
             self.proto_base, self.proto_patch_matches, x, y
         )
 
@@ -273,7 +273,7 @@ class ProtoTree(pl.LightningModule):
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
         # It's useful to compute this for visualizations, even if we're not projecting.
-        self.proto_patch_matches = updated_proto_patch_matches(
+        update_proto_patch_matches(
             self.proto_base, self.proto_patch_matches, x, y
         )
 
