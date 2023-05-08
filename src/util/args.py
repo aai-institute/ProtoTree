@@ -153,7 +153,7 @@ def get_args() -> argparse.Namespace:
         "--disable_pretrained",
         action="store_true",
         help="When set, the backbone network is initialized with random weights instead of being pretrained on "
-        "another dataset). When not set, resnet50_inat is initalized with weights from iNaturalist2017. Other "
+        "another dataset). When not set, resnet50_inat is initialized with weights from iNaturalist2017. Other "
         "networks are initialized with weights from ImageNet",
     )
     parser.add_argument(
