@@ -8,12 +8,13 @@ def select_not(t: torch.Tensor, y: torch.Tensor):
     index not equal to y_i.
     """
     single_selections = [_select_not_unbatched(t, y_single) for y_single in y]
-    return torch.stack(single_selections, dim=0)
+    stacked_selections = torch.stack(single_selections, dim=0)
+    return torch.flatten(stacked_selections, start_dim=1)
 
 
 def _select_not_unbatched(t: torch.Tensor, y_single: torch.Tensor):
     excl = _exclusion_range(y_single, t.shape[0])
-    return torch.flatten(t[excl, :])
+    return t[excl, :]
 
 
 def _exclusion_range(idx: torch.Tensor, range_size: torch.Tensor):
