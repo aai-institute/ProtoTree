@@ -176,19 +176,25 @@ class ProtoPNet(pl.LightningModule):
 
 
 @dataclass
+class NodeSimilarity:
+    similarity: ImageProtoSimilarity
+    node: InternalNode
+
+
+@dataclass
 class LeafRationalization:
-    ancestor_similarities: list[ImageProtoSimilarity]
-    ancestors: list[InternalNode]
+    ancestor_sims: list[NodeSimilarity]
     leaf: Leaf
 
     @property
     def proto_presents(self) -> list[bool]:
         """
-        Returns a list of bools the same length as ancestor_similarities, where each item indicates whether the
+        Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
         prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
         the leaf is a right child.
         """
-        ancestor_children: list[Node] = self.ancestors[1:] + [self.leaf]
+        non_root_ancestors: list[InternalNode] = [sim.node for sim in self.ancestor_sims][1:]
+        ancestor_children: list[Node] = non_root_ancestors + [self.leaf]
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
@@ -401,7 +407,7 @@ class ProtoTree(pl.LightningModule):
             x, predicting_leaves, dists, patches
         ):
             leaf_ancestors = predicting_leaf.ancestors
-            ancestor_similarities: list[ImageProtoSimilarity] = []
+            ancestor_sims: list[NodeSimilarity] = []
             for leaf_ancestor in leaf_ancestors:
                 node_proto_idx = self.tree_section.node_to_proto_idx[leaf_ancestor]
 
@@ -409,11 +415,10 @@ class ProtoTree(pl.LightningModule):
                 similarity = img_proto_similarity(
                     node_proto_idx, x_i, node_distances, patches_i
                 )
-                ancestor_similarities.append(similarity)
+                ancestor_sims.append(NodeSimilarity(similarity, leaf_ancestor))
 
             rationalization = LeafRationalization(
-                ancestor_similarities,
-                leaf_ancestors,
+                ancestor_sims,
                 predicting_leaf,
             )
             rationalizations.append(rationalization)

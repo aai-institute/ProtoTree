@@ -84,7 +84,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="./runs/run_prototree",
+        default="./runs/run_model",
         help="The directory for output from training, testing, and visualizing the tree.",
     )
     parser.add_argument(
@@ -109,7 +109,7 @@ def get_args() -> argparse.Namespace:
         "--milestones",
         type=str,
         default="60,70,80,90,100",
-        help="The milestones for the MultiStepLR learning rate scheduler",
+        help="The milestones for the MultiStepLR learning rate scheduler, should be provided as comma separated ints.",
     )
     parser.add_argument(
         "--gamma",

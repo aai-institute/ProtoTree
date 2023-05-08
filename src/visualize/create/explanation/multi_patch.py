@@ -68,15 +68,15 @@ def _save_multi_patch_vis(
     Saves the original image and copies of it with {an average heatmap, all bounding boxes from patches, bounding boxes
     from patches that were similar enough to be considered present}.
     """
-    ancestor_sims = leaf_rationalization.ancestor_similarities
-    transformed_orig = ancestor_sims[0].transformed_image
+    ancestor_sims = leaf_rationalization.ancestor_sims
+    transformed_orig = ancestor_sims[0].similarity.transformed_image
     im_original = inv_transform(transformed_orig)
 
     # TODO: Seems a bit redundant that we're extracting the similarities and then max similarities separately.
     all_patch_similarities = [
-        sim.all_patch_similarities.cpu().numpy() for sim in ancestor_sims
+        sim.similarity.all_patch_similarities.cpu().numpy() for sim in ancestor_sims
     ]
-    highest_similarities = [sim.highest_patch_similarity for sim in ancestor_sims]
+    highest_similarities = [ancestor_sim.similarity.highest_patch_similarity for ancestor_sim in ancestor_sims]
 
     im_with_bboxs, im_with_present_bboxs = _bboxs_overlaid(
         all_patch_similarities,
