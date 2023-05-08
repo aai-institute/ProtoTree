@@ -61,7 +61,11 @@ def _save_pydot(pydot_tree: pydot.Dot, tree_dir: os.PathLike):
 
 
 def _pydot_tree(
-    root: Node, node_to_proto_idx: dict[Node, int], patches_dir: os.PathLike, node_imgs_dir: os.PathLike, class_names: tuple
+    root: Node,
+    node_to_proto_idx: dict[Node, int],
+    patches_dir: os.PathLike,
+    node_imgs_dir: os.PathLike,
+    class_names: tuple,
 ) -> pydot.Dot:
     pydot_tree = pydot.Dot(
         "prototree",
@@ -73,7 +77,9 @@ def _pydot_tree(
         splines=False,
     )
 
-    pydot_nodes = _pydot_nodes(root, node_to_proto_idx, patches_dir, node_imgs_dir, class_names)
+    pydot_nodes = _pydot_nodes(
+        root, node_to_proto_idx, patches_dir, node_imgs_dir, class_names
+    )
     pydot_edges = _pydot_edges(root)
     return graph_with_components(pydot_tree, pydot_nodes, [], pydot_edges)
 
@@ -91,7 +97,11 @@ def _pydot_nodes(
     match subtree_root:
         case InternalNode() as internal_node:
             return _pydot_nodes_internal(
-                internal_node, node_to_proto_idx, patches_dir, node_imgs_dir, class_names
+                internal_node,
+                node_to_proto_idx,
+                patches_dir,
+                node_imgs_dir,
+                class_names,
             )
         case Leaf() as leaf:
             return _pydot_nodes_leaf(leaf, class_names)
@@ -169,9 +179,7 @@ def _pydot_edges_internal(subtree_root: InternalNode) -> list[pydot.Edge]:
 def _gen_internal_node_img(proto_idx: int, patches_dir: os.PathLike) -> Image:
     # TODO: move hardcoded strings to config
     patch_path = os.path.join(patches_dir, f"{proto_idx}_closest_patch.png")
-    bb_path = os.path.join(
-        patches_dir, f"{proto_idx}_bounding_box_closest_patch.png"
-    )
+    bb_path = os.path.join(patches_dir, f"{proto_idx}_bounding_box_closest_patch.png")
     patch_img_orig = Image.open(patch_path)
     bb_img_orig = Image.open(bb_path)
 

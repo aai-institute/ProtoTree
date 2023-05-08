@@ -466,7 +466,7 @@ class TreeSection(nn.Module):
 
         self.num_classes = num_classes
         self.root = create_tree(depth, num_classes)
-        self.node_to_proto_idx = {
+        self.node_to_proto_idx: dict[Node, int] = {
             node: idx for idx, node in enumerate(self.root.descendant_internal_nodes)
         }
         self.leaf_pruning_threshold = leaf_pruning_threshold
