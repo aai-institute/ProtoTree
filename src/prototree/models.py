@@ -284,17 +284,17 @@ class ProtoTree(PrototypeBase):
     def forward(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrat = "distributed",
+        strategy: SamplingStrat = "distributed",
     ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
         Produces predictions for input images.
 
-        If sampling_strategy is `distributed`, all leaves contribute to each prediction, and predicting_leaves is None.
+        If strategy is `distributed`, all leaves contribute to each prediction, and predicting_leaves is None.
         For other sampling strategies, only one leaf is used per sample, which results in an interpretable prediction;
         in this case, predicting_leaves is a list of leaves of length `batch_size`.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
-        :param sampling_strategy:
+        :param strategy:
 
         :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves
         """
@@ -302,19 +302,19 @@ class ProtoTree(PrototypeBase):
         node_to_probs = self.get_node_to_probs(x)
 
         # TODO: Find a better approach for this branching logic (https://martinfowler.com/bliki/FlagArgument.html).
-        match self.training, sampling_strategy:
+        match self.training, strategy:
             case _, "distributed":
                 predicting_leaves = None
                 logits = self.tree_root.forward(node_to_probs)
             case False, "sample_max" | "greedy":
                 predicting_leaves = get_predicting_leaves(
-                    self.tree_root, node_to_probs, sampling_strategy
+                    self.tree_root, node_to_probs, strategy
                 )
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
             case _:
                 raise ValueError(
-                    f"Invalid train/test and sampling strategy combination: {self.training=}, {sampling_strategy=}"
+                    f"Invalid train/test and sampling strategy combination: {self.training=}, {strategy=}"
                 )
 
         return logits, node_to_probs, predicting_leaves
@@ -322,7 +322,7 @@ class ProtoTree(PrototypeBase):
     def explain(
         self,
         x: torch.Tensor,
-        sampling_strategy: SingleLeafStrat = "sample_max",
+        strategy: SingleLeafStrat = "sample_max",
     ) -> tuple[
         Tensor,
         dict[Node, NodeProbabilities],
@@ -338,12 +338,12 @@ class ProtoTree(PrototypeBase):
         rationalizations.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
-        :param sampling_strategy:
+        :param strategy:
 
         :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations
         """
         logits, node_to_probs, predicting_leaves = self.forward(
-            x, sampling_strategy=sampling_strategy
+            x, strategy=strategy
         )
         leaf_explanations = self.rationalize(x, predicting_leaves)
         return logits, node_to_probs, predicting_leaves, leaf_explanations
@@ -401,9 +401,9 @@ class ProtoTree(PrototypeBase):
     def predict(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrat = "sample_max",
+        strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
-        logits = self.forward(x, sampling_strategy)[0]
+        logits = self.forward(x, strategy)[0]
         return logits.argmax(dim=1)
 
     def predict_probs(
@@ -438,12 +438,12 @@ class ProtoTree(PrototypeBase):
 def get_predicting_leaves(
     root: InternalNode,
     node_to_probs: dict[Node, NodeProbabilities],
-    sampling_strategy: SingleLeafStrat,
+    strategy: SingleLeafStrat,
 ) -> List[Leaf]:
     """
     Selects one leaf for each entry of the batch covered in node_to_probs.
     """
-    match sampling_strategy:
+    match strategy:
         case "sample_max":
             return _get_max_p_arrival_leaves(root.leaves, node_to_probs)
         case "greedy":

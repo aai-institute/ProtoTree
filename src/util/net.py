@@ -2,7 +2,7 @@ from features.densenet_features import *
 from features.resnet_features import *
 from features.vgg_features import *
 
-BASE_ARCHITECTURE_TO_FEATURES = {
+NAME_TO_NET = {
     "resnet18": resnet18_features,
     "resnet34": resnet34_features,
     "resnet50": resnet50_features,
@@ -25,14 +25,23 @@ BASE_ARCHITECTURE_TO_FEATURES = {
 
 
 def default_add_on_layers(feature_convnet: nn.Module, out_channels: int):
-    conv_layer = nn.Conv2d(
+    conv_layer_1 = nn.Conv2d(
         in_channels=num_out_channels(feature_convnet),
         out_channels=out_channels,
         kernel_size=1,
-        bias=False,
     )
-    # TODO: allow other activations
-    return nn.Sequential(conv_layer, nn.Sigmoid())
+    torch.nn.init.kaiming_normal(conv_layer_1.weight, nonlinearity="relu")
+    conv_layer_2 = nn.Conv2d(
+        in_channels=out_channels,
+        out_channels=out_channels,
+        kernel_size=1,
+    )
+    torch.nn.init.xavier_normal_(
+        conv_layer_2.weight, gain=torch.nn.init.calculate_gain("sigmoid")
+    )
+    # TODO: Should we allow other activations? Why is the 2nd a sigmoid? Forcing [0, 1] due to relatively few layers
+    #  after this one?
+    return nn.Sequential(conv_layer_1, nn.ReLU(), conv_layer_2, nn.Sigmoid())
 
 
 def num_out_channels(convnet: nn.Module):
