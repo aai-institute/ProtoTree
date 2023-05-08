@@ -56,7 +56,7 @@ def train_prototree(args: Namespace):
     if args.project_from_epoch >= 0:
         project_epochs = set((i for i in range(args.project_from_epoch, epochs)))
     else:
-        project_epochs = {}
+        project_epochs = set()
 
     # prototree specifics
     leaf_pruning_multiplier = args.leaf_pruning_multiplier
