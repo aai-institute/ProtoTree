@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torchvision.transforms as transforms
 from matplotlib import pyplot as plt
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
 from config import project_dir, test_dir, train_dir

@@ -21,4 +21,4 @@ Currently, all these steps are only done manually on a development machine. We s
 1. Install requirements from `requirements-dev.txt`.
 2. You can lint the code with `black src tests`.
 3. You can check types with `MYPYPATH=src mypy src tests --explicit-package-bases --check-untyped-defs`. Note that it will be helpful to run `mypy --install-types` beforehand.
-4. You can run tests with the command `PYTHONPATH=src pytest`.
+4. You can run tests with the command `pytest`.
