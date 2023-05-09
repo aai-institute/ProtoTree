@@ -62,6 +62,7 @@ def eval_model(
     return avg_acc
 
 
+@torch.no_grad()
 def single_leaf_eval(
     projected_pruned_tree: ProtoTree,
     test_loader: DataLoader,
@@ -100,23 +101,3 @@ def eval_fidelity(
         avg_fidelity += batch_fidelity / (len(y) * n_batches)
 
     return avg_fidelity
-
-
-# TODO: use some inbuilt of torch or sklearn
-def acc_from_cm(cm: np.ndarray) -> float:
-    """
-    Compute the accuracy from the confusion matrix
-    :param cm: confusion matrix
-    :return: the accuracy score
-    """
-    assert len(cm.shape) == 2 and cm.shape[0] == cm.shape[1]
-
-    correct = 0
-    for i in range(len(cm)):
-        correct += cm[i, i]
-
-    total = np.sum(cm)
-    if total == 0:
-        return 1.0
-    else:
-        return correct / total
