@@ -109,6 +109,8 @@ class ProtoBase(nn.Module):
         x: torch.Tensor,
         y: torch.Tensor,
     ):
+        # TODO: This is currently incredibly slow, particularly on GPUs, because of the large number of small,
+        #  non-vectorized operations. This can probably be refactored to be much faster.
         """
         Produces a map where each key is a node and the corresponding value is information about the patch (out of all
         images in the dataset) that is most similar to node's prototype.

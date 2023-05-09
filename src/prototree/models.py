@@ -95,7 +95,7 @@ class ProtoPNet(pl.LightningModule):
         self.manual_backward(loss)
         nonlinear_optim.step()
 
-        if batch_idx % 50 == 0:
+        if batch_idx % 125 == 124:  # TODO: Hack because update_proto_patch_matches is inefficient.
             # It's useful to compute this for visualizations, even if we're not projecting.
             self.proto_base.update_proto_patch_matches(
                 self.proto_patch_matches, x, y
@@ -273,7 +273,7 @@ class ProtoTree(pl.LightningModule):
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
-        if batch_idx % 50 == 0:
+        if batch_idx % 125 == 124:  # TODO: Hack because update_proto_patch_matches is inefficient.
             # It's useful to compute this for visualizations, even if we're not projecting.
             self.proto_base.update_proto_patch_matches(
                 self.proto_patch_matches, x, y
