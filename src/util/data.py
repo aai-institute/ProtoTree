@@ -18,7 +18,6 @@ def get_dataloaders(
     pin_memory=True, batch_size=64, **kwargs
 ) -> tuple[DataLoader[ImageFolder], DataLoader[ImageFolder], DataLoader[ImageFolder]]:
     """
-
     :param pin_memory:
     :param batch_size:
     :param kwargs: passed to DataLoader
@@ -32,7 +31,6 @@ def get_dataloaders(
             batch_size=loader_batch_size,
             shuffle=True,
             pin_memory=pin_memory,
-            num_workers=7,
             **kwargs
         )
 
