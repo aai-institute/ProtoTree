@@ -139,8 +139,8 @@ class ProtoBase(nn.Module):
         # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
         #  commonality. However, we also need to beware of premature abstraction.
         """
-        Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
-        the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
+        Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair
+        in the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
 
         :return: Iterator of (similarity, label)
         """
