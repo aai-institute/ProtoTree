@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn import functional as F
 
-from prototree.base import ProtoBase, update_proto_patch_matches
+from prototree.base import ProtoBase
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
 from prototree.prune import prune_unconfident_leaves
@@ -96,8 +96,8 @@ class ProtoPNet(pl.LightningModule):
         nonlinear_optim.step()
 
         # It's useful to compute this for visualizations, even if we're not projecting.
-        update_proto_patch_matches(
-            self.proto_base, self.proto_patch_matches, x, y
+        self.proto_base.update_proto_patch_matches(
+            self.proto_patch_matches, x, y
         )
 
         y_pred = logits.argmax(dim=1)
@@ -273,8 +273,8 @@ class ProtoTree(pl.LightningModule):
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
         # It's useful to compute this for visualizations, even if we're not projecting.
-        update_proto_patch_matches(
-            self.proto_base, self.proto_patch_matches, x, y
+        self.proto_base.update_proto_patch_matches(
+            self.proto_patch_matches, x, y
         )
 
         y_pred = logits.argmax(dim=1)
@@ -398,9 +398,7 @@ class ProtoTree(pl.LightningModule):
         Returns:
             List of rationalizations
         """
-        patches, dists = self.proto_base.patches(x), self.proto_base.distances(
-            x
-        )  # Common subexpression elimination possible, if necessary.
+        patches, dists = self.proto_base.patches_and_dists(x)
 
         rationalizations = []
         for x_i, predicting_leaf, dists_i, patches_i in zip(

@@ -54,9 +54,8 @@ class ProtoBase(nn.Module):
         Get the patches for a given input tensor. This is the same as extract_features, except the output is unfolded to
         be (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto).
         """
-        w_proto, h_proto = self.prototype_shape[:2]
         features = self.extract_features(x)
-        return features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
+        return self._features_to_patches(features)
 
     def distances(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -65,6 +64,14 @@ class ProtoBase(nn.Module):
         """
         x = self.extract_features(x)
         return self.proto_layer(x)
+
+    def patches_and_dists(self, x: torch.Tensor):
+        features = self.extract_features(x)
+        return self._features_to_patches(features), self.proto_layer(features)
+
+    def _features_to_patches(self, features: torch.Tensor) -> torch.Tensor:
+        w_proto, h_proto = self.prototype_shape[:2]
+        return features.unfold(2, w_proto, 1).unfold(3, h_proto, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.distances(x)
@@ -89,63 +96,58 @@ class ProtoBase(nn.Module):
         """
         Replaces each prototype with a given patch.
         Note: This mutates the prototype tensors.
-        TODO: We should probably not be mutating the tree (via the prototypes) after training, as this is making the code
-         less flexible and harder to reason about.
+        TODO: We should probably not be mutating the tree (via the prototypes) after training, as this is making the
+         code less flexible and harder to reason about.
         """
         for proto_id, patch_info in node_to_patch_matches.items():
             self.proto_layer.protos.data[proto_id] = patch_info.closest_patch.data
 
+    @torch.no_grad()
+    def update_proto_patch_matches(
+        self,
+        updated_matches: dict[int, ImageProtoSimilarity],
+        x: torch.Tensor,
+        y: torch.Tensor,
+    ):
+        """
+        Produces a map where each key is a node and the corresponding value is information about the patch (out of all
+        images in the dataset) that is most similar to node's prototype.
 
-@torch.no_grad()
-def update_proto_patch_matches(
-    base: ProtoBase,
-    updated_matches: dict[int, ImageProtoSimilarity],
-    x: torch.Tensor,
-    y: torch.Tensor,
-):
-    """
-    Produces a map where each key is a node and the corresponding value is information about the patch (out of all
-    images in the dataset) that is most similar to node's prototype.
-
-    :param base:
-    :param updated_matches:
-    :param x:
-    :param y:
-    :return: The map of nodes to best matches.
-    """
-    for proto_similarity, label in _patch_match_candidates(base, x, y):
-        proto_id = proto_similarity.proto_id
-        if proto_id in updated_matches:
-            cur_closest = updated_matches[proto_id]
-            if (
-                proto_similarity.closest_patch_distance
-                < cur_closest.closest_patch_distance
-            ):
+        :param updated_matches:
+        :param x:
+        :param y:
+        :return: The map of nodes to best matches.
+        """
+        for proto_similarity, label in self._patch_match_candidates(x, y):
+            proto_id = proto_similarity.proto_id
+            if proto_id in updated_matches:
+                cur_closest = updated_matches[proto_id]
+                if (
+                    proto_similarity.closest_patch_distance
+                    < cur_closest.closest_patch_distance
+                ):
+                    updated_matches[proto_id] = proto_similarity
+            else:
                 updated_matches[proto_id] = proto_similarity
-        else:
-            updated_matches[proto_id] = proto_similarity
 
+    @torch.no_grad()
+    def _patch_match_candidates(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+    ) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
+        # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
+        #  commonality. However, we also need to beware of premature abstraction.
+        """
+        Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
+        the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
 
-@torch.no_grad()
-def _patch_match_candidates(
-    base: ProtoBase,
-    x: torch.Tensor,
-    y: torch.Tensor,
-) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
-    # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
-    #  commonality. However, we also need to beware of premature abstraction.
-    """
-    Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair in
-    the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
+        :return: Iterator of (similarity, label)
+        """
+        patches, dists = self.patches_and_dists(x)
 
-    :return: Iterator of (similarity, label)
-    """
-    patches, dists = base.patches(x), base.distances(
-        x
-    )  # Common subexpression elimination possible, if necessary.
-
-    for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
-        for proto_id in range(base.num_prototypes):
-            node_distances = dists_i[proto_id, :, :]
-            similarity = img_proto_similarity(proto_id, x_i, node_distances, patches_i)
-            yield similarity, y_i
+        for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
+            for proto_id in range(self.num_prototypes):
+                node_distances = dists_i[proto_id, :, :]
+                similarity = img_proto_similarity(proto_id, x_i, node_distances, patches_i)
+                yield similarity, y_i
