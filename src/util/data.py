@@ -32,6 +32,7 @@ def get_dataloaders(
             batch_size=loader_batch_size,
             shuffle=True,
             pin_memory=pin_memory,
+            num_workers=7,
             **kwargs
         )
 
