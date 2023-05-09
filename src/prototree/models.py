@@ -95,10 +95,11 @@ class ProtoPNet(pl.LightningModule):
         self.manual_backward(loss)
         nonlinear_optim.step()
 
-        # It's useful to compute this for visualizations, even if we're not projecting.
-        self.proto_base.update_proto_patch_matches(
-            self.proto_patch_matches, x, y
-        )
+        if batch_idx % 50 == 0:
+            # It's useful to compute this for visualizations, even if we're not projecting.
+            self.proto_base.update_proto_patch_matches(
+                self.proto_patch_matches, x, y
+            )
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -272,10 +273,11 @@ class ProtoTree(pl.LightningModule):
 
         self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
 
-        # It's useful to compute this for visualizations, even if we're not projecting.
-        self.proto_base.update_proto_patch_matches(
-            self.proto_patch_matches, x, y
-        )
+        if batch_idx % 50 == 0:
+            # It's useful to compute this for visualizations, even if we're not projecting.
+            self.proto_base.update_proto_patch_matches(
+                self.proto_patch_matches, x, y
+            )
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
