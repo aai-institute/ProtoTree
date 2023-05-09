@@ -108,7 +108,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--milestones",
         type=str,
-        default="60,70,80,90,100",
+        default="",
         help="The milestones for the MultiStepLR learning rate scheduler, should be provided as comma separated ints.",
     )
     parser.add_argument(
