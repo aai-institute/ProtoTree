@@ -77,6 +77,11 @@ def get_args() -> argparse.Namespace:
         help="Weight decay used in the optimizer",
     )
     parser.add_argument(
+        "--gradient_leaf_opt",
+        action="store_true",
+        help="Optimize the leaf distributions with backprop. Default (False) is a derivative-free algorithm.",
+    )
+    parser.add_argument(
         "--disable_cuda",
         action="store_true",
         help="Flag that disables GPU usage if set",

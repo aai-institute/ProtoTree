@@ -262,14 +262,16 @@ class Leaf(Node):
         index: int,
         num_classes: int,
         parent: InternalNode = None,
+        gradient_opt: bool = False
     ):
         super().__init__(index, parent=parent)
 
         self.num_classes = num_classes
         self.dist_params: nn.Parameter = nn.Parameter(
-            torch.zeros(num_classes), requires_grad=False
+            torch.zeros(num_classes), requires_grad=gradient_opt
         )
-        self.dist_param_update_count = 0
+        if not gradient_opt:
+            self.dist_param_update_count = 0
 
     def to(self, *args, **kwargs):
         self.dist_params = self.dist_params.to(*args, **kwargs)
@@ -325,13 +327,12 @@ class Leaf(Node):
 def create_tree(
     height: int,
     num_classes: int,
+    gradient_leaf_opt: bool = False,
 ):
     """
     Create a full binary tree with the given height.
     The leaves will carry distributions with the given number of classes.
 
-    :param height:
-    :param num_classes:
     :return: the root node of the created tree
     """
     if height < 1:
@@ -344,6 +345,7 @@ def create_tree(
             index,
             num_classes,
             parent=parent,
+            gradient_opt=gradient_leaf_opt,
         )
 
     root = InternalNode(0)

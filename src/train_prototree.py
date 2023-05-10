@@ -3,7 +3,6 @@ from argparse import Namespace
 from pathlib import Path
 
 import lightning.pytorch as pl
-import torch
 
 from prototree.models import ProtoTree, ProtoPNet
 from prototree.eval import eval_model, single_leaf_eval
@@ -45,6 +44,7 @@ def train_prototree(args: Namespace):
     lr_backbone = args.lr_net
     momentum = args.momentum
     weight_decay = args.weight_decay
+    gradient_leaf_opt = args.gradient_leaf_opt
 
     # Training loop args
     disable_cuda = args.disable_cuda
@@ -117,6 +117,7 @@ def train_prototree(args: Namespace):
                 leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
                 project_epochs=project_epochs,
                 nonlinear_scheduler_params=nonlinear_scheduler_params,
+                gradient_leaf_opt=gradient_leaf_opt,
                 backbone_name=backbone_name,
                 pretrained=pretrained,
             )

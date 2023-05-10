@@ -217,6 +217,7 @@ class ProtoTree(pl.LightningModule):
         leaf_opt_ewma_alpha: float,
         project_epochs: set[int],
         nonlinear_scheduler_params: NonlinearSchedulerParams,
+        gradient_leaf_opt: bool = False,
         backbone_name="resnet50_inat",
         pretrained=True,
     ):
@@ -245,7 +246,9 @@ class ProtoTree(pl.LightningModule):
             depth=depth,
             leaf_pruning_threshold=leaf_pruning_threshold,
             leaf_opt_ewma_alpha=leaf_opt_ewma_alpha,
+            gradient_leaf_opt=gradient_leaf_opt,
         )
+        self.gradient_leaf_opt = gradient_leaf_opt
 
         self.project_epochs = project_epochs
         self.nonlinear_scheduler_params = nonlinear_scheduler_params
@@ -275,7 +278,8 @@ class ProtoTree(pl.LightningModule):
         self.manual_backward(loss)
         nonlinear_optim.step()
 
-        self.tree_section.update_leaf_distributions(y, logits.detach(), node_to_prob)
+        if not self.gradient_leaf_opt:
+            self.tree_section.deriv_free_leaves_update(y, logits.detach(), node_to_prob)
 
         # TODO: Hack because update_proto_patch_matches is inefficient.
         if batch_idx % MATCH_UPDATE_PERIOD == MATCH_UPDATE_PERIOD - 1:
@@ -314,7 +318,15 @@ class ProtoTree(pl.LightningModule):
         self.val_step_outputs.clear()
 
     def configure_optimizers(self):
-        return get_nonlinear_scheduler(self, self.nonlinear_scheduler_params)
+        [optimizer], [scheduler] = get_nonlinear_scheduler(
+            self, self.nonlinear_scheduler_params
+        )
+        if self.gradient_leaf_opt:
+            leaf_dists = [leaf.dist_params for leaf in self.tree_section.root.leaves]
+            optimizer.param_groups.append(
+                {"params": leaf_dists} | optimizer.defaults
+            )
+        return [optimizer], [scheduler]
 
     def forward(
         self,
@@ -471,11 +483,12 @@ class TreeSection(nn.Module):
         depth: int,
         leaf_pruning_threshold: float,
         leaf_opt_ewma_alpha: float,
+        gradient_leaf_opt: bool = False,
     ):
         super().__init__()
 
         self.num_classes = num_classes
-        self.root = create_tree(depth, num_classes)
+        self.root = create_tree(depth, num_classes, gradient_leaf_opt=gradient_leaf_opt)
         self.node_to_proto_idx: dict[Node, int] = {
             node: idx for idx, node in enumerate(self.root.descendant_internal_nodes)
         }
@@ -627,7 +640,7 @@ class TreeSection(nn.Module):
         return [leaves[i.item()] for i in predicting_leaf_idx]
 
     @torch.no_grad()
-    def update_leaf_distributions(
+    def deriv_free_leaves_update(
         self,
         y_true: torch.Tensor,
         logits: torch.Tensor,
@@ -644,9 +657,9 @@ class TreeSection(nn.Module):
         y_true_logits = torch.log(y_true_one_hot)
 
         for leaf in self.leaves:
-            self._update_leaf_distribution(leaf, node_to_prob, logits, y_true_logits)
+            self._deriv_free_leaf_update(leaf, node_to_prob, logits, y_true_logits)
 
-    def _update_leaf_distribution(
+    def _deriv_free_leaf_update(
         self,
         leaf: Leaf,
         node_to_prob: dict[Node, NodeProbabilities],
