@@ -268,7 +268,7 @@ class Leaf(Node):
 
         self.num_classes = num_classes
         self.dist_params: nn.Parameter = nn.Parameter(
-            torch.zeros(num_classes), requires_grad=gradient_opt
+            torch.randn(num_classes) * 1e-3, requires_grad=gradient_opt
         )
         if not gradient_opt:
             self.dist_param_update_count = 0
