@@ -73,7 +73,7 @@ def train_prototree(args: Namespace):
     log.info(f"Training and testing ProtoTree with {args=}.")
 
     # PREPARE DATA
-    train_loader, project_loader, test_loader = get_dataloaders(batch_size=batch_size)
+    train_loader, val_loader, test_loader = get_dataloaders(batch_size=batch_size)
 
     class_names = train_loader.dataset.classes
     num_classes = len(class_names)
@@ -145,9 +145,8 @@ def train_prototree(args: Namespace):
         limit_val_batches=n_training_batches // 25,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
     )
-    # TODO: The original code used the test set as the validation set! We need to fix this.
     trainer.fit(
-        model=model, train_dataloaders=train_loader, val_dataloaders=test_loader
+        model=model, train_dataloaders=train_loader, val_dataloaders=val_loader
     )
     log.info("Finished training.")
 
