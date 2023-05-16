@@ -189,7 +189,6 @@ class LeafRationalization:
     ancestor_sims: list[NodeSimilarity]
     leaf: Leaf
 
-    @property
     def proto_presents(self) -> list[bool]:
         """
         Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
