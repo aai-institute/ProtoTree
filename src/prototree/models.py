@@ -338,7 +338,7 @@ class ProtoTree(pl.LightningModule):
         :param x: tensor of shape (batch_size, n_channels, w, h)
         :param strategy:
 
-        :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves
+        :return: tensor of predicted logits of shape (bs, k), node_probabilities, Optional[predicting_leaves]
         """
 
         similarities = self.proto_base.forward(x)
