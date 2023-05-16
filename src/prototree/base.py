@@ -105,7 +105,7 @@ class ProtoBase(nn.Module):
     @torch.no_grad()
     def update_proto_patch_matches(
         self,
-        updated_matches: dict[int, ImageProtoSimilarity],
+        proto_patch_patches: dict[int, ImageProtoSimilarity],
         x: torch.Tensor,
     ):
         # TODO: This is currently incredibly slow, particularly on GPUs, because of the large number of small,
@@ -114,21 +114,22 @@ class ProtoBase(nn.Module):
         Produces a map where each key is a node and the corresponding value is information about the patch (out of all
         images in the dataset) that is most similar to node's prototype.
 
-        :param updated_matches:
-        :param x:
+        :param proto_patch_patches: The current map of proto_idx to data on the most similar image. Note that this will
+        be mutated by this method.
+        :param x: A batch of images.
         :return: The map of nodes to best matches.
         """
         for proto_similarity in self._patch_match_candidates(x):
             proto_id = proto_similarity.proto_id
-            if proto_id in updated_matches:
-                cur_closest = updated_matches[proto_id]
+            if proto_id in proto_patch_patches:
+                cur_closest = proto_patch_patches[proto_id]
                 if (
                     proto_similarity.closest_patch_distance
                     < cur_closest.closest_patch_distance
                 ):
-                    updated_matches[proto_id] = proto_similarity
+                    proto_patch_patches[proto_id] = proto_similarity
             else:
-                updated_matches[proto_id] = proto_similarity
+                proto_patch_patches[proto_id] = proto_similarity
 
     @torch.no_grad()
     def _patch_match_candidates(
