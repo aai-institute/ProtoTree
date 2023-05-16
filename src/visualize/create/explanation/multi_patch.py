@@ -76,7 +76,10 @@ def _save_multi_patch_vis(
     all_patch_similarities = [
         sim.similarity.all_patch_similarities.cpu().numpy() for sim in ancestor_sims
     ]
-    highest_similarities = [ancestor_sim.similarity.highest_patch_similarity for ancestor_sim in ancestor_sims]
+    highest_similarities = [
+        ancestor_sim.similarity.highest_patch_similarity
+        for ancestor_sim in ancestor_sims
+    ]
 
     im_with_bboxs, im_with_present_bboxs = _bboxs_overlaid(
         all_patch_similarities,

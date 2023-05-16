@@ -146,7 +146,9 @@ def _proto_node_components(
     """
     proto_file = patches_dir / f"{ancestor_sim.node.index}_closest_patch.png"
 
-    proto_subgraph = pydot.Subgraph(f"proto_subgraph_{ancestor_sim.node.depth}", rank="same")
+    proto_subgraph = pydot.Subgraph(
+        f"proto_subgraph_{ancestor_sim.node.depth}", rank="same"
+    )
 
     proto_pydot_node = _img_pydot_node(_node_name(ancestor_sim.node), proto_file, 1.5)
     proto_subgraph.add_node(proto_pydot_node)
@@ -162,7 +164,9 @@ def _proto_node_components(
         proto_subgraph.add_edge(bbox_pydot_edge)
 
     decision_edge = _decision_edge(
-        ancestor_sim.node, proto_present, ancestor_sim.similarity.highest_patch_similarity
+        ancestor_sim.node,
+        proto_present,
+        ancestor_sim.similarity.highest_patch_similarity,
     )
     return proto_subgraph, decision_edge
 

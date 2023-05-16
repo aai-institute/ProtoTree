@@ -262,7 +262,7 @@ class Leaf(Node):
         index: int,
         num_classes: int,
         parent: InternalNode = None,
-        gradient_opt: bool = False
+        gradient_opt: bool = False,
     ):
         super().__init__(index, parent=parent)
 

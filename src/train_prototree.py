@@ -142,12 +142,10 @@ def train_prototree(args: Namespace):
         accelerator="cpu" if disable_cuda else "auto",
         detect_anomaly=False,
         max_epochs=epochs,
-        limit_val_batches=n_training_batches // 25,
+        limit_val_batches=n_training_batches // 5,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
     )
-    trainer.fit(
-        model=model, train_dataloaders=train_loader, val_dataloaders=val_loader
-    )
+    trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     log.info("Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE

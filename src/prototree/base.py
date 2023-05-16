@@ -107,7 +107,6 @@ class ProtoBase(nn.Module):
         self,
         updated_matches: dict[int, ImageProtoSimilarity],
         x: torch.Tensor,
-        y: torch.Tensor,
     ):
         # TODO: This is currently incredibly slow, particularly on GPUs, because of the large number of small,
         #  non-vectorized operations. This can probably be refactored to be much faster.
@@ -117,10 +116,9 @@ class ProtoBase(nn.Module):
 
         :param updated_matches:
         :param x:
-        :param y:
         :return: The map of nodes to best matches.
         """
-        for proto_similarity, label in self._patch_match_candidates(x, y):
+        for proto_similarity in self._patch_match_candidates(x):
             proto_id = proto_similarity.proto_id
             if proto_id in updated_matches:
                 cur_closest = updated_matches[proto_id]
@@ -136,8 +134,7 @@ class ProtoBase(nn.Module):
     def _patch_match_candidates(
         self,
         x: torch.Tensor,
-        y: torch.Tensor,
-    ) -> Iterator[Tuple[ImageProtoSimilarity, int]]:
+    ) -> Iterator[ImageProtoSimilarity]:
         # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
         #  commonality. However, we also need to beware of premature abstraction.
         """
@@ -148,8 +145,7 @@ class ProtoBase(nn.Module):
         """
         patches, dists = self.patches_and_dists(x)
 
-        for x_i, y_i, dists_i, patches_i in zip(x, y, dists, patches):
+        for x_i, dists_i, patches_i in zip(x, dists, patches):
             for proto_id in range(self.num_prototypes):
                 node_distances = dists_i[proto_id, :, :]
-                similarity = img_proto_similarity(proto_id, x_i, node_distances, patches_i)
-                yield similarity, y_i
+                yield img_proto_similarity(proto_id, x_i, node_distances, patches_i)

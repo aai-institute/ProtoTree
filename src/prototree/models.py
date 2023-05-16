@@ -101,9 +101,7 @@ class ProtoPNet(pl.LightningModule):
         # TODO: Hack because update_proto_patch_matches is inefficient.
         if batch_idx % MATCH_UPDATE_PERIOD == MATCH_UPDATE_PERIOD - 1:
             # It's useful to compute this for visualizations, even if we're not projecting.
-            self.proto_base.update_proto_patch_matches(
-                self.proto_patch_matches, x, y
-            )
+            self.proto_base.update_proto_patch_matches(self.proto_patch_matches, x, y)
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -198,7 +196,9 @@ class LeafRationalization:
         prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
         the leaf is a right child.
         """
-        non_root_ancestors: list[InternalNode] = [sim.node for sim in self.ancestor_sims][1:]
+        non_root_ancestors: list[InternalNode] = [
+            sim.node for sim in self.ancestor_sims
+        ][1:]
         ancestor_children: list[Node] = non_root_ancestors + [self.leaf]
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
@@ -284,9 +284,7 @@ class ProtoTree(pl.LightningModule):
         # TODO: Hack because update_proto_patch_matches is inefficient.
         if batch_idx % MATCH_UPDATE_PERIOD == MATCH_UPDATE_PERIOD - 1:
             # It's useful to compute this for visualizations, even if we're not projecting.
-            self.proto_base.update_proto_patch_matches(
-                self.proto_patch_matches, x, y
-            )
+            self.proto_base.update_proto_patch_matches(self.proto_patch_matches, x, y)
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -323,9 +321,7 @@ class ProtoTree(pl.LightningModule):
         )
         if self.gradient_leaf_opt:
             leaf_dists = [leaf.dist_params for leaf in self.tree_section.root.leaves]
-            optimizer.param_groups.append(
-                {"params": leaf_dists} | optimizer.defaults
-            )
+            optimizer.param_groups.append({"params": leaf_dists} | optimizer.defaults)
         return [optimizer], [scheduler]
 
     def forward(
