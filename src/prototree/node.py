@@ -291,8 +291,7 @@ class Leaf(Node):
 
     def y_logits_batch(self, batch_size: int) -> torch.Tensor:
         logits = self.y_logits()
-        logits_batch_list = [logits.unsqueeze(0)] * batch_size
-        return torch.cat(logits_batch_list, dim=0)
+        return logits.unsqueeze(0).repeat(batch_size, 1)
 
     def y_logits(self) -> torch.Tensor:
         return F.log_softmax(self.dist_params, dim=0)
