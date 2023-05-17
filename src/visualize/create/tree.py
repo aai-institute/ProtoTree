@@ -24,7 +24,10 @@ INTERNAL_NODE_IMG_GAP = 4
 
 @torch.no_grad()
 def save_tree_visualization(
-    tree: ProtoTree, patches_dir: os.PathLike, tree_dir: os.PathLike, class_names: tuple
+    tree: ProtoTree,
+    patches_dir: os.PathLike,
+    tree_dir: os.PathLike,
+    class_names: tuple,
 ):
     """
     Saves visualization as a DOT file and png.
@@ -34,7 +37,12 @@ def save_tree_visualization(
     node_imgs_dir = tree_dir / "node_imgs"
     node_imgs_dir.mkdir(parents=True, exist_ok=True)
 
-    pydot_tree = _pydot_tree(tree.tree_root, patches_dir, node_imgs_dir, class_names)
+    pydot_tree = _pydot_tree(
+        tree.tree_root,
+        patches_dir,
+        node_imgs_dir,
+        class_names
+    )
     _save_pydot(pydot_tree, tree_dir)
 
 
@@ -81,7 +89,10 @@ def _pydot_nodes(
     match subtree_root:
         case InternalNode() as internal_node:
             return _pydot_nodes_internal(
-                internal_node, patches_dir, node_imgs_dir, class_names
+                internal_node,
+                patches_dir,
+                node_imgs_dir,
+                class_names
             )
         case Leaf() as leaf:
             return _pydot_nodes_leaf(leaf, class_names)
