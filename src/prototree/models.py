@@ -496,7 +496,9 @@ class TreeSection(nn.Module):
         self.leaf_opt_ewma_alpha = leaf_opt_ewma_alpha
 
         # Ensures proper device handling
-        self._dist_param_registration = nn.ParameterList(leaf.dist_params for leaf in self.root.leaves)
+        self._dist_param_registration = nn.ParameterList(
+            leaf.dist_params for leaf in self.root.leaves
+        )
 
     def get_node_to_log_p_right(
         self, similarities: torch.Tensor
