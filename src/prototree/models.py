@@ -30,6 +30,8 @@ MATCH_UPDATE_PERIOD = 125
 
 
 class ProtoModel(nn.Module):
+    # Temporarily preserved class for the old inheritance based ProtoTree.
+
     # TODO: "Composition over Inheritance" probably applies here for the backbone and prototypes. As added motivation,
     #  it looks like the way this is built right now violates the Liskov substitution principle (e.g. Mypy picks up
     #  incompatible signatures for methods like `forward`).
