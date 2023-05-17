@@ -16,13 +16,13 @@ log = logging.getLogger(__name__)
 def eval_model(
     tree: ProtoTree,
     data_loader: DataLoader,
-    sampling_strategy: SamplingStrat = "distributed",
+    strategy: SamplingStrat = "distributed",
     desc: str = "Evaluating",
 ) -> float:
     """
     :param tree:
     :param data_loader:
-    :param sampling_strategy:
+    :param strategy:
     :param desc: description for the progress bar, passed to tqdm
     :return:
     """
@@ -72,7 +72,7 @@ def single_leaf_eval(
         acc = eval_model(
             projected_pruned_tree,
             test_loader,
-            sampling_strategy=strategy,
+            strategy=strategy,
             desc=eval_name,
         )
         fidelity = eval_fidelity(projected_pruned_tree, test_loader, strategy)
@@ -85,8 +85,8 @@ def single_leaf_eval(
 def eval_fidelity(
     tree: ProtoTree,
     data_loader: DataLoader,
-    test_sampling_strategy: SamplingStrat,
-    ref_sampling_strategy: SamplingStrat = "distributed",
+    test_strategy: SamplingStrat,
+    ref_strategy: SamplingStrat = "distributed",
 ) -> float:
     n_batches = len(data_loader)
     tree.eval()
