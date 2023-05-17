@@ -344,7 +344,7 @@ class ProtoTree(pl.LightningModule):
         """
         Produces predictions for input images.
 
-        If sampling_strategy is `distributed`, all leaves contribute to each prediction, and predicting_leaves is None.
+        If strategy is `distributed`, all leaves contribute to each prediction, and predicting_leaves is None.
         For other sampling strategies, only one leaf is used per sample, which results in an interpretable prediction;
         in this case, predicting_leaves is a list of leaves of length `batch_size`.
 
@@ -602,12 +602,12 @@ class TreeSection(nn.Module):
     def get_predicting_leaves(
         root: InternalNode,
         node_to_probs: dict[Node, NodeProbabilities],
-        sampling_strategy: SingleLeafStrat,
+        strategy: SingleLeafStrat,
     ) -> List[Leaf]:
         """
         Selects one leaf for each entry of the batch covered in node_to_probs.
         """
-        match sampling_strategy:
+        match strategy:
             case "sample_max":
                 return TreeSection._get_max_p_arrival_leaves(root.leaves, node_to_probs)
             case "greedy":
