@@ -2,7 +2,7 @@ import pickle
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Any
 
 import numpy as np
 import torch
@@ -173,7 +173,7 @@ class LeafRationalization:
     leaf: Leaf
 
     @root_validator()  # Makes the method a classmethod.
-    def validate_ancestor_sims(cls, vals):
+    def validate_ancestor_sims(cls, vals: dict[str, Any]):
         ancestor_sims: list[ImageProtoSimilarity] = vals.get("ancestor_sims")
         leaf: Leaf = vals.get("leaf")
 
