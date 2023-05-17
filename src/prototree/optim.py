@@ -5,7 +5,6 @@ from typing import Literal
 import torch
 import torch.optim
 import torch.utils.data
-from torch.nn import Parameter
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import MultiStepLR
 
