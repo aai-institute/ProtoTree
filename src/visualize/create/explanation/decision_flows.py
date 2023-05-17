@@ -9,7 +9,7 @@ import torch
 from tqdm import tqdm
 
 from prototree.img_similarity import ImageProtoSimilarity
-from prototree.models import LeafRationalization
+from prototree.models import ProtoTree
 from prototree.node import Node, InternalNode
 from util.data import save_img
 from util.image import get_latent_to_pixel, get_inverse_arr_transform
@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 @torch.no_grad()
 def save_decision_flow_visualizations(
-    explanations: Iterator[tuple[LeafRationalization, str, tuple]],
+    explanations: Iterator[tuple[ProtoTree.LeafRationalization, str, tuple]],
     patches_dir: os.PathLike,
     explanations_dir: os.PathLike,
     img_size=(224, 224),
@@ -70,7 +70,7 @@ def _save_pydot(flow_dag: pydot.Dot, decision_flow_dir: os.PathLike):
 
 
 def _decision_flow_dag(
-    leaf_rationalization: LeafRationalization,
+    leaf_rationalization: ProtoTree.LeafRationalization,
     true_class: str,
     class_names: tuple,
     inv_transform: Callable[[torch.Tensor], np.ndarray],

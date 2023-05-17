@@ -178,7 +178,9 @@ class LeafRationalization:
         leaf: Leaf = vals.get("leaf")
 
         assert ancestor_sims, "ancestor_sims must not be empty"
-        assert [sim.internal_node for sim in ancestor_sims] == leaf.ancestors, "sims must be of the leaf ancestors"
+        assert [
+            sim.internal_node for sim in ancestor_sims
+        ] == leaf.ancestors, "sims must be of the leaf ancestors"
 
     def proto_presents(self) -> list[bool]:
         """
@@ -187,13 +189,49 @@ class LeafRationalization:
         the leaf is a right child.
         """
         ancestor_children = [
-            ancestor_sim.internal_node
-            for ancestor_sim in self.ancestor_sims[1:]
+            ancestor_sim.internal_node for ancestor_sim in self.ancestor_sims[1:]
         ] + [self.leaf]
         return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
 
 
 class ProtoTree(PrototypeBase):
+    @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
+    class LeafRationalization:
+        @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
+        class NodeSimilarity:
+            similarity: ImageProtoSimilarity
+            node: InternalNode
+
+        # Note: Can only correspond to all the leaf's ancestors in order starting from the root.
+        ancestor_sims: list[NodeSimilarity]
+        leaf: Leaf
+
+        @root_validator()  # Ignore PyCharm, this makes the method a classmethod.
+        def validate_ancestor_sims(cls, vals: dict[str, Any]):
+            ancestor_sims: list[ProtoTree.NodeSimilarity] = vals.get("ancestor_sims")
+            leaf: Leaf = vals.get("leaf")
+
+            assert ancestor_sims, "ancestor_sims must not be empty"
+            assert [
+                sim.node for sim in ancestor_sims
+            ] == leaf.ancestors, "sims must be of the leaf ancestors"
+
+            return vals
+
+        def proto_presents(self) -> list[bool]:
+            """
+            Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
+            prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
+            the leaf is a right child.
+            """
+            non_root_ancestors: list[InternalNode] = [
+                sim.node for sim in self.ancestor_sims
+            ][1:]
+            ancestor_children: list[Node] = non_root_ancestors + [self.leaf]
+            return [
+                ancestor_child.is_right_child for ancestor_child in ancestor_children
+            ]
+
     def __init__(
         self,
         num_classes: int,
@@ -405,7 +443,7 @@ class ProtoTree(PrototypeBase):
                 )
                 ancestor_sims.append(similarity)
 
-            rationalization = LeafRationalization(
+            rationalization = ProtoTree.LeafRationalization(
                 ancestor_sims,
                 predicting_leaf,
             )

@@ -35,9 +35,7 @@ def eval_model(
 
     for batch_num, (x, y) in enumerate(tqdm_loader):
         x, y = x.to(tree.device), y.to(tree.device)
-        logits, _, predicting_leaves = tree.forward(
-            x, strategy=strategy
-        )
+        logits, _, predicting_leaves = tree.forward(x, strategy=strategy)
         y_pred = torch.argmax(logits, dim=1)
         batch_acc = (y_pred == y).sum().item() / len(y)
         tqdm_loader.set_postfix_str(f"batch: acc={batch_acc:.5f}")
