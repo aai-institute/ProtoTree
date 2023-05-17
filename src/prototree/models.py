@@ -7,7 +7,7 @@ from typing import List, Literal, Optional, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from pydantic import dataclasses, validator
+from pydantic import dataclasses, root_validator
 from torch import Tensor
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
@@ -172,9 +172,13 @@ class LeafRationalization:
     ancestor_sims: list[ImageProtoSimilarity]
     leaf: Leaf
 
-    @validator("ancestor_sims")
-    def validate_ancestor_sims_nonempty(cls, v):
-        assert v, "ancestor_sims must not be empty"
+    @root_validator()  # Makes the method a classmethod.
+    def validate_ancestor_sims(cls, vals):
+        ancestor_sims: list[ImageProtoSimilarity] = vals.get("ancestor_sims")
+        leaf: Leaf = vals.get("leaf")
+
+        assert ancestor_sims, "ancestor_sims must not be empty"
+        assert [sim.internal_node for sim in ancestor_sims] == leaf.ancestors, "sims must be the leaf ancestors"
 
     def proto_presents(self) -> list[bool]:
         """
