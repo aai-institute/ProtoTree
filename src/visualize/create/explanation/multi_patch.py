@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from prototree.models import LeafRationalization
+from prototree.models import ProtoTree
 from util.data import save_img
 from util.image import get_inverse_arr_transform, get_latent_to_pixel
 from visualize.create.patches import (
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 @torch.no_grad()
 def save_multi_patch_visualizations(
-    explanations: Iterator[tuple[LeafRationalization, str, tuple]],
+    explanations: Iterator[tuple[ProtoTree.LeafRationalization, str, tuple]],
     explanations_dir: os.PathLike,
     img_size=(224, 224),
 ):
@@ -59,7 +59,7 @@ def save_multi_patch_visualizations(
 
 
 def _save_multi_patch_vis(
-    leaf_rationalization: LeafRationalization,
+    leaf_rationalization: ProtoTree.LeafRationalization,
     inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     multi_patch_dir: os.PathLike,

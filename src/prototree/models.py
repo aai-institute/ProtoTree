@@ -179,39 +179,37 @@ class ProtoPNet(pl.LightningModule):
         return torch.argmax(self.predict_probs(x), dim=-1)
 
 
-@dataclass
-class NodeSimilarity:
-    similarity: ImageProtoSimilarity
-    node: InternalNode
-
-
-@dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
-class LeafRationalization:
-    ancestor_sims: list[NodeSimilarity]
-    leaf: Leaf
-
-    @root_validator()  # Makes the method a classmethod.
-    def validate_ancestor_sims(cls, vals: dict[str, Any]):
-        ancestor_sims: list[NodeSimilarity] = vals.get("ancestor_sims")
-        leaf: Leaf = vals.get("leaf")
-
-        assert ancestor_sims, "ancestor_sims must not be empty"
-        assert [sim.node for sim in ancestor_sims] == leaf.ancestors, "sims must be of the leaf ancestors"
-
-    def proto_presents(self) -> list[bool]:
-        """
-        Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
-        prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
-        the leaf is a right child.
-        """
-        non_root_ancestors: list[InternalNode] = [
-            sim.node for sim in self.ancestor_sims
-        ][1:]
-        ancestor_children: list[Node] = non_root_ancestors + [self.leaf]
-        return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
-
-
 class ProtoTree(pl.LightningModule):
+    @dataclass
+    class NodeSimilarity:
+        similarity: ImageProtoSimilarity
+        node: InternalNode
+
+    @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
+    class LeafRationalization:
+        ancestor_sims: list
+        leaf: Leaf
+
+        @root_validator()  # Makes the method a classmethod.
+        def validate_ancestor_sims(cls, vals: dict[str, Any]):
+            ancestor_sims: list[ProtoTree.NodeSimilarity] = vals.get("ancestor_sims")
+            leaf: Leaf = vals.get("leaf")
+
+            assert ancestor_sims, "ancestor_sims must not be empty"
+            assert [sim.node for sim in ancestor_sims] == leaf.ancestors, "sims must be of the leaf ancestors"
+
+        def proto_presents(self) -> list[bool]:
+            """
+            Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
+            prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
+            the leaf is a right child.
+            """
+            non_root_ancestors: list[InternalNode] = [
+                                                         sim.node for sim in self.ancestor_sims
+                                                     ][1:]
+            ancestor_children: list[Node] = non_root_ancestors + [self.leaf]
+            return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
+
     # TODO: We could abstract this and ProtoPNet into a superclass. However, perhaps we should wait for the rule of 3 to
     #  help us choose the right abstraction.
     def __init__(
@@ -429,7 +427,7 @@ class ProtoTree(pl.LightningModule):
             x, predicting_leaves, dists, patches
         ):
             leaf_ancestors = predicting_leaf.ancestors
-            ancestor_sims: list[NodeSimilarity] = []
+            ancestor_sims: list[ProtoTree.NodeSimilarity] = []
             for leaf_ancestor in leaf_ancestors:
                 node_proto_idx = self.tree_section.node_to_proto_idx[leaf_ancestor]
 
@@ -437,9 +435,9 @@ class ProtoTree(pl.LightningModule):
                 similarity = img_proto_similarity(
                     node_proto_idx, x_i, node_distances, patches_i
                 )
-                ancestor_sims.append(NodeSimilarity(similarity, leaf_ancestor))
+                ancestor_sims.append(ProtoTree.NodeSimilarity(similarity, leaf_ancestor))
 
-            rationalization = LeafRationalization(
+            rationalization = ProtoTree.LeafRationalization(
                 ancestor_sims,
                 predicting_leaf,
             )
