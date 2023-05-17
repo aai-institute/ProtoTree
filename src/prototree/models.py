@@ -375,7 +375,7 @@ class ProtoTree(pl.LightningModule):
     ) -> tuple[
         Tensor,
         dict[Node, NodeProbabilities],
-        Optional[list[Leaf]],
+        list[Leaf],
         list[LeafRationalization],
     ]:
         # TODO: This public method works by calling two other methods on the same class. This is perhaps a little bit
@@ -387,9 +387,11 @@ class ProtoTree(pl.LightningModule):
         rationalizations.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
-        :param strategy:
+        :param strategy: This has to be a single leaf sampling strategy.
 
-        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations
+        :return: Tuple[predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations].
+         Since this method is only ever called with a single leaf sampling strategy, both predicting_leaves and
+         leaf_explanations will always be not None if this method succeeds.
         """
         logits, node_to_probs, predicting_leaves = self.forward(x, strategy=strategy)
         leaf_explanations = self.rationalize(x, predicting_leaves)
