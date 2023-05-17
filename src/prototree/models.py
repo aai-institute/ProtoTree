@@ -1,5 +1,5 @@
+import logging
 import pickle
-from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import List, Literal, Optional, Union, Any
@@ -9,12 +9,16 @@ import torch
 import torch.nn as nn
 from pydantic import dataclasses, root_validator
 from torch import Tensor
+from torch.nn import functional as F
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
 from prototree.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
+from prototree.prune import prune_unconfident_leaves
 from prototree.types import SamplingStrat, SingleLeafStrat
 from util.l2conv import L2Conv2D
 from util.net import default_add_on_layers
+
+log = logging.getLogger(__name__)
 
 
 class PrototypeBase(nn.Module):
@@ -510,3 +514,269 @@ def _get_max_p_arrival_leaves(
     log_p_arrivals = torch.cat(log_p_arrivals, dim=1)  # shape: (bs, n_leaves)
     predicting_leaf_idx = torch.argmax(log_p_arrivals, dim=1).long()  # shape: (bs,)
     return [leaves[i.item()] for i in predicting_leaf_idx]
+
+
+class TreeSection(nn.Module):
+    def __init__(
+        self,
+        num_classes: int,
+        depth: int,
+        leaf_pruning_threshold: float,
+        leaf_opt_ewma_alpha: float,
+        gradient_leaf_opt: bool = False,
+    ):
+        super().__init__()
+
+        self.num_classes = num_classes
+        self.root = create_tree(depth, num_classes, gradient_leaf_opt=gradient_leaf_opt)
+        self.node_to_proto_idx: dict[Node, int] = {
+            node: idx for idx, node in enumerate(self.root.descendant_internal_nodes)
+        }
+        self.leaf_pruning_threshold = leaf_pruning_threshold
+        self.leaf_opt_ewma_alpha = leaf_opt_ewma_alpha
+
+        # Ensures proper device handling
+        self._dist_param_registration = nn.ParameterList(
+            leaf.dist_params for leaf in self.root.leaves
+        )
+
+    def get_node_to_log_p_right(
+        self, similarities: torch.Tensor
+    ) -> dict[Node, torch.Tensor]:
+        return {node: -similarities[:, i] for node, i in self.node_to_proto_idx.items()}
+
+    @staticmethod
+    def _node_to_probs_from_p_right(
+        node_to_log_p_right: dict[Node, torch.Tensor], root: InternalNode
+    ):
+        """
+        This method was separated out from get_node_to_probs to
+        highlight that it doesn't directly depend on the input x and could
+        in principle be moved to the forward of the tree or somewhere else.
+
+        :param node_to_log_p_right: computed from the similarities, see get_node_to_log_p_right
+        :param root: a root of a tree from which node_to_log_p_right was computed
+        :return:
+        """
+        root_log_p_right = node_to_log_p_right[root]
+
+        root_probs = NodeProbabilities(
+            log_p_arrival=torch.zeros_like(root_log_p_right),
+            log_p_right=root_log_p_right,
+        )
+        result = {root: root_probs}
+
+        def add_strict_descendants(node: Union[InternalNode, Leaf]):
+            """
+            Adds the log probability of arriving at all strict descendants of node to the result dict.
+            """
+            if node.is_leaf:
+                return
+            n_probs = result[node]
+            log_p_right_right = node_to_log_p_right.get(node.right)
+            log_p_right_left = node_to_log_p_right.get(node.left)
+
+            log_p_arrival_left = n_probs.log_p_arrival_left
+            log_p_arrival_right = n_probs.log_p_arrival_right
+            result[node.left] = NodeProbabilities(
+                log_p_arrival=log_p_arrival_left,
+                log_p_right=log_p_right_left,
+            )
+            result[node.right] = NodeProbabilities(
+                log_p_arrival=log_p_arrival_right,
+                log_p_right=log_p_right_right,
+            )
+
+            add_strict_descendants(node.left)
+            add_strict_descendants(node.right)
+
+        add_strict_descendants(root)
+        return result
+
+    def get_node_to_probs(
+        self, similarities: torch.Tensor
+    ) -> dict[Node, NodeProbabilities]:
+        """
+        Computes the log probabilities (left, right, arrival) for all nodes for the input x.
+
+        :param similarities:
+        :return: dictionary mapping each node to a dataclass containing tensors of shape (batch_size,)
+        """
+        node_to_log_p_right = self.get_node_to_log_p_right(similarities)
+        return self._node_to_probs_from_p_right(node_to_log_p_right, self.root)
+
+    @property
+    def all_nodes(self) -> set:
+        return self.root.descendants
+
+    @property
+    def internal_nodes(self):
+        return self.root.descendant_internal_nodes
+
+    @property
+    def leaves(self):
+        return self.root.leaves
+
+    @property
+    def num_internal_nodes(self):
+        return self.root.num_internal_nodes
+
+    @property
+    def num_leaves(self):
+        return self.root.num_leaves
+
+    @staticmethod
+    def get_predicting_leaves(
+        root: InternalNode,
+        node_to_probs: dict[Node, NodeProbabilities],
+        strategy: SingleLeafStrat,
+    ) -> List[Leaf]:
+        """
+        Selects one leaf for each entry of the batch covered in node_to_probs.
+        """
+        match strategy:
+            case "sample_max":
+                return TreeSection._get_max_p_arrival_leaves(root.leaves, node_to_probs)
+            case "greedy":
+                return TreeSection._get_predicting_leaves_greedily(root, node_to_probs)
+            case other:
+                raise ValueError(f"Unknown sampling strategy {other}")
+
+    @staticmethod
+    def _get_predicting_leaves_greedily(
+        root: InternalNode, node_to_probs: dict[Node, NodeProbabilities]
+    ) -> List[Leaf]:
+        """
+        Selects one leaf for each entry of the batch covered in node_to_probs.
+        """
+        neg_log_2 = -np.log(2)
+
+        def get_leaf_for_sample(sample_idx: int):
+            # walk through greedily from root to leaf using probabilities for the selected sample
+            cur_node = root
+            while cur_node.is_internal:
+                cur_probs = node_to_probs[cur_node]
+                log_p_left = cur_probs.log_p_left[sample_idx].item()
+                if log_p_left > neg_log_2:
+                    cur_node = cur_node.left
+                else:
+                    cur_node = cur_node.right
+            return cur_node
+
+        batch_size = node_to_probs[root].batch_size
+        return [get_leaf_for_sample(i) for i in range(batch_size)]
+
+    @staticmethod
+    def _get_max_p_arrival_leaves(
+        leaves: List[Leaf], node_to_probs: dict[Node, NodeProbabilities]
+    ) -> List[Leaf]:
+        """
+        Selects one leaf for each entry of the batch covered in node_to_probs.
+
+        :param leaves:
+        :param node_to_probs: see `ProtoTree.get_node_to_probs`
+        :return: list of leaves of length `node_to_probs.batch_size`
+        """
+        log_p_arrivals = [
+            node_to_probs[leaf].log_p_arrival.unsqueeze(1) for leaf in leaves
+        ]
+        log_p_arrivals = torch.cat(log_p_arrivals, dim=1)  # shape: (bs, n_leaves)
+        predicting_leaf_idx = torch.argmax(log_p_arrivals, dim=1).long()  # shape: (bs,)
+        return [leaves[i.item()] for i in predicting_leaf_idx]
+
+    @torch.no_grad()
+    def deriv_free_leaves_update(
+        self,
+        y_true: torch.Tensor,
+        logits: torch.Tensor,
+        node_to_prob: dict[Node, NodeProbabilities],
+    ):
+        """
+        :param y_true: shape (batch_size)
+        :param logits: shape (batch_size, num_classes)
+        :param node_to_prob:
+        """
+        batch_size, num_classes = logits.shape
+
+        y_true_one_hot = F.one_hot(y_true, num_classes=num_classes)
+        y_true_logits = torch.log(y_true_one_hot)
+
+        for leaf in self.leaves:
+            self._deriv_free_leaf_update(leaf, node_to_prob, logits, y_true_logits)
+
+    def _deriv_free_leaf_update(
+        self,
+        leaf: Leaf,
+        node_to_prob: dict[Node, NodeProbabilities],
+        logits: torch.Tensor,
+        y_true_logits: torch.Tensor,
+    ):
+        """
+        :param leaf:
+        :param node_to_prob:
+        :param logits: of shape (batch_size, num_classes)
+        :param y_true_logits: of shape (batch_size, num_classes)
+        """
+        # shape (batch_size, 1)
+        log_p_arrival = node_to_prob[leaf].log_p_arrival.unsqueeze(1)
+        # shape (num_classes). Not the same as logits, which has (batch_size, num_classes)
+        leaf_logits = leaf.y_logits()
+
+        # TODO: y_true_logits is mostly -Inf terms (the rest being 0s) that won't contribute to the total, and we are
+        #  also summing together tensors of different shapes. We should be able to express this more clearly and
+        #  efficiently by taking advantage of this sparsity.
+        log_dist_update = torch.logsumexp(
+            log_p_arrival + leaf_logits + y_true_logits - logits,
+            dim=0,
+        )
+
+        dist_update = torch.exp(log_dist_update)
+
+        # This exponentially weighted moving average is designed to ensure stability of the leaf class probability
+        # distributions (leaf.dist_params), by lowpass filtering out noise from minibatching in the optimization.
+        # TODO: Work out how best to initialize the EWMA to avoid a long "burn-in".
+        leaf.dist_param_update_count += 1
+        count_alpha = (
+            1 / leaf.dist_param_update_count
+        )  # Stops the first updates having too large an impact.
+        alpha = max(count_alpha, self.leaf_opt_ewma_alpha)
+        leaf.dist_params.mul_(1.0 - alpha)
+        leaf.dist_params.add_(dist_update)
+
+    def log_leaves_properties(self):
+        """
+        Logs information about which leaves have a sufficiently high confidence and whether there
+        are classes not predicted by any leaf. Useful for debugging the training process.
+        """
+        n_leaves_above_threshold = 0
+        classes_covered = set()
+        for leaf in self.leaves:
+            classes_covered.add(leaf.predicted_label())
+            if leaf.conf_predicted_label() > self.leaf_pruning_threshold:
+                n_leaves_above_threshold += 1
+
+        log.info(
+            f"Leaves with confidence > {self.leaf_pruning_threshold:.3f}: {n_leaves_above_threshold}"
+        )
+
+        num_classes = self.leaves[0].num_classes
+        class_labels_without_leaf = set(range(num_classes)) - classes_covered
+        if class_labels_without_leaf:
+            log.info(f"Never predicted classes: {class_labels_without_leaf}")
+
+    def prune(self, leaf_pruning_threshold: float):
+        log.info(
+            f"Before pruning: {self.root.num_internal_nodes} internal_nodes and {self.root.num_leaves} leaves"
+        )
+        num_nodes_before = len(self.root.descendant_internal_nodes)
+
+        # all work happens here, the rest is just logging
+        prune_unconfident_leaves(self.root, leaf_pruning_threshold)
+
+        frac_nodes_pruned = (
+            1 - len(self.root.descendant_internal_nodes) / num_nodes_before
+        )
+        log.info(
+            f"After pruning: {self.root.num_internal_nodes} internal_nodes and {self.root.num_leaves} leaves"
+        )
+        log.info(f"Fraction of nodes pruned: {frac_nodes_pruned}")

@@ -6,7 +6,7 @@ from matplotlib import pyplot, pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from config import project_dir, test_dir, train_dir
+from config import val_dir, test_dir, train_dir
 from util.image import (
     get_augmentation_transform,
     get_base_transform,
@@ -69,7 +69,7 @@ def get_data(
     # TODO: relax hard-configured datasets, make this into a generic loader
     # TODO 2: we actually train on the corners, why? Is this to reveal biases?
     train_set = ImageFolder(train_dir, transform=train_transform)
-    project_set = ImageFolder(project_dir, transform=base_transform)
+    project_set = ImageFolder(val_dir, transform=base_transform)
     test_set = ImageFolder(test_dir, transform=base_transform)
     return train_set, project_set, test_set
 
