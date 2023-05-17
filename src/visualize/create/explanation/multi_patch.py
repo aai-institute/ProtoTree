@@ -81,7 +81,7 @@ def _save_multi_patch_vis(
     im_with_bboxs, im_with_present_bboxs = _bboxs_overlaid(
         all_patch_similarities,
         highest_similarities,
-        leaf_rationalization.proto_presents,
+        leaf_rationalization.proto_presents(),
         latent_to_pixel,
         im_original,
     )

@@ -7,6 +7,7 @@ from typing import List, Literal, Optional, Union
 import numpy as np
 import torch
 import torch.nn as nn
+from pydantic import dataclasses, validator
 from torch import Tensor
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
@@ -166,12 +167,15 @@ class NodeSimilarity:
     node: InternalNode
 
 
-@dataclass
+@dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
 class LeafRationalization:
     ancestor_sims: list[ImageProtoSimilarity]
     leaf: Leaf
 
-    @property
+    @validator("ancestor_sims")
+    def validate_ancestor_sims_nonempty(cls, v):
+        assert v, "ancestor_sims must not be empty"
+
     def proto_presents(self) -> list[bool]:
         """
         Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
@@ -295,14 +299,15 @@ class ProtoTree(PrototypeBase):
         """
         Produces predictions for input images.
 
-        If strategy is `distributed`, all leaves contribute to each prediction, and predicting_leaves is None.
+        If sampling_strategy is `distributed`, all leaves contribute to each prediction, and predicting_leaves is None.
         For other sampling strategies, only one leaf is used per sample, which results in an interpretable prediction;
         in this case, predicting_leaves is a list of leaves of length `batch_size`.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
         :param strategy:
 
-        :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves
+        :return: Tuple[tensor of predicted logits of shape (bs, k), node_probabilities, and optionally
+         predicting_leaves if a single leaf sampling strategy is used]
         """
 
         node_to_probs = self.get_node_to_probs(x)
@@ -332,7 +337,7 @@ class ProtoTree(PrototypeBase):
     ) -> tuple[
         Tensor,
         dict[Node, NodeProbabilities],
-        Optional[list[Leaf]],
+        list[Leaf],
         list[LeafRationalization],
     ]:
         # TODO: This public method works by calling two other methods on the same class. This is perhaps a little bit
@@ -344,13 +349,13 @@ class ProtoTree(PrototypeBase):
         rationalizations.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
-        :param strategy:
+        :param strategy: This has to be a single leaf sampling strategy.
 
-        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations
+        :return: Tuple[predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations].
+         Since this method is only ever called with a single leaf sampling strategy, both predicting_leaves and
+         leaf_explanations will always be not None if this method succeeds.
         """
-        logits, node_to_probs, predicting_leaves = self.forward(
-            x, strategy=strategy
-        )
+        logits, node_to_probs, predicting_leaves = self.forward(x, strategy=strategy)
         leaf_explanations = self.rationalize(x, predicting_leaves)
         return logits, node_to_probs, predicting_leaves, leaf_explanations
 

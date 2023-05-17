@@ -92,7 +92,7 @@ def _decision_flow_dag(
     proto_subgraphs, decision_pydot_edges = [], []
     for ancestor_sim, proto_present in zip(
         leaf_rationalization.ancestor_sims,
-        leaf_rationalization.proto_presents,
+        leaf_rationalization.proto_presents(),
     ):
         proto_subgraph, decision_edge = _proto_node_components(
             ancestor_sim,
