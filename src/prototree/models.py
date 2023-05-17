@@ -196,7 +196,9 @@ class ProtoTree(pl.LightningModule):
             leaf: Leaf = vals.get("leaf")
 
             assert ancestor_sims, "ancestor_sims must not be empty"
-            assert [sim.node for sim in ancestor_sims] == leaf.ancestors, "sims must be of the leaf ancestors"
+            assert [
+                sim.node for sim in ancestor_sims
+            ] == leaf.ancestors, "sims must be of the leaf ancestors"
 
             return vals
 
@@ -207,10 +209,12 @@ class ProtoTree(pl.LightningModule):
             the leaf is a right child.
             """
             non_root_ancestors: list[InternalNode] = [
-                                                         sim.node for sim in self.ancestor_sims
-                                                     ][1:]
+                sim.node for sim in self.ancestor_sims
+            ][1:]
             ancestor_children: list[Node] = non_root_ancestors + [self.leaf]
-            return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
+            return [
+                ancestor_child.is_right_child for ancestor_child in ancestor_children
+            ]
 
     # TODO: We could abstract this and ProtoPNet into a superclass. However, perhaps we should wait for the rule of 3 to
     #  help us choose the right abstraction.
@@ -437,7 +441,11 @@ class ProtoTree(pl.LightningModule):
                 similarity = img_proto_similarity(
                     node_proto_idx, x_i, node_distances, patches_i
                 )
-                ancestor_sims.append(ProtoTree.LeafRationalization.NodeSimilarity(similarity, leaf_ancestor))
+                ancestor_sims.append(
+                    ProtoTree.LeafRationalization.NodeSimilarity(
+                        similarity, leaf_ancestor
+                    )
+                )
 
             rationalization = ProtoTree.LeafRationalization(
                 ancestor_sims,
