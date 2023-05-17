@@ -20,7 +20,6 @@ def eval_model(
     desc: str = "Evaluating",
 ) -> float:
     """
-
     :param tree:
     :param data_loader:
     :param sampling_strategy:
