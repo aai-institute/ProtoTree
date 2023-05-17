@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from prototree.models import LeafRationalization
+from prototree.models import ProtoTree
 from util.data import save_img
 from util.image import get_inverse_arr_transform, get_latent_to_pixel
 from visualize.create.patches import (
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 @torch.no_grad()
 def save_multi_patch_visualizations(
-    explanations: Iterator[tuple[LeafRationalization, str, tuple]],
+    explanations: Iterator[tuple[ProtoTree.LeafRationalization, str, tuple]],
     explanations_dir: os.PathLike,
     img_size=(224, 224),
 ):
@@ -59,7 +59,7 @@ def save_multi_patch_visualizations(
 
 
 def _save_multi_patch_vis(
-    leaf_rationalization: LeafRationalization,
+    leaf_rationalization: ProtoTree.LeafRationalization,
     inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     multi_patch_dir: os.PathLike,
@@ -68,7 +68,7 @@ def _save_multi_patch_vis(
     Saves the original image and copies of it with {an average heatmap, all bounding boxes from patches, bounding boxes
     from patches that were similar enough to be considered present}.
     """
-    ancestor_sims = leaf_rationalization.ancestor_similarities
+    ancestor_sims = leaf_rationalization.ancestor_sims
     transformed_orig = ancestor_sims[0].transformed_image
     im_original = inv_transform(transformed_orig)
 
@@ -81,7 +81,7 @@ def _save_multi_patch_vis(
     im_with_bboxs, im_with_present_bboxs = _bboxs_overlaid(
         all_patch_similarities,
         highest_similarities,
-        leaf_rationalization.proto_presents,
+        leaf_rationalization.proto_presents(),
         latent_to_pixel,
         im_original,
     )

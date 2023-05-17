@@ -2,11 +2,12 @@ import pickle
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, Any
 
 import numpy as np
 import torch
 import torch.nn as nn
+from pydantic import dataclasses, root_validator
 from torch import Tensor
 
 from prototree.img_similarity import img_proto_similarity, ImageProtoSimilarity
@@ -160,26 +161,44 @@ class ProtoPNet(PrototypeBase):
         return torch.argmax(self.predict_probs(x), dim=-1)
 
 
-@dataclass
-class LeafRationalization:
-    ancestor_similarities: list[ImageProtoSimilarity]
-    leaf: Leaf
-
-    @property
-    def proto_presents(self) -> list[bool]:
-        """
-        Returns a list of bools the same length as ancestor_similarities, where each item indicates whether the
-        prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
-        the leaf is a right child.
-        """
-        ancestor_children = [
-            ancestor_similarity.internal_node
-            for ancestor_similarity in self.ancestor_similarities[1:]
-        ] + [self.leaf]
-        return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
-
-
 class ProtoTree(PrototypeBase):
+    @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
+    class LeafRationalization:
+        @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
+        class NodeSimilarity:
+            similarity: ImageProtoSimilarity
+            node: InternalNode
+
+        # Note: Can only correspond to all the leaf's ancestors in order starting from the root.
+        ancestor_sims: list[NodeSimilarity]
+        leaf: Leaf
+
+        @root_validator()  # Ignore PyCharm, this makes the method a classmethod.
+        def validate_ancestor_sims(cls, vals: dict[str, Any]):
+            ancestor_sims: list[ProtoTree.NodeSimilarity] = vals.get("ancestor_sims")
+            leaf: Leaf = vals.get("leaf")
+
+            assert ancestor_sims, "ancestor_sims must not be empty"
+            assert [
+                sim.node for sim in ancestor_sims
+            ] == leaf.ancestors, "sims must be of the leaf ancestors"
+
+            return vals
+
+        def proto_presents(self) -> list[bool]:
+            """
+            Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
+            prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
+            the leaf is a right child.
+            """
+            non_root_ancestors: list[InternalNode] = [
+                sim.node for sim in self.ancestor_sims
+            ][1:]
+            ancestor_children: list[Node] = non_root_ancestors + [self.leaf]
+            return [
+                ancestor_child.is_right_child for ancestor_child in ancestor_children
+            ]
+
     def __init__(
         self,
         num_classes: int,
@@ -284,7 +303,7 @@ class ProtoTree(PrototypeBase):
     def forward(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrat = "distributed",
+        strategy: SamplingStrat = "distributed",
     ) -> tuple[torch.Tensor, dict[Node, NodeProbabilities], Optional[List[Leaf]]]:
         """
         Produces predictions for input images.
@@ -294,27 +313,28 @@ class ProtoTree(PrototypeBase):
         in this case, predicting_leaves is a list of leaves of length `batch_size`.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
-        :param sampling_strategy:
+        :param strategy:
 
-        :return: tensor of predicted logits of shape (bs, k), node_probabilities, predicting_leaves
+        :return: Tuple[tensor of predicted logits of shape (bs, k), node_probabilities, and optionally
+         predicting_leaves if a single leaf sampling strategy is used]
         """
 
         node_to_probs = self.get_node_to_probs(x)
 
         # TODO: Find a better approach for this branching logic (https://martinfowler.com/bliki/FlagArgument.html).
-        match self.training, sampling_strategy:
+        match self.training, strategy:
             case _, "distributed":
                 predicting_leaves = None
                 logits = self.tree_root.forward(node_to_probs)
             case False, "sample_max" | "greedy":
                 predicting_leaves = get_predicting_leaves(
-                    self.tree_root, node_to_probs, sampling_strategy
+                    self.tree_root, node_to_probs, strategy
                 )
                 logits = [leaf.y_logits().unsqueeze(0) for leaf in predicting_leaves]
                 logits = torch.cat(logits, dim=0)
             case _:
                 raise ValueError(
-                    f"Invalid train/test and sampling strategy combination: {self.training=}, {sampling_strategy=}"
+                    f"Invalid train/test and sampling strategy combination: {self.training=}, {strategy=}"
                 )
 
         return logits, node_to_probs, predicting_leaves
@@ -322,11 +342,11 @@ class ProtoTree(PrototypeBase):
     def explain(
         self,
         x: torch.Tensor,
-        sampling_strategy: SingleLeafStrat = "sample_max",
+        strategy: SingleLeafStrat = "sample_max",
     ) -> tuple[
         Tensor,
         dict[Node, NodeProbabilities],
-        Optional[list[Leaf]],
+        list[Leaf],
         list[LeafRationalization],
     ]:
         # TODO: This public method works by calling two other methods on the same class. This is perhaps a little bit
@@ -338,13 +358,13 @@ class ProtoTree(PrototypeBase):
         rationalizations.
 
         :param x: tensor of shape (batch_size, n_channels, w, h)
-        :param sampling_strategy:
+        :param strategy: This has to be a single leaf sampling strategy.
 
-        :return: predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations
+        :return: Tuple[predicted logits of shape (bs, k), node_probabilities, predicting_leaves, leaf_explanations].
+         Since this method is only ever called with a single leaf sampling strategy, both predicting_leaves and
+         leaf_explanations will always be not None if this method succeeds.
         """
-        logits, node_to_probs, predicting_leaves = self.forward(
-            x, sampling_strategy=sampling_strategy
-        )
+        logits, node_to_probs, predicting_leaves = self.forward(x, strategy=strategy)
         leaf_explanations = self.rationalize(x, predicting_leaves)
         return logits, node_to_probs, predicting_leaves, leaf_explanations
 
@@ -380,7 +400,7 @@ class ProtoTree(PrototypeBase):
             x, predicting_leaves, dists, patches
         ):
             leaf_ancestors = predicting_leaf.ancestors
-            ancestor_similarities: list[ImageProtoSimilarity] = []
+            ancestor_sims: list[ImageProtoSimilarity] = []
             for leaf_ancestor in leaf_ancestors:
                 node_proto_idx = self.node_to_proto_idx[leaf_ancestor]
 
@@ -388,10 +408,10 @@ class ProtoTree(PrototypeBase):
                 similarity = img_proto_similarity(
                     leaf_ancestor, x_i, node_distances, patches_i
                 )
-                ancestor_similarities.append(similarity)
+                ancestor_sims.append(similarity)
 
-            rationalization = LeafRationalization(
-                ancestor_similarities,
+            rationalization = ProtoTree.LeafRationalization(
+                ancestor_sims,
                 predicting_leaf,
             )
             rationalizations.append(rationalization)
@@ -401,9 +421,9 @@ class ProtoTree(PrototypeBase):
     def predict(
         self,
         x: torch.Tensor,
-        sampling_strategy: SamplingStrat = "sample_max",
+        strategy: SamplingStrat = "sample_max",
     ) -> torch.Tensor:
-        logits = self.forward(x, sampling_strategy)[0]
+        logits = self.forward(x, strategy)[0]
         return logits.argmax(dim=1)
 
     def predict_probs(
@@ -438,12 +458,12 @@ class ProtoTree(PrototypeBase):
 def get_predicting_leaves(
     root: InternalNode,
     node_to_probs: dict[Node, NodeProbabilities],
-    sampling_strategy: SingleLeafStrat,
+    strategy: SingleLeafStrat,
 ) -> List[Leaf]:
     """
     Selects one leaf for each entry of the batch covered in node_to_probs.
     """
-    match sampling_strategy:
+    match strategy:
         case "sample_max":
             return _get_max_p_arrival_leaves(root.leaves, node_to_probs)
         case "greedy":

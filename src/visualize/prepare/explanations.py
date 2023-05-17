@@ -3,7 +3,7 @@ from typing import Iterator
 import torch
 from torch.utils.data import DataLoader
 
-from prototree.models import ProtoTree, LeafRationalization
+from prototree.models import ProtoTree
 
 
 @torch.no_grad()
@@ -11,7 +11,7 @@ def data_explanations(
     tree: ProtoTree,
     loader: DataLoader,
     class_names: tuple,
-) -> Iterator[tuple[LeafRationalization, str, tuple]]:
+) -> Iterator[tuple[ProtoTree.LeafRationalization, str, tuple]]:
     # TODO: This doesn't give a direct reference to the original image names/orderings (particularly if we shuffle the
     #  data. We could try to plumb that through too, but we'd need to consider a possible loss in generality, e.g. if
     #  the images don't come from files.

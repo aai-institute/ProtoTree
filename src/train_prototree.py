@@ -5,7 +5,7 @@ import logging
 
 import torch
 
-from prototree.eval import eval_tree, single_leaf_eval
+from prototree.eval import eval_model, single_leaf_eval
 from prototree.models import ProtoTree
 from prototree.node import InternalNode, log_leaves_properties
 from visualize.create.explanation.decision_flows import (
@@ -20,7 +20,7 @@ from prototree.train import train_epoch
 from visualize.create.patches import save_patch_visualizations
 from util.args import get_args, get_optimizer
 from util.data import get_dataloaders
-from util.net import BASE_ARCHITECTURE_TO_FEATURES
+from util.net import NAME_TO_NET
 from visualize.create.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
@@ -191,7 +191,7 @@ def train_prototree(args: Namespace):
         )
 
         if should_evaluate(epoch):
-            eval_tree(tree, test_loader, desc=f"Testing after epoch: {epoch}")
+            eval_model(tree, test_loader, desc=f"Testing after epoch: {epoch}")
     log.info(f"Finished training.")
 
     # EVALUATE AND ANALYSE TRAINED TREE
@@ -202,7 +202,7 @@ def train_prototree(args: Namespace):
     _prune_tree(tree.tree_root, leaf_pruning_threshold)
 
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
-    pruned_acc = eval_tree(tree, test_loader, desc="Pruned only")
+    pruned_acc = eval_model(tree, test_loader, desc="Pruned only")
     log.info(f"\nTest acc. after pruning only: {pruned_acc:.3f}")
 
     # PROJECT
@@ -213,7 +213,7 @@ def train_prototree(args: Namespace):
     project_prototypes(tree, node_to_patch_matches)  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
 
-    pruned_and_proj_acc = eval_tree(tree, test_loader)
+    pruned_and_proj_acc = eval_model(tree, test_loader)
     log.info(f"\nTest acc. after pruning and projection: {pruned_and_proj_acc:.3f}")
     single_leaf_eval(tree, test_loader, "Pruned and projected")
 
@@ -274,7 +274,7 @@ def create_proto_tree(
     :param pretrained:
     :return:
     """
-    features_net = BASE_ARCHITECTURE_TO_FEATURES[backbone](pretrained=pretrained)
+    features_net = NAME_TO_NET[backbone](pretrained=pretrained)
     tree = ProtoTree(
         num_classes=num_classes,
         depth=depth,
