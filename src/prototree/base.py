@@ -175,5 +175,5 @@ class ProtoBase(nn.Module):
 
         for x_i, dists_i, patches_i in zip(x, dists, patches):
             for proto_id in range(self.num_prototypes):
-                node_distances = dists_i[proto_id, :, :]
-                yield img_proto_similarity(proto_id, x_i, node_distances, patches_i)
+                patch_distances = dists_i[proto_id, :, :]
+                yield img_proto_similarity(proto_id, x_i, patch_distances, patches_i)
