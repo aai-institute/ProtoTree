@@ -161,39 +161,6 @@ class ProtoPNet(PrototypeBase):
         return torch.argmax(self.predict_probs(x), dim=-1)
 
 
-@dataclass
-class NodeSimilarity:
-    similarity: ImageProtoSimilarity
-    node: InternalNode
-
-
-@dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
-class LeafRationalization:
-    ancestor_sims: list[ImageProtoSimilarity]
-    leaf: Leaf
-
-    @root_validator()  # Makes the method a classmethod.
-    def validate_ancestor_sims(cls, vals: dict[str, Any]):
-        ancestor_sims: list[ImageProtoSimilarity] = vals.get("ancestor_sims")
-        leaf: Leaf = vals.get("leaf")
-
-        assert ancestor_sims, "ancestor_sims must not be empty"
-        assert [
-            sim.internal_node for sim in ancestor_sims
-        ] == leaf.ancestors, "sims must be of the leaf ancestors"
-
-    def proto_presents(self) -> list[bool]:
-        """
-        Returns a list of bools the same length as ancestor_sims, where each item indicates whether the
-        prototype for that node was present. Equivalently, the booleans indicate whether the next node on the way to
-        the leaf is a right child.
-        """
-        ancestor_children = [
-            ancestor_sim.internal_node for ancestor_sim in self.ancestor_sims[1:]
-        ] + [self.leaf]
-        return [ancestor_child.is_right_child for ancestor_child in ancestor_children]
-
-
 class ProtoTree(PrototypeBase):
     @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
     class LeafRationalization:
