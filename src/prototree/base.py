@@ -98,15 +98,22 @@ class ProtoBase(nn.Module):
 
     @torch.no_grad()
     def project_prototypes(
-        self, node_to_patch_matches: dict[int, ImageProtoSimilarity]
+        self, proto_patch_patches: dict[int, ImageProtoSimilarity]
     ):
+        # TODO: We should probably not be mutating the model (via the prototypes) after training, as this is making the
+        #  code less flexible and harder to reason about.
         """
         Replaces each prototype with a given patch.
-        Note: This mutates the prototype tensors.
-        TODO: We should probably not be mutating the tree (via the prototypes) after training, as this is making the
-         code less flexible and harder to reason about.
+        Note: This mutates the prototype tensors, and hence modifies any model using them.
+
+        The intended usage of this is that after collecting a map of proto_idx to most similar image patches elsewhere
+        in the code (presumably by looping through the data with update_proto_patch_matches), the caller can call this
+        method to update the prototypes to be the most similar patches from actual images.
+
+        :param proto_patch_patches: The current map of proto_idx to data on the most similar image patch. Note that it
+         will be mutated by this method.
         """
-        for proto_id, patch_info in node_to_patch_matches.items():
+        for proto_id, patch_info in proto_patch_patches.items():
             self.proto_layer.protos.data[proto_id] = patch_info.closest_patch.data
 
     @torch.no_grad()
@@ -117,14 +124,18 @@ class ProtoBase(nn.Module):
     ):
         # TODO: This is currently incredibly slow, particularly on GPUs, because of the large number of small,
         #  non-vectorized operations. This can probably be refactored to be much faster.
+        #  Another small thing is that this function isn't pure, it mutates the dictionary since even shallow copying
+        #  can be a bit slow; is there a more functional way of doing this?
         """
-        Produces a map where each key is a node and the corresponding value is information about the patch (out of all
-        images in the dataset) that is most similar to node's prototype.
+        Takes a map where each key is a proto_idx and the corresponding value is information about the patch that is
+        most similar to the prototype, and then updates that map based on any new best matches (most similar patches)
+        found in the new data x. The intended use for this is that the caller will start with an empty dictionary, and
+        then repeatedly pass the dictionary into this method while looping through batches of data, in order to modify
+        this dictionary to keep it populated with the best matching patches from images for each prototype.
 
-        :param proto_patch_patches: The current map of proto_idx to data on the most similar image. Note that this will
-        be mutated by this method.
+        :param proto_patch_patches: The current map of proto_idx to data on the most similar image patch. Note that it
+         will be mutated by this method.
         :param x: A batch of images.
-        :return: The map of nodes to best matches.
         """
         for proto_similarity in self._patch_match_candidates(x):
             proto_id = proto_similarity.proto_id
@@ -146,7 +157,7 @@ class ProtoBase(nn.Module):
         # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
         #  commonality. However, we also need to beware of premature abstraction.
         """
-        Generator yielding the [node prototype]-[image] similarity (ImageProtoSimilarity) for every (node, image) pair
+        Generator yielding the [prototype]-[image] similarity (ImageProtoSimilarity) for every (proto, image) pair
         in the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
 
         :return: Iterator of (similarity, label)
