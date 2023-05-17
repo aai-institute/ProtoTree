@@ -106,9 +106,7 @@ class ProtoBase(nn.Module):
         return self.proto_layer.proto_shape
 
     @torch.no_grad()
-    def project_prototypes(
-        self, proto_patch_patches: dict[int, ImageProtoSimilarity]
-    ):
+    def project_prototypes(self, proto_patch_patches: dict[int, ImageProtoSimilarity]):
         # TODO: We should probably not be mutating the model (via the prototypes) after training, as this is making the
         #  code less flexible and harder to reason about.
         """
