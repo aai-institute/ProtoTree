@@ -29,7 +29,7 @@ from util.net import default_add_on_layers, NAME_TO_NET
 MATCH_UPDATE_PERIOD = 125
 
 
-class PrototypeBase(nn.Module):
+class ProtoModel(nn.Module):
     # TODO: "Composition over Inheritance" probably applies here for the backbone and prototypes. As added motivation,
     #  it looks like the way this is built right now violates the Liskov substitution principle (e.g. Mypy picks up
     #  incompatible signatures for methods like `forward`).
@@ -291,7 +291,7 @@ class ProtoPNet(pl.LightningModule):
         return torch.argmax(self.predict_probs(x), dim=-1)
 
 
-class ProtoTree(PrototypeBase):
+class ProtoTree(ProtoModel):
     @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
     class LeafRationalization:
         @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
