@@ -417,12 +417,10 @@ class ProtoTree(pl.LightningModule):
         deliberate, since it can help us assess the interpretability of the model on incorrect and/or random predictions
         and help avoid things like confirmation bias and cherry-picking.
 
-        Args:
-            x: Images tensor
-            predicting_leaves: List of leaves
+        :param x: Images tensor
+        :param predicting_leaves: List of leaves
 
-        Returns:
-            List of rationalizations
+        :return: List of rationalizations
         """
         patches, dists = self.proto_base.patches_and_dists(x)
 
