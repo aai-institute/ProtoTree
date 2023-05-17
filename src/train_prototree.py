@@ -122,17 +122,7 @@ def train_prototree(args: Namespace):
                 pretrained=pretrained,
             )
         case "protopnet":
-            model = ProtoPNet(
-                h_proto=h_proto,
-                w_proto=w_proto,
-                channels_proto=channels_proto,
-                num_classes=num_classes,
-                prototypes_per_class=10,
-                project_epochs=project_epochs,
-                nonlinear_scheduler_params=nonlinear_scheduler_params,
-                backbone_name=backbone_name,
-                pretrained=pretrained,
-            )
+            raise NotImplementedError("ProtoPNet will come in a later PR.")
         case _:
             raise ValueError(f"Unknown model type {model_type}.")
 
