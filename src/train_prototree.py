@@ -98,7 +98,7 @@ def train_prototree(args: Namespace):
     # PREPARE DATA
     device = get_device(disable_cuda)
     pin_memory = "cuda" in device.type
-    train_loader, project_loader, test_loader = get_dataloaders(
+    train_loader, val_loader, test_loader = get_dataloaders(
         pin_memory=pin_memory,
         batch_size=batch_size,
     )
@@ -209,7 +209,7 @@ def train_prototree(args: Namespace):
     log.info(
         "Projecting prototypes to nearest training patch (with class restrictions)."
     )
-    node_to_patch_matches = node_patch_matches(tree, project_loader)
+    node_to_patch_matches = node_patch_matches(tree, val_loader)
     project_prototypes(tree, node_to_patch_matches)  # TODO: Assess the impact of this.
     log_leaves_properties(tree.leaves, leaf_pruning_threshold)
 
