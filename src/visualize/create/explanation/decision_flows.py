@@ -132,7 +132,7 @@ def _assemble_flow_dag(
 
 
 def _proto_node_components(
-    ancestor_sim: ProtoTree.NodeSimilarity,
+    ancestor_sim: ProtoTree.LeafRationalization.NodeSimilarity,
     proto_present: bool,
     inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],

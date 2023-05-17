@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 from math import isnan
 from statistics import mean
 from typing import List, Optional, Union, Any
@@ -180,23 +179,26 @@ class ProtoPNet(pl.LightningModule):
 
 
 class ProtoTree(pl.LightningModule):
-    @dataclass
-    class NodeSimilarity:
-        similarity: ImageProtoSimilarity
-        node: InternalNode
-
     @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
     class LeafRationalization:
-        ancestor_sims: list  # Note: Can only correspond to all the leaf's ancestors in order starting from the root.
+        @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
+        class NodeSimilarity:
+            similarity: ImageProtoSimilarity
+            node: InternalNode
+
+        # Note: Can only correspond to all the leaf's ancestors in order starting from the root.
+        ancestor_sims: list[NodeSimilarity]
         leaf: Leaf
 
-        @root_validator()  # Makes the method a classmethod.
+        @root_validator()  # Ignore PyCharm, this makes the method a classmethod.
         def validate_ancestor_sims(cls, vals: dict[str, Any]):
             ancestor_sims: list[ProtoTree.NodeSimilarity] = vals.get("ancestor_sims")
             leaf: Leaf = vals.get("leaf")
 
             assert ancestor_sims, "ancestor_sims must not be empty"
             assert [sim.node for sim in ancestor_sims] == leaf.ancestors, "sims must be of the leaf ancestors"
+
+            return vals
 
         def proto_presents(self) -> list[bool]:
             """
@@ -435,7 +437,7 @@ class ProtoTree(pl.LightningModule):
                 similarity = img_proto_similarity(
                     node_proto_idx, x_i, node_distances, patches_i
                 )
-                ancestor_sims.append(ProtoTree.NodeSimilarity(similarity, leaf_ancestor))
+                ancestor_sims.append(ProtoTree.LeafRationalization.NodeSimilarity(similarity, leaf_ancestor))
 
             rationalization = ProtoTree.LeafRationalization(
                 ancestor_sims,
