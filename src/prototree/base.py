@@ -66,6 +66,15 @@ class ProtoBase(nn.Module):
         return self.proto_layer(x)
 
     def patches_and_dists(self, x: torch.Tensor):
+        """
+        Get Tuple[patches for a given input tensor, minimal distances between the prototypes and the input]
+        This is just an optimized version of the patches and distances methods so that we don't have to extract the
+        features from the backbone twice.
+
+        Outputs have shapes:
+            (batch_size, d, n_patches_w, n_patches_h, w_proto, h_proto)
+            (batch_size, num_prototypes, n_patches_w, n_patches_h)
+        """
         features = self.extract_features(x)
         return self._features_to_patches(features), self.proto_layer(features)
 
