@@ -187,7 +187,7 @@ class ProtoTree(pl.LightningModule):
 
     @dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
     class LeafRationalization:
-        ancestor_sims: list
+        ancestor_sims: list  # Note: Can only correspond to all the leaf's ancestors in order starting from the root.
         leaf: Leaf
 
         @root_validator()  # Makes the method a classmethod.
