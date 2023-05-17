@@ -2,13 +2,13 @@ import logging
 from dataclasses import dataclass
 from math import isnan
 from statistics import mean
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any
 
 import lightning.pytorch as pl
 import numpy as np
 import torch
 import torch.nn as nn
-from pydantic import validator, dataclasses
+from pydantic import dataclasses, root_validator
 from torch import Tensor
 from torch.nn import functional as F
 
@@ -190,9 +190,13 @@ class LeafRationalization:
     ancestor_sims: list[NodeSimilarity]
     leaf: Leaf
 
-    @validator("ancestor_sims")
-    def validate_ancestor_sims_nonempty(cls, v):
-        assert v, "ancestor_sims must not be empty"
+    @root_validator()  # Makes the method a classmethod.
+    def validate_ancestor_sims(cls, vals: dict[str, Any]):
+        ancestor_sims: list[NodeSimilarity] = vals.get("ancestor_sims")
+        leaf: Leaf = vals.get("leaf")
+
+        assert ancestor_sims, "ancestor_sims must not be empty"
+        assert [sim.node for sim in ancestor_sims] == leaf.ancestors, "sims must be of the leaf ancestors"
 
     def proto_presents(self) -> list[bool]:
         """
