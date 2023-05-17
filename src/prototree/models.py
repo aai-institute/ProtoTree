@@ -178,7 +178,7 @@ class LeafRationalization:
         leaf: Leaf = vals.get("leaf")
 
         assert ancestor_sims, "ancestor_sims must not be empty"
-        assert [sim.internal_node for sim in ancestor_sims] == leaf.ancestors, "sims must be the leaf ancestors"
+        assert [sim.internal_node for sim in ancestor_sims] == leaf.ancestors, "sims must be of the leaf ancestors"
 
     def proto_presents(self) -> list[bool]:
         """
