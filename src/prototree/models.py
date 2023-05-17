@@ -8,6 +8,7 @@ import lightning.pytorch as pl
 import numpy as np
 import torch
 import torch.nn as nn
+from pydantic import validator, dataclasses
 from torch import Tensor
 from torch.nn import functional as F
 
@@ -184,10 +185,14 @@ class NodeSimilarity:
     node: InternalNode
 
 
-@dataclass
+@dataclasses.dataclass(config=dict(arbitrary_types_allowed=True))
 class LeafRationalization:
     ancestor_sims: list[NodeSimilarity]
     leaf: Leaf
+
+    @validator("ancestor_sims")
+    def validate_ancestor_sims_nonempty(cls, v):
+        assert v, "ancestor_sims must not be empty"
 
     def proto_presents(self) -> list[bool]:
         """
