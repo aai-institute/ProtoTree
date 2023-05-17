@@ -76,13 +76,13 @@ class ProtoBase(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x: Transformed images (batch_size, num_prototypes, n_patches_w, n_patches_h)
+            x: Transformed images (batch_size, num_channels, W, H)
 
         Returns:
             Minimum distances between each image & prototype pair (batch_size, num_prototypes)
         """
-        x = self.distances(x)
-        return torch.amin(x, dim=(2, 3))
+        dists = self.distances(x)
+        return torch.amin(dists, dim=(2, 3))
 
     @property
     def num_prototypes(self):
