@@ -39,11 +39,11 @@ def train_prototree(args: Namespace):
     # Optimizer args
     optim_type = args.optimizer
     batch_size = args.batch_size
-    lr = args.lr
-    lr_block = args.lr_block
-    lr_backbone = args.lr_net
+    lr_main = args.lr_main
+    lr_backbone = args.lr_backbone
     momentum = args.momentum
-    weight_decay = args.weight_decay
+    weight_decay_main = args.weight_decay_main
+    weight_decay_backbone = args.weight_decay_backbone
     gradient_leaf_opt = args.gradient_leaf_opt
 
     # Training loop args
@@ -93,10 +93,10 @@ def train_prototree(args: Namespace):
         optim_type=optim_type,
         backbone_name=backbone_name,
         momentum=momentum,
-        weight_decay=weight_decay,
-        lr=lr,
-        lr_block=lr_block,
+        lr_main=lr_main,
         lr_backbone=lr_backbone,
+        weight_decay_main=weight_decay_main,
+        weight_decay_backbone=weight_decay_backbone,
         freeze_epochs=freeze_epochs,
         dataset=dataset,
     )

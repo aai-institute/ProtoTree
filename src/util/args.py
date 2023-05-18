@@ -46,23 +46,16 @@ def get_args() -> argparse.Namespace:
         help="The optimizer that should be used when training the tree",
     )
     parser.add_argument(
-        "--lr",
+        "--lr_main",
         type=float,
-        default=0.001,
-        help="The optimizer learning rate for training the prototypes",
+        default=1e-3,
+        help="The optimizer learning rate for parameters other than the backbone.",
     )
     parser.add_argument(
-        "--lr_block",
-        type=float,
-        default=0.001,
-        help="The optimizer learning rate for training the 1x1 conv layer and last conv layer of the underlying "
-        "neural network (applicable to resnet50 and densenet121)",
-    )
-    parser.add_argument(
-        "--lr_net",
+        "--lr_backbone",
         type=float,
         default=1e-5,
-        help="The optimizer learning rate for the underlying neural network",
+        help="The optimizer learning rate for the backbone",
     )
     parser.add_argument(
         "--momentum",
@@ -71,10 +64,16 @@ def get_args() -> argparse.Namespace:
         help="The optimizer momentum parameter (only applicable to SGD)",
     )
     parser.add_argument(
-        "--weight_decay",
+        "--weight_decay_main",
         type=float,
-        default=0.01,
-        help="Weight decay used in the optimizer",
+        default=1e-2,
+        help="Weight decay used in the optimizer for parameters other than the backbone.",
+    )
+    parser.add_argument(
+        "--weight_decay_backbone",
+        type=float,
+        default=1e-4,
+        help="Weight decay used in the optimizer for the backbone.",
     )
     parser.add_argument(
         "--gradient_leaf_opt",

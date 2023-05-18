@@ -16,10 +16,10 @@ class NonlinearOptimParams:
     optim_type: Literal["SGD", "Adam", "AdamW"]
     backbone_name: str
     momentum: float
-    weight_decay: float
-    lr: float
-    lr_block: float
+    lr_main: float
     lr_backbone: float
+    weight_decay_main: float
+    weight_decay_backbone: float
     freeze_epochs: int
     dataset: str  # TODO: We shouldn't have dataset specific stuff here.
 
@@ -77,23 +77,18 @@ def get_nonlinear_optimizer(
             {
                 "params": params_to_freeze,
                 "lr": optim_params.lr_backbone,
-                "weight_decay_rate": optim_params.weight_decay,
+                "weight_decay_rate": optim_params.weight_decay_backbone,
             },
             {
                 "params": params_to_train,
-                "lr": optim_params.lr_block,
-                "weight_decay_rate": optim_params.weight_decay,
             },
             {
                 # TODO: Seems to defeat the point of encapsulation if we're accessing the add_on directly.
                 "params": model.proto_base.add_on.parameters(),
-                "lr": optim_params.lr_block,
-                "weight_decay_rate": optim_params.weight_decay,
             },
             {
                 # TODO: Seems to defeat the point of encapsulation if we're accessing the prototype_layer directly.
                 "params": model.proto_base.proto_layer.parameters(),
-                "lr": optim_params.lr,
                 "weight_decay_rate": 0,
             },
         ]
@@ -105,16 +100,21 @@ def get_nonlinear_optimizer(
             param_list[i]["momentum"] = optim_params.momentum
         # TODO: why pass momentum here explicitly again? Which one is taken?
         optimizer = torch.optim.SGD(
-            param_list, lr=optim_params.lr, momentum=optim_params.momentum
+            param_list, lr=optim_params.lr_main, momentum=optim_params.momentum
         )
     elif optim_params.optim_type == "Adam":
-        optimizer = torch.optim.Adam(param_list, lr=optim_params.lr, eps=1e-07)
+        optimizer = torch.optim.Adam(
+            param_list,
+            lr=optim_params.lr_main,
+            weight_decay=optim_params.weight_decay_main,
+            eps=1e-07,
+        )
     elif optim_params.optim_type == "AdamW":
         optimizer = torch.optim.AdamW(
             param_list,
-            lr=optim_params.lr,
+            lr=optim_params.lr_main,
             eps=1e-07,
-            weight_decay=optim_params.weight_decay,
+            weight_decay=optim_params.weight_decay_main,
         )
     else:
         raise ValueError(
