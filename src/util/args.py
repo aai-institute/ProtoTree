@@ -72,7 +72,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--weight_decay_backbone",
         type=float,
-        default=1e-4,
+        default=1e-2,
         help="Weight decay used in the optimizer for the backbone.",
     )
     parser.add_argument(
