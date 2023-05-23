@@ -6,8 +6,8 @@ import torch.optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from prototree.models import ProtoTree
-from prototree.types import SamplingStrat, SingleLeafStrat
+from core.models import ProtoTree
+from core.types import SamplingStrat, SingleLeafStrat
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +20,6 @@ def eval_model(
     desc: str = "Evaluating",
 ) -> float:
     """
-
     :param tree:
     :param data_loader:
     :param strategy:
@@ -62,13 +61,14 @@ def eval_model(
     return avg_acc
 
 
+@torch.no_grad()
 def single_leaf_eval(
     projected_pruned_tree: ProtoTree,
     test_loader: DataLoader,
     eval_name: str,
 ):
-    test_sampling_strategies: list[SingleLeafStrat] = ["sample_max"]
-    for strategy in test_sampling_strategies:
+    test_strategies: list[SingleLeafStrat] = ["sample_max"]
+    for strategy in test_strategies:
         acc = eval_model(
             projected_pruned_tree,
             test_loader,
@@ -100,23 +100,3 @@ def eval_fidelity(
         avg_fidelity += batch_fidelity / (len(y) * n_batches)
 
     return avg_fidelity
-
-
-# TODO: use some inbuilt of torch or sklearn
-def acc_from_cm(cm: np.ndarray) -> float:
-    """
-    Compute the accuracy from the confusion matrix
-    :param cm: confusion matrix
-    :return: the accuracy score
-    """
-    assert len(cm.shape) == 2 and cm.shape[0] == cm.shape[1]
-
-    correct = 0
-    for i in range(len(cm)):
-        correct += cm[i, i]
-
-    total = np.sum(cm)
-    if total == 0:
-        return 1.0
-    else:
-        return correct / total

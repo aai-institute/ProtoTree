@@ -8,9 +8,9 @@ import pydot
 import torch
 from tqdm import tqdm
 
-from prototree.img_similarity import ImageProtoSimilarity
-from prototree.models import ProtoTree
-from prototree.node import Node, InternalNode
+from core.img_similarity import ImageProtoSimilarity
+from core.models import ProtoTree
+from core.node import Node, InternalNode
 from util.data import save_img
 from util.image import get_latent_to_pixel, get_inverse_arr_transform
 from visualize.create.dot import _node_name, gen_leaf, graph_with_components
@@ -105,10 +105,11 @@ def _decision_flow_dag(
         decision_pydot_edges.append(decision_edge)
         proto_subgraphs.append(proto_subgraph)
 
+    first_ancestor_sim = leaf_rationalization.ancestor_sims[0]
     original_nodes, original_edges = _original_im_components(
         inv_transform,
-        leaf_rationalization.ancestor_sims[0].transformed_image,
-        _node_name(leaf_rationalization.ancestor_sims[0].internal_node),
+        first_ancestor_sim.similarity.transformed_image,
+        _node_name(first_ancestor_sim.node),
         true_class,
         decision_flow_dir,
     )
@@ -131,7 +132,7 @@ def _assemble_flow_dag(
 
 
 def _proto_node_components(
-    ancestor_sim: ImageProtoSimilarity,
+    ancestor_sim: ProtoTree.LeafRationalization.NodeSimilarity,
     proto_present: bool,
     inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
@@ -143,17 +144,18 @@ def _proto_node_components(
     the tree. This consists of a subgraph of {prototype visualization, (optional) bounding box for the matching patch on
     the image, (optional) edge connecting the two images}, and an edge leading to the next node in the tree.
     """
-    proto_node = ancestor_sim.internal_node
-    proto_file = patches_dir / f"{proto_node.index}_closest_patch.png"
+    proto_file = patches_dir / f"{ancestor_sim.node.index}_closest_patch.png"
 
-    proto_subgraph = pydot.Subgraph(f"proto_subgraph_{proto_node.depth}", rank="same")
+    proto_subgraph = pydot.Subgraph(
+        f"proto_subgraph_{ancestor_sim.node.depth}", rank="same"
+    )
 
-    proto_pydot_node = _img_pydot_node(_node_name(proto_node), proto_file, 1.5)
+    proto_pydot_node = _img_pydot_node(_node_name(ancestor_sim.node), proto_file, 1.5)
     proto_subgraph.add_node(proto_pydot_node)
     if proto_present:
         bbox_pydot_node, bbox_pydot_edge = _bbox_components(
-            ancestor_sim,
-            proto_node,
+            ancestor_sim.similarity,
+            ancestor_sim.node,
             inv_transform,
             latent_to_pixel,
             decision_flow_dir,
@@ -162,7 +164,9 @@ def _proto_node_components(
         proto_subgraph.add_edge(bbox_pydot_edge)
 
     decision_edge = _decision_edge(
-        proto_node, proto_present, ancestor_sim.highest_patch_similarity
+        ancestor_sim.node,
+        proto_present,
+        ancestor_sim.similarity.highest_patch_similarity,
     )
     return proto_subgraph, decision_edge
 

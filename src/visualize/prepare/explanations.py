@@ -3,12 +3,12 @@ from typing import Iterator
 import torch
 from torch.utils.data import DataLoader
 
-from prototree.models import ProtoTree
+from core.models import TreeSection, ProtoTree
 
 
 @torch.no_grad()
 def data_explanations(
-    tree: ProtoTree,
+    tree: TreeSection,
     loader: DataLoader,
     class_names: tuple,
 ) -> Iterator[tuple[ProtoTree.LeafRationalization, str, tuple]]:

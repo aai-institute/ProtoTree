@@ -1,11 +1,5 @@
 import argparse
-from typing import Literal
 
-import torch
-import torch.optim
-from torch.nn import Parameter
-
-from prototree.models import ProtoTree
 
 # Utility functions for handling parsed arguments
 
@@ -30,7 +24,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=64,
+        default=16,
         help="Batch size when training the model using minibatch gradient descent",
     )
     parser.add_argument(
@@ -52,23 +46,16 @@ def get_args() -> argparse.Namespace:
         help="The optimizer that should be used when training the tree",
     )
     parser.add_argument(
-        "--lr",
+        "--lr_main",
         type=float,
-        default=0.001,
-        help="The optimizer learning rate for training the prototypes",
+        default=1e-3,
+        help="The optimizer learning rate for parameters other than the backbone.",
     )
     parser.add_argument(
-        "--lr_block",
-        type=float,
-        default=0.001,
-        help="The optimizer learning rate for training the 1x1 conv layer and last conv layer of the underlying "
-        "neural network (applicable to resnet50 and densenet121)",
-    )
-    parser.add_argument(
-        "--lr_net",
+        "--lr_backbone",
         type=float,
         default=1e-5,
-        help="The optimizer learning rate for the underlying neural network",
+        help="The optimizer learning rate for the backbone",
     )
     parser.add_argument(
         "--momentum",
@@ -77,10 +64,21 @@ def get_args() -> argparse.Namespace:
         help="The optimizer momentum parameter (only applicable to SGD)",
     )
     parser.add_argument(
-        "--weight_decay",
+        "--weight_decay_main",
         type=float,
-        default=0.01,
-        help="Weight decay used in the optimizer",
+        default=1e-2,
+        help="Weight decay used in the optimizer for parameters other than the backbone.",
+    )
+    parser.add_argument(
+        "--weight_decay_backbone",
+        type=float,
+        default=1e-2,
+        help="Weight decay used in the optimizer for the backbone.",
+    )
+    parser.add_argument(
+        "--gradient_leaf_opt",
+        action="store_true",
+        help="Optimize the leaf distributions with backprop. Default (False) is a derivative-free algorithm.",
     )
     parser.add_argument(
         "--disable_cuda",
@@ -90,7 +88,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="./runs/run_prototree",
+        default="./runs/run_model",
         help="The directory for output from training, testing, and visualizing the tree.",
     )
     parser.add_argument(
@@ -114,8 +112,8 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--milestones",
         type=str,
-        default="60,70,80,90,100",
-        help="The milestones for the MultiStepLR learning rate scheduler",
+        default="",
+        help="The milestones for the MultiStepLR learning rate scheduler, should be provided as comma separated ints.",
     )
     parser.add_argument(
         "--gamma",
@@ -140,7 +138,7 @@ def get_args() -> argparse.Namespace:
         "--freeze_epochs",
         type=int,
         default=30,
-        help="Number of epochs where pretrained features_net will be frozen",
+        help="Number of epochs where the pretrained backbone will be frozen.",
     )
     parser.add_argument(
         "--dir_for_saving_images",
@@ -159,7 +157,7 @@ def get_args() -> argparse.Namespace:
         "--disable_pretrained",
         action="store_true",
         help="When set, the backbone network is initialized with random weights instead of being pretrained on "
-        "another dataset). When not set, resnet50_inat is initalized with weights from iNaturalist2017. Other "
+        "another dataset). When not set, resnet50_inat is initialized with weights from iNaturalist2017. Other "
         "networks are initialized with weights from ImageNet",
     )
     parser.add_argument(
@@ -176,6 +174,15 @@ def get_args() -> argparse.Namespace:
         default=5,
         help="Number of ProtoTrees to train and (optionally) use in an ensemble. Used in main_ensemble.py",
     )
+    parser.add_argument(
+        "--model_type", type=str, help="One of 'protopnet' or 'prototree'."
+    )
+    parser.add_argument(
+        "--project_from_epoch",
+        type=int,
+        default=-1,
+        help="Project at end of each epoch from this epoch (0-indexed) forwards. Value of -1 means no projection.",
+    )
     args = parser.parse_args()
     args.milestones_list = get_milestones_list(
         args.milestones
@@ -189,92 +196,3 @@ def get_milestones_list(milestones_str: str):
     :param milestones_str: The milestones as a comma separated string, e.g. "23,34,45"
     """
     return list(map(int, milestones_str.split(","))) if milestones_str else []
-
-
-def get_optimizer(
-    tree: ProtoTree,
-    optimizer: Literal["SGD", "Adam", "AdamW"],
-    net: str,
-    dataset: str,
-    momentum: float,
-    weight_decay: float,
-    lr: float,
-    lr_block: float,
-    lr_net: float,
-) -> tuple[torch.optim.Optimizer, list[Parameter], list[Parameter]]:
-    """
-
-    :param tree:
-    :param optimizer:
-    :param net:
-    :param dataset:
-    :param momentum:
-    :param lr_block:
-    :param weight_decay:
-    :param lr:
-    :param lr_net:
-    :return: the optimizer, parameter set that can be frozen, and parameter set of the net that will be trained
-    """
-
-    optim_type = optimizer
-    params_to_freeze = []
-    params_to_train = []
-
-    dist_params = []
-    for name, param in tree.named_parameters():
-        # TODO: what is this?
-        if "dist_params" in name:
-            dist_params.append(param)
-    # set up optimizer
-    if "resnet50_inat" in net or (
-        "resnet50" in net and dataset == "CARS"
-    ):  # to reproduce experimental results
-        # freeze resnet50 except last convolutional layer
-        for name, param in tree.net.named_parameters():
-            # TODO: improve this logic
-            if "layer4.2" not in name:
-                params_to_freeze.append(param)
-            else:
-                params_to_train.append(param)
-
-        param_list = [
-            {
-                "params": params_to_freeze,
-                "lr": lr_net,
-                "weight_decay_rate": weight_decay,
-            },
-            {
-                "params": params_to_train,
-                "lr": lr_block,
-                "weight_decay_rate": weight_decay,
-            },
-            {
-                "params": tree.add_on.parameters(),
-                "lr": lr_block,
-                "weight_decay_rate": weight_decay,
-            },
-            {
-                "params": tree.prototype_layer.parameters(),
-                "lr": lr,
-                "weight_decay_rate": 0,
-            },
-        ]
-
-    if optim_type == "SGD":
-        # TODO: why no momentum for the prototype layer?
-        # add momentum to the first three entries of paramlist
-        for i in range(3):
-            param_list[i]["momentum"] = momentum
-        # TODO: why pass momentum here explicitly again? Which one is taken?
-        optimizer = torch.optim.SGD(param_list, lr=lr, momentum=momentum)
-    elif optim_type == "Adam":
-        optimizer = torch.optim.Adam(param_list, lr=lr, eps=1e-07)
-    elif optim_type == "AdamW":
-        optimizer = torch.optim.AdamW(
-            param_list, lr=lr, eps=1e-07, weight_decay=weight_decay
-        )
-    else:
-        raise ValueError(
-            f"Unknown optimizer type: {optim_type}. Supported optimizers are SGD, Adam, and AdamW."
-        )
-    return optimizer, params_to_freeze, params_to_train

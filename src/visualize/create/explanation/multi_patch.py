@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from prototree.models import ProtoTree
+from core.models import ProtoTree
 from util.data import save_img
 from util.image import get_inverse_arr_transform, get_latent_to_pixel
 from visualize.create.patches import (
@@ -69,14 +69,17 @@ def _save_multi_patch_vis(
     from patches that were similar enough to be considered present}.
     """
     ancestor_sims = leaf_rationalization.ancestor_sims
-    transformed_orig = ancestor_sims[0].transformed_image
+    transformed_orig = ancestor_sims[0].similarity.transformed_image
     im_original = inv_transform(transformed_orig)
 
     # TODO: Seems a bit redundant that we're extracting the similarities and then max similarities separately.
     all_patch_similarities = [
-        sim.all_patch_similarities.cpu().numpy() for sim in ancestor_sims
+        sim.similarity.all_patch_similarities.cpu().numpy() for sim in ancestor_sims
     ]
-    highest_similarities = [sim.highest_patch_similarity for sim in ancestor_sims]
+    highest_similarities = [
+        ancestor_sim.similarity.highest_patch_similarity
+        for ancestor_sim in ancestor_sims
+    ]
 
     im_with_bboxs, im_with_present_bboxs = _bboxs_overlaid(
         all_patch_similarities,

@@ -262,13 +262,16 @@ class Leaf(Node):
         index: int,
         num_classes: int,
         parent: InternalNode = None,
+        gradient_opt: bool = False,
     ):
         super().__init__(index, parent=parent)
 
         self.num_classes = num_classes
         self.dist_params: nn.Parameter = nn.Parameter(
-            torch.zeros(num_classes), requires_grad=False
+            torch.randn(num_classes) * 1e-3, requires_grad=gradient_opt
         )
+        if not gradient_opt:
+            self.dist_param_update_count = 0
 
     def to(self, *args, **kwargs):
         self.dist_params = self.dist_params.to(*args, **kwargs)
@@ -288,8 +291,7 @@ class Leaf(Node):
 
     def y_logits_batch(self, batch_size: int) -> torch.Tensor:
         logits = self.y_logits()
-        logits_batch_list = [logits.unsqueeze(0)] * batch_size
-        return torch.cat(logits_batch_list, dim=0)
+        return logits.unsqueeze(0).repeat(batch_size, 1)
 
     def y_logits(self) -> torch.Tensor:
         return F.log_softmax(self.dist_params, dim=0)
@@ -324,13 +326,12 @@ class Leaf(Node):
 def create_tree(
     height: int,
     num_classes: int,
+    gradient_leaf_opt: bool = False,
 ):
     """
     Create a full binary tree with the given height.
     The leaves will carry distributions with the given number of classes.
 
-    :param height:
-    :param num_classes:
     :return: the root node of the created tree
     """
     if height < 1:
@@ -343,6 +344,7 @@ def create_tree(
             index,
             num_classes,
             parent=parent,
+            gradient_opt=gradient_leaf_opt,
         )
 
     root = InternalNode(0)
@@ -617,32 +619,3 @@ class NodeProbabilities:
     @property
     def batch_size(self) -> int:
         return self.log_p_arrival.shape[0]
-
-
-def log_leaves_properties(
-    leaves: list[Leaf],
-    leaf_pruning_threshold: float,
-):
-    """
-    Logs information about which leaves have a sufficiently high confidence and whether there
-    are classes not predicted by any leaf. Useful for debugging the training process.
-
-    :param leaves:
-    :param leaf_pruning_threshold:
-    :return:
-    """
-    n_leaves_above_threshold = 0
-    classes_covered = set()
-    for leaf in leaves:
-        classes_covered.add(leaf.predicted_label())
-        if leaf.conf_predicted_label() > leaf_pruning_threshold:
-            n_leaves_above_threshold += 1
-
-    log.info(
-        f"Leaves with confidence > {leaf_pruning_threshold:.3f}: {n_leaves_above_threshold}"
-    )
-
-    num_classes = leaves[0].num_classes
-    class_labels_without_leaf = set(range(num_classes)) - classes_covered
-    if class_labels_without_leaf:
-        log.info(f"Never predicted classes: {class_labels_without_leaf}")
