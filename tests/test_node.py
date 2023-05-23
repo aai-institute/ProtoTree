@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import pytest
 
-from prototree.node import (
+from core.node import (
     Node,
     create_tree,
     get_max_height_nodes,

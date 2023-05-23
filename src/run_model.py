@@ -4,9 +4,9 @@ from pathlib import Path
 
 import lightning.pytorch as pl
 
-from prototree.models import ProtoTree, ProtoPNet
-from prototree.eval import eval_model, single_leaf_eval
-from prototree.optim import (
+from core.models import ProtoTree, ProtoPNet
+from core.eval import eval_model, single_leaf_eval
+from core.optim import (
     NonlinearOptimParams,
     NonlinearSchedulerParams,
 )

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from prototree.models import ProtoTree
+from core.models import ProtoTree
 from util.data import save_img
 from util.image import get_inverse_arr_transform, get_latent_to_pixel
 from visualize.create.patches import (
