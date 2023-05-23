@@ -24,7 +24,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=64,
+        default=16,
         help="Batch size when training the model using minibatch gradient descent",
     )
     parser.add_argument(
