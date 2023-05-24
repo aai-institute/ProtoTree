@@ -1,0 +1,96 @@
+\documentclass{rescience}
+
+\usepackage{hyperref}
+
+
+\begin{document}
+
+\hypersetup{linkcolor=black,urlcolor=darkgray}
+\renewcommand\emph[1]{{\bfseries #1}}
+
+\input{header.tex}
+
+\subsubsection{Abstract}
+\textit{TODO: Check how this should be written. This likely depends on whether we're presenting the paper as pure, isolated reproductions of two different papers, or as an extension and simplification that's applicable to several papers in the area (the latter is more accurate in my view).}
+
+Image classification models based upon similarity comparisons with learnable prototype tensors have arisen as a promising approach to achieving interpretability. However, quite a few works in this area have employed complex, custom optimization algorithms and manual hyperparameter tuning in order achieve accurate results. In this paper, we reimplement a couple of major papers in this area in a single, modular codebase, and confirm their key results. We then show that their models can be successfully trained with more standard algorithms and hyperparameters, sometimes even achieving superior accuracy. We also briefly investigate negative prototypes and perform a qualitative analysis of the interpretability of the models.
+
+
+\section{Introduction}
+In the last several years, machine learning models have seen widespread success in computer vision, with applications in many areas such as healthcare, agriculture, and manufacturing. In one subfield of computer vision --- image classification ---, deep learning models have surpassed human-level performance in  many specific tasks. However, these models have often been critised for their ``black box'' nature, making it hard to trust their predictions, or to understand the circumstances under which they might fail.
+
+In order to increase the interpretability of these models, many different approaches have been proposed. Some are based on taking a trained, uninterpretable model, and performing some form of analysis to gain insights into how it works; other works have instead tried to build models that are interpretable from the start. One relatively new case of the latter method is prototype based models; with this approach, parts of images are compared to a collection of tensors --- known as prototypes --- which are learned during training, classification then proceeds based on the outcomes of these comparisons.
+
+Many prototype-based models have been able to achieve accuracy that's competitive with black box models, but there have also been several criticisms levelled at them. Firstly, they have often used complex, custom optimization algorithms and manual hyperparameter tuning. Secondly, both works exclusively use ``positive'' prototypes, in which we seek parts of images that are most similar to the prototypes; papers such as \cite{donnelly2022deformable} have discussed trying to avoid ``negative'' reasoning --- in which we look for parts of images most different to any prototypes ---, but there has been little quantitative analysis and justification for this. Finally, several works have questioned how interpretable the models truly are.
+
+In this work, we build upon two major papers in the area of prototype-based image classification: ``This looks like that: deep learning for interpretable image recognition'' by Chen et al,\cite{chen2019looks} and ``Neural prototype trees for interpretable fine-grained image recognition'' by Nauta et al.\cite{nauta2021neural} Our contribution comprises several parts:
+
+\begin{itemize}
+\item We reimplement both works in a single, modular codebase in Python 3 with PyTorch; our reimplementation was originally forked from the authors' open sourced code for \cite{nauta2021neural} at \url{https://github.com/M-Nauta/ProtoTree}, but we have performed sufficient refactoring that our code is almost entirely new.
+\item We successfully replicate the core accuracy claims from these papers. \ We show that by structuring the training and modelling in a suitable manner, it's feasible to successfully train the models with standard deep learning optimization algorithms and hyperpameters.
+\item We demonstrate that negative prototype models suffer far worse performance than positive ones, and discuss the implications of this.
+\item We perform a qualitative assessment of the interpretability of the models by looking at the outputs of visualization code we have written.
+\end{itemize}
+
+
+
+\section{Methodology}
+In this section, we discuss the models themselves, and the optimization algorithms that were used to train them in the original papers. We also discuss our use of alternative, simpler, more standard optimization procedures. While our changes may of course reduce accuracy, we believe that this approach will aid in understanding how well prototype-based models work ``out-of-the-box'', which is more representative of what users of these models can expect to achieve in practice.
+
+\subsection{Models}
+Both models consist of a common ``base'' section that contains the prototypes, followed by a model-specific section that takes the outputs from the base section and produces the classifications.
+
+\subsubsection{Base}
+The base section starts with a typical feature-extraction backbone convolutional neural network with output shape \(H\times W\times D_c\); it is usually pretrained on an image dataset such as ImageNet. This is followed by an ``addon'' section for more prototype-specific feature extraction; the two papers and open sourced codebases contain several variants on this, but for our paper we opt for the following 4 operations in order:
+\begin{enumerate}
+\item \(1\times 1\) convolutional layer with \(D_p\) output channels, where \(D_p\) is the number of prototypes
+\item ReLU
+\item \(1\times 1\) convolutional layer with \(D_p\) output channels
+\item Sigmoid (we suspect that ensuring that outputs lie in the \([0,\ 1]\) interval helps to give sensible results in the prototype similarity calculations)
+\end{enumerate}
+After the addons, we have a prototype layer consisting of \(D_p\) different \(H_p\times W_p\) prototype tensors \(\mathbf{p}_1, \cdots, \mathbf{p}_j, \cdots, \mathbf{p}_\mathrm{\textsc{j}}\), with \(H_p < H\) and \(W_p < W\). We then perform a form of generalized convolution, in which each \(\mathbf{p}_j\) is treated as a kernel that we slide over each patch \(\tilde{z}\) in an image \(z\). In the positive prototype case, we compute
+\[s_j=\min_{\tilde{z} f(\tilde{z},\ \mathbf{p}_j)},\]
+for each \(j\), where \(f\) is a chosen similarity function; in the negative prototype case, we instead compute \(\max_{\tilde{z}}\). In this paper and the original papers \(f(\tilde{z},\ \mathbf{p}_j)=|\tilde{z} - \mathbf{p}_j|_2\). In practice, efficiently computing \(f\) can result in square rooting negative numbers in  \(\sqrt{|\tilde{z} - \mathbf{p}_j|_2^2}\) due to numerical instabilities. The two original papers dealt with this by instead computing \(\sqrt{|\tilde{z} - \mathbf{p}_j|_2^2 + \varepsilon}\), but we found that that 
+
+
+\subsection{Optimization}
+The original optimization algorithm for ProtoPNet consists of 3 main steps:
+\begin{enumerate}
+\item 
+\end{enumerate}
+
+\subsection{Hyperparameters}
+No attempt was made to manually tune the hyperparameters for each dataset. The Adam optimizer uses a learning rate of \(10^{-5}\) for the backbone network (excluding the final layer), and \(10^{-3}\) for all other parameters; no learning rate decay is performed; \(\beta_1=0.999,\ \beta_2=0.9\), and eps is \(10^{-7}\). All prototypes are spatial size \(1\times 1\) with a depth of 256. We use a batch size of 64. We train for 100 epochs, and the backbone network (excluding the final layer) is frozen for the first 30 epochs.
+
+The ProtoTree depth is 9 (so 512 prototypes), and for ProtoPNet we have 10 prototypes per class in the dataset.
+
+The backbone network is ...
+
+
+\subsection{Code}
+Both \cite{chen2019looks} and \cite{nauta2021neural} have open sourced their code in \url{https://github.com/cfchen-duke/ProtoPNet} and \url{https://github.com/M-Nauta/ProtoTree}, respectively. These implementations are both written in Python 3 using PyTorch. We found that both codebases tended to couple together the model, optimization, and training loop code; this was fine for those papers, but made it challenging for us to make substantial changes to any of these components. We therefore forked \url{https://github.com/M-Nauta/ProtoTree} and refactored it into a form that allowed us to combine it with \cite{chen2019looks} and conduct our investigations; at this point there have been so many changes to the code that our implementation is more akin to a complete rewrite than a refactor.
+
+Our code is still in Python 3, but it now uses PyTorch Lightning instead of just PyTorch. We have a \texttt{ProtoBase} class which handles the prototypes and similarity calculations. The two models are implemented in the \texttt{ProtoPNet} and \texttt{ProtoTree} class; they use \texttt{ProtoBase} via composition, and the optimization algorithms for the models are included in methods on the classes. We hope that this approach will allow other models and forms of prototypes to be implemented by slotting in new model classes and prototype classes, respectively, instead of needing widespread changes to disparate parts of the codebase.
+
+
+
+\subsection{Data}
+We ran our experiments on the CUB-200-2011 dataset with 200
+bird species (CUB), and the Stanford Cars dataset with 196 car
+types (CARS).\cite{krause20133d}\cite{wah2011caltech} These were the same datasets used by both \cite{chen2019looks} and \cite{nauta2021neural}.
+
+The data were augmented with ...
+
+As in \cite{nauta2021neural}, the CUB-200-2011 dataset was further augmented with corner...
+
+\section{Results}
+\subsection{Hardware Used}
+All experiments were run on a virtual machine with a 32GB VRAM NVidia GPU, 8 Intel ..., and 64GB RAM. (TODO: details)
+
+\subsection{Data}
+aaa
+
+\setlength\bibitemsep{0pt}
+\printbibliography
+
+\end{document}
