@@ -2,7 +2,7 @@ import numpy as np
 import pydot
 import torch
 
-from core.node import Leaf, InternalNode, Node
+from src.core.node import Leaf, InternalNode, Node
 
 FONT = "Helvetica"  # TODO: Config?
 

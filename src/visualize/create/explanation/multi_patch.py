@@ -6,10 +6,10 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from core.models import ProtoTree
-from util.data import save_img
-from util.image import get_inverse_arr_transform, get_latent_to_pixel
-from visualize.create.patches import (
+from src.core.models import ProtoTree
+from src.util.data import save_img
+from src.util.image import get_inverse_arr_transform, get_latent_to_pixel
+from src.visualize.create.patches import (
     _bbox_indices,
     _to_rgb_heatmap,
     _superimpose_bboxs,

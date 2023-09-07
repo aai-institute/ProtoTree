@@ -6,7 +6,7 @@ import tarfile
 
 import gdown
 
-import config as c
+from src import config as c
 
 URL = "https://drive.google.com/uc?id=1hbzc_P1FuxMkcabkgn9ZKinBwW683j45"
 

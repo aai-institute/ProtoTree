@@ -8,14 +8,14 @@ import pydot
 import torch
 from tqdm import tqdm
 
-from core.img_similarity import ImageProtoSimilarity
-from core.models import ProtoTree
-from core.node import Node, InternalNode
-from util.data import save_img
-from util.image import get_latent_to_pixel, get_inverse_arr_transform
-from visualize.create.dot import _node_name, gen_leaf, graph_with_components
-from visualize.create.explanation.common import _original_im_components, _img_pydot_node
-from visualize.create.patches import closest_patch_imgs
+from src.core.img_similarity import ImageProtoSimilarity
+from src.core.models import ProtoTree
+from src.core.node import Node, InternalNode
+from src.util.data import save_img
+from src.util.image import get_latent_to_pixel, get_inverse_arr_transform
+from src.visualize.create.dot import _node_name, gen_leaf, graph_with_components
+from src.visualize.create.explanation.common import _original_im_components, _img_pydot_node
+from src.visualize.create.patches import closest_patch_imgs
 
 log = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@ import logging
 
 import torch
 
-from core.node import (
+from src.core.node import (
     InternalNode,
     Node,
     get_max_height_nodes,

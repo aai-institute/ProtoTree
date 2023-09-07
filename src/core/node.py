@@ -9,7 +9,7 @@ from pptree import print_tree
 from torch import nn as nn
 from torch.nn import functional as F
 
-from util.math import log1mexp
+from src.util.math import log1mexp
 
 # TODO: A lot of stuff here is very poorly optimized, multiple calls with exponential time complexity in the depth,
 #  even in properties.

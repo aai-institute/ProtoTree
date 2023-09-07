@@ -1,6 +1,6 @@
-from features.densenet_features import *
-from features.resnet_features import *
-from features.vgg_features import *
+from src.features.densenet_features import *
+from src.features.resnet_features import *
+from src.features.vgg_features import *
 
 NAME_TO_NET = {
     "resnet18": resnet18_features,

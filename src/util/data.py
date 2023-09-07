@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from config import val_dir, test_dir, train_dir
-from util.image import (
+from src.config import val_dir, test_dir, train_dir
+from src.util.image import (
     get_augmentation_transform,
     get_base_transform,
     get_normalize_transform,

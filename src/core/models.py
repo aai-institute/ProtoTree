@@ -11,18 +11,18 @@ from pydantic import dataclasses, root_validator
 from torch import Tensor
 from torch.nn import functional as F
 
-from core.base import ProtoBase
-from core.img_similarity import img_proto_similarity, ImageProtoSimilarity
-from core.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
-from core.prune import prune_unconfident_leaves
-from core.optim import (
+from src.core.base import ProtoBase
+from src.core.img_similarity import img_proto_similarity, ImageProtoSimilarity
+from src.core.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
+from src.core.prune import prune_unconfident_leaves
+from src.core.optim import (
     NonlinearSchedulerParams,
     get_nonlinear_scheduler,
     freezable_step,
 )
-from core.types import SamplingStrat, SingleLeafStrat
-from util.indexing import select_not
-from util.net import NAME_TO_NET
+from src.core.types import SamplingStrat, SingleLeafStrat
+from src.util.indexing import select_not
+from src.util.net import NAME_TO_NET
 
 log = logging.getLogger(__name__)
 
