@@ -169,12 +169,6 @@ def get_args() -> argparse.Namespace:
         " please look at the code using this argument to see how the threshold is calculated.",
     )
     parser.add_argument(
-        "--nr_trees_ensemble",
-        type=int,
-        default=5,
-        help="Number of ProtoTrees to train and (optionally) use in an ensemble. Used in main_ensemble.py",
-    )
-    parser.add_argument(
         "--model_type", type=str, help="One of 'protopnet' or 'prototree'."
     )
     parser.add_argument(
