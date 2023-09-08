@@ -122,36 +122,10 @@ def get_args() -> argparse.Namespace:
         help="The gamma for the MultiStepLR learning rate scheduler. Needs to be 0<=gamma<=1",
     )
     parser.add_argument(
-        "--state_dict_dir_net",
-        type=str,
-        default="",
-        help="The directory containing a state dict with a pretrained backbone network",
-    )
-    parser.add_argument(
-        "--state_dict_dir_tree",
-        type=str,
-        default="",
-        help="The directory containing a state dict (checkpoint) with a pretrained ProtoTree. Note that training "
-        "further from a checkpoint does not seem to work correctly. Evaluating a trained ProtoTree does work.",
-    )
-    parser.add_argument(
         "--freeze_epochs",
         type=int,
         default=30,
         help="Number of epochs where the pretrained backbone will be frozen.",
-    )
-    parser.add_argument(
-        "--dir_for_saving_images",
-        type=str,
-        default="upsampling_results",
-        help="Directory for saving the prototypes, patches, and heatmaps",
-    )
-    parser.add_argument(
-        "--upsample_threshold",
-        type=float,
-        default=0.98,
-        help="Threshold (between 0 and 1) for visualizing the nearest patch of an image after upsampling. The higher "
-        "this threshold, the larger the patches.",
     )
     parser.add_argument(
         "--disable_pretrained",
