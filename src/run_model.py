@@ -73,7 +73,9 @@ def train_prototree(args: Namespace):
     log.info(f"Training and testing ProtoTree with {args=}.")
 
     # PREPARE DATA
-    train_loader, val_loader, test_loader = get_dataloaders(batch_size=batch_size)
+    train_loader, val_loader, test_loader = get_dataloaders(
+        batch_size=batch_size, num_workers=4
+    )
 
     class_names = train_loader.dataset.classes
     num_classes = len(class_names)
