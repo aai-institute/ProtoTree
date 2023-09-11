@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from config import val_dir, test_dir, train_dir
-from util.image import (
+from src.config import val_dir, test_dir, train_dir
+from src.util.image import (
     get_augmentation_transform,
     get_base_transform,
     get_normalize_transform,
@@ -25,16 +25,18 @@ def get_dataloaders(
     """
     train_set, val_set, test_set = get_data()
 
-    def get_loader(dataset: ImageFolder, loader_batch_size=batch_size):
+    def get_loader(
+        dataset: ImageFolder, loader_batch_size: int = batch_size, shuffle: bool = False
+    ):
         return DataLoader(
             dataset,
             batch_size=loader_batch_size,
-            shuffle=True,
+            shuffle=shuffle,
             pin_memory=pin_memory,
             **kwargs
         )
 
-    train_loader = get_loader(train_set)
+    train_loader = get_loader(train_set, shuffle=True)
     val_loader = get_loader(val_set)
     test_loader = get_loader(test_set)
     return train_loader, val_loader, test_loader

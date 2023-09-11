@@ -5,8 +5,8 @@ import numpy as np
 import pydot
 import torch
 
-from util.data import save_img
-from visualize.create.dot import FONT
+from src.util.data import save_img
+from src.visualize.create.dot import FONT
 
 
 def _original_im_components(

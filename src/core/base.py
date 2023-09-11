@@ -3,9 +3,9 @@ from typing import Optional, Union, Literal, Iterator, Tuple
 import torch
 from torch import nn as nn
 
-from core.img_similarity import ImageProtoSimilarity, img_proto_similarity
-from util.l2conv import L2Conv2D
-from util.net import default_add_on_layers
+from src.core.img_similarity import ImageProtoSimilarity, img_proto_similarity
+from src.util.l2conv import L2Conv2D
+from src.util.net import default_add_on_layers
 
 
 class ProtoBase(nn.Module):

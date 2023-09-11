@@ -6,8 +6,8 @@ import torch.optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from core.models import ProtoTree
-from core.types import SamplingStrat, SingleLeafStrat
+from src.core.models import ProtoTree
+from src.core.types import SamplingStrat, SingleLeafStrat
 
 log = logging.getLogger(__name__)
 

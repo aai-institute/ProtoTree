@@ -7,9 +7,9 @@ import cv2
 import numpy as np
 import torch
 
-from core.img_similarity import ImageProtoSimilarity
-from util.data import save_img
-from util.image import get_latent_to_pixel, get_inverse_arr_transform
+from src.core.img_similarity import ImageProtoSimilarity
+from src.util.data import save_img
+from src.util.image import get_latent_to_pixel, get_inverse_arr_transform
 
 log = logging.getLogger(__name__)
 

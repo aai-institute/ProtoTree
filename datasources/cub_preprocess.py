@@ -12,7 +12,7 @@ from typing import Literal
 from PIL import Image
 from tqdm import tqdm
 
-from config import cub_dir, cub_images_dir, dataset_dir
+from src.config import cub_dir, cub_images_dir, dataset_dir
 
 train_crop_dir = dataset_dir / "train_crop"
 train_corners_dir = dataset_dir / "train_corners"

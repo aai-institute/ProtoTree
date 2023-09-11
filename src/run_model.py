@@ -4,21 +4,21 @@ from pathlib import Path
 
 import lightning.pytorch as pl
 
-from core.models import ProtoTree, ProtoPNet
-from core.eval import eval_model, single_leaf_eval
-from core.optim import (
+from src.core.models import ProtoTree, ProtoPNet
+from src.core.eval import eval_model, single_leaf_eval
+from src.core.optim import (
     NonlinearOptimParams,
     NonlinearSchedulerParams,
 )
-from util.args import get_args
-from util.data import get_dataloaders
-from visualize.create.explanation.decision_flows import (
+from src.util.args import get_args
+from src.util.data import get_dataloaders
+from src.visualize.create.explanation.decision_flows import (
     save_decision_flow_visualizations,
 )
-from visualize.create.explanation.multi_patch import save_multi_patch_visualizations
-from visualize.create.patches import save_patch_visualizations
-from visualize.create.tree import save_tree_visualization
-from visualize.prepare.explanations import data_explanations
+from src.visualize.create.explanation.multi_patch import save_multi_patch_visualizations
+from src.visualize.create.patches import save_patch_visualizations
+from src.visualize.create.tree import save_tree_visualization
+from src.visualize.prepare.explanations import data_explanations
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -73,7 +73,9 @@ def train_prototree(args: Namespace):
     log.info(f"Training and testing ProtoTree with {args=}.")
 
     # PREPARE DATA
-    train_loader, val_loader, test_loader = get_dataloaders(batch_size=batch_size)
+    train_loader, val_loader, test_loader = get_dataloaders(
+        batch_size=batch_size, num_workers=4
+    )
 
     class_names = train_loader.dataset.classes
     num_classes = len(class_names)

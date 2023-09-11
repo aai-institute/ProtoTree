@@ -1,10 +1,18 @@
+[project]
+name = "ProtoTree"
+version = "0.1.0"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+exclude = ["tests*"]
+namespaces = false
+
+[build-system]
+requires = ["setuptools >= 40.6.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 # Black-compatible settings for isort
 # See https://black.readthedocs.io/en/stable/compatible_configs.html
 [tool.isort]
 profile = "black"
 skip_glob = ["data/*", "runs/*"]
-
-
-[build-system]
-requires = ["setuptools >= 40.6.0", "wheel"]
-build-backend = "setuptools.build_meta"

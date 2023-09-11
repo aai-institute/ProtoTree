@@ -5,9 +5,9 @@ import pydot
 import torch
 from PIL import Image, ImageOps
 
-from core.models import ProtoTree
-from core.node import InternalNode, Leaf, Node
-from visualize.create.dot import (
+from src.core.models import ProtoTree
+from src.core.node import InternalNode, Leaf, Node
+from src.visualize.create.dot import (
     FONT,
     _node_name,
     gen_leaf,
