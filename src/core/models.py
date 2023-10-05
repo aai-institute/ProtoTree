@@ -72,6 +72,8 @@ class ProtoPNet(pl.LightningModule):
 
         self.train_step_outputs, self.val_step_outputs = [], []
         self.proto_patch_matches: dict[int, ImageProtoSimilarity] = {}
+        
+        self.save_hyperparameters()
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
@@ -268,6 +270,8 @@ class ProtoTree(pl.LightningModule):
 
         self.train_step_outputs, self.val_step_outputs = [], []
         self.proto_patch_matches: dict[int, ImageProtoSimilarity] = {}
+        
+        self.save_hyperparameters()
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
