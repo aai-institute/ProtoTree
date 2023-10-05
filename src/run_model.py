@@ -3,6 +3,7 @@ from argparse import Namespace
 from pathlib import Path
 
 import lightning.pytorch as pl
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 from src.core.models import ProtoTree, ProtoPNet
 from src.core.eval import eval_model, single_leaf_eval
@@ -140,6 +141,9 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     log.info("Starting training.")
+    # TODO: maybe put arguments of ModelCheckpoint in args. So the saving can be custom
+    checkpoint_callback = ModelCheckpoint(filename="{epoch}-{step}-{Val acc:.2f}", monitor="Val acc", #Val avg acc
+                                          save_last=True, every_n_epochs=2) #save_top_k=10, 
     trainer = pl.Trainer(
         accelerator="cpu" if disable_cuda else "auto",
         detect_anomaly=False,
@@ -149,6 +153,7 @@ def train_prototree(args: Namespace):
     )
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     log.info("Finished training.")
+    checkpoint_callback.best_model_path
 
     # EVALUATE AND ANALYSE TRAINED TREE
     model = model.eval()
