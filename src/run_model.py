@@ -142,19 +142,27 @@ def train_prototree(args: Namespace):
     # TRAIN
     log.info("Starting training.")
     # TODO: maybe put arguments of ModelCheckpoint in args. So the saving can be custom
-    checkpoint_callback = ModelCheckpoint(filename="{epoch}-{step}-{Val acc:.2f}", monitor="Val acc", #Val avg acc
-                                          save_last=True, every_n_epochs=2) #save_top_k=10, 
+    checkpoint_callback = ModelCheckpoint(dirpath="output",
+                                          filename="{epoch}-{step}-{Val acc:.2f}", monitor="Val acc", #Val avg acc
+                                          save_last=True, every_n_epochs=2, save_top_k=1) 
     trainer = pl.Trainer(
         accelerator="cpu" if disable_cuda else "auto",
         detect_anomaly=False,
         max_epochs=epochs,
         limit_val_batches=n_training_batches // 5,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
+        default_root_dir=f"output_{model_type}"
     )
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     log.info("Finished training.")
     checkpoint_callback.best_model_path
 
+    if DEBUG:
+        # Load the previously saved model and check if the leaves parameters are well saved
+        import numpy as np
+        leaves_paramas = np.array([leave.dist_params.cpu().numpy() for leave in model.tree_section.leaves])
+        np.save(trainer.checkpoint_callback.dirpath, leaves_paramas)
+        #model = ProtoTree.load_from_checkpoint(f"{trainer.logger.root_dir}/version_{trainer.logger.version}/checkpoints/epoch={}-step={}.ckpt")
     # EVALUATE AND ANALYSE TRAINED TREE
     model = model.eval()
 
