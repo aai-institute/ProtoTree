@@ -70,5 +70,5 @@ def get_latent_to_pixel(
         return cv2.resize(
             latent_img, (img_size[1], img_size[0]), interpolation=cv2.INTER_CUBIC
         )
-
+        
     return latent_to_pixel

@@ -14,6 +14,19 @@ from src.util.image import (
 )
 
 
+def get_dataloader(
+    dataset_dir: str, augment: bool = False, loader_batch_size: int = 64, num_workers: int = 4, shuffle: bool = False
+):
+    
+    dataset = get_data(dir=dataset_dir, augment=augment)
+    return DataLoader(
+        dataset,
+        batch_size=loader_batch_size,
+        shuffle=shuffle,
+        pin_memory=True,
+        num_workers=num_workers, 
+    )
+    
 def get_dataloaders(
     pin_memory=True, batch_size=64, **kwargs
 ) -> tuple[DataLoader[ImageFolder], DataLoader[ImageFolder], DataLoader[ImageFolder]]:
@@ -23,7 +36,9 @@ def get_dataloaders(
     :param kwargs: passed to DataLoader
     :return:
     """
-    train_set, val_set, test_set = get_data()
+    train_set = get_data(dir=train_dir, augment=True)
+    val_set = get_data(dir=val_dir)
+    test_set = get_data(dir=test_dir)
 
     def get_loader(
         dataset: ImageFolder, loader_batch_size: int = batch_size, shuffle: bool = False
@@ -43,7 +58,7 @@ def get_dataloaders(
 
 
 def get_data(
-    augment_train_set=True, img_size=(224, 224)
+    dir, augment=False, img_size=(224, 224)
 ) -> tuple[ImageFolder, ImageFolder, ImageFolder]:
     """
     :param augment_train_set: only affects the train set, val set and test set are not augmented
@@ -52,9 +67,9 @@ def get_data(
     """
     base_transform = get_base_transform(img_size)
 
-    if augment_train_set:
+    if augment:
         # TODO: why first augment and then resize?
-        train_transform = transforms.Compose(
+        transform = transforms.Compose(
             [
                 get_augmentation_transform(),
                 transforms.Resize(size=img_size),
@@ -63,15 +78,13 @@ def get_data(
             ]
         )
     else:
-        train_transform = base_transform
+        transform = base_transform
 
     # TODO: relax hard-configured datasets, make this into a generic loader
     # TODO 2: we actually train on the corners, why? Is this to reveal biases?
-    train_set = ImageFolder(train_dir, transform=train_transform)
-    val_set = ImageFolder(val_dir, transform=base_transform)
-    test_set = ImageFolder(test_dir, transform=base_transform)
-    return train_set, val_set, test_set
-
+    data_set = ImageFolder(dir, transform=transform)   
+   
+    return data_set
 
 def save_img(img: np.ndarray, filepath: os.PathLike):
     filepath.parent.mkdir(parents=True, exist_ok=True)

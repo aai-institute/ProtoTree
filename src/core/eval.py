@@ -5,11 +5,45 @@ import torch
 import torch.optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from typing import Union
 
-from src.core.models import ProtoTree
+from src.core.models import ProtoTree, ProtoPNet
 from src.core.types import SamplingStrat, SingleLeafStrat
 
 log = logging.getLogger(__name__)
+
+@torch.no_grad()
+def eval_protopnet_model(
+    model: ProtoPNet,
+    data_loader: DataLoader,
+    desc: str = "Evaluating",
+) -> float:
+    """
+    :param model:
+    :param data_loader:
+    :param strategy:
+    :param desc: description for the progress bar, passed to tqdm
+    :return:
+    """
+    model.eval()
+    tqdm_loader = tqdm(data_loader, desc=desc, ncols=0)
+    total_acc = 0.0
+    n_batches = len(tqdm_loader)
+
+    for batch_num, (x, y) in enumerate(tqdm_loader):
+        x, y = x.to(model.device), y.to(model.device)
+        y_pred = model.predict(x)
+        batch_acc = (y_pred == y).sum().item() / len(y)
+        tqdm_loader.set_postfix_str(f"batch: acc={batch_acc:.5f}")
+        total_acc += batch_acc
+
+        if (
+            batch_num == n_batches - 1
+        ):  # TODO: Hack due to https://github.com/tqdm/tqdm/issues/1369
+            avg_acc = total_acc / n_batches
+            tqdm_loader.set_postfix_str(f"average: acc={avg_acc:.5f}")
+
+    return avg_acc
 
 
 @torch.no_grad()
