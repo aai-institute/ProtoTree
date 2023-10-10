@@ -151,6 +151,15 @@ def get_args() -> argparse.Namespace:
         default=-1,
         help="Project at end of each epoch from this epoch (0-indexed) forwards. Value of -1 means no projection.",
     )
+    
+    parser.add_argument(
+        "--every_n_epochs", default=10, type=int, help="Checkpoint will be saved every n epochs during training."  
+    )
+        
+    parser.add_argument(
+        "--save_top_k", default=1, type=int, help="Number of best checkpoints saved during the training."  
+    )
+    
     args = parser.parse_args()
     args.milestones_list = get_milestones_list(
         args.milestones

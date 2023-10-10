@@ -62,6 +62,10 @@ def train_prototree(args: Namespace):
     # prototree specifics
     leaf_pruning_multiplier = args.leaf_pruning_multiplier
 
+    # Model checkpoint specifics
+    every_n_epochs = args.every_n_epochs
+    save_top_k = args.save_top_k
+    
     # Architecture args
     model_type = args.model_type
     backbone_name = args.backbone
@@ -144,7 +148,7 @@ def train_prototree(args: Namespace):
     # TODO: maybe put arguments of ModelCheckpoint in args. So the saving can be custom
     checkpoint_callback = ModelCheckpoint(dirpath="output",
                                           filename="{epoch}-{step}-{Val acc:.2f}", monitor="Val acc", #Val avg acc
-                                          save_last=True, every_n_epochs=2, save_top_k=1) 
+                                          save_last=True, every_n_epochs=every_n_epochs, save_top_k=save_top_k) 
     trainer = pl.Trainer(
         accelerator="cpu" if disable_cuda else "auto",
         detect_anomaly=False,
