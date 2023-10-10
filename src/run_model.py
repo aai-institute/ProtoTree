@@ -6,7 +6,7 @@ import lightning.pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 from src.core.models import ProtoTree, ProtoPNet
-from src.core.eval import eval_model, single_leaf_eval
+from src.core.eval import eval_model, single_leaf_eval, eval_protopnet_model
 from src.core.optim import (
     NonlinearOptimParams,
     NonlinearSchedulerParams,
@@ -145,7 +145,6 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     log.info("Starting training.")
-    # TODO: maybe put arguments of ModelCheckpoint in args. So the saving can be custom
     checkpoint_callback = ModelCheckpoint(dirpath="output",
                                           filename="{epoch}-{step}-{Val acc:.2f}", monitor="Val acc", #Val avg acc
                                           save_last=True, every_n_epochs=every_n_epochs, save_top_k=save_top_k) 
@@ -161,29 +160,28 @@ def train_prototree(args: Namespace):
     log.info("Finished training.")
     checkpoint_callback.best_model_path
 
-    if DEBUG:
-        # Load the previously saved model and check if the leaves parameters are well saved
-        import numpy as np
-        leaves_paramas = np.array([leave.dist_params.cpu().numpy() for leave in model.tree_section.leaves])
-        np.save(trainer.checkpoint_callback.dirpath, leaves_paramas)
-        #model = ProtoTree.load_from_checkpoint(f"{trainer.logger.root_dir}/version_{trainer.logger.version}/checkpoints/epoch={}-step={}.ckpt")
     # EVALUATE AND ANALYSE TRAINED TREE
     model = model.eval()
 
-    if model_type == "prototree":
-        model.log_state()
-        model.prune(leaf_pruning_threshold)
-        pruned_acc = eval_model(model, test_loader)
-        log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
-        model.log_state()
-        single_leaf_eval(model, test_loader, "Pruned")
+    match (model_type):
+        case "protopnet":
+            acc = eval_protopnet_model(model, test_loader)
+            log.info(f"\nTest acc.: {acc:.3f}")
+            
+        case "prototree":
+            model.log_state()
+            model.prune(leaf_pruning_threshold)
+            pruned_acc = eval_model(model, test_loader)
+            log.info(f"\nTest acc. after pruning: {pruned_acc:.3f}")
+            model.log_state()
+            single_leaf_eval(model, test_loader, "Pruned")
 
-        def explanations_provider():
-            return data_explanations(
-                model, test_loader, class_names
-            )  # This is lazy to enable iterator reuse.
+            def explanations_provider():
+                return data_explanations(
+                    model, test_loader, class_names
+                )  # This is lazy to enable iterator reuse.
 
-        model.print()
+            model.print()
 
     # SAVE VISUALIZATIONS
     vis_dir = output_dir / "visualizations"

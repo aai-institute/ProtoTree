@@ -2,15 +2,8 @@ import logging
 from argparse import Namespace
 from pathlib import Path
 
-import lightning.pytorch as pl
-from lightning.pytorch.callbacks import ModelCheckpoint
-
 from src.core.models import ProtoTree, ProtoPNet
 from src.core.eval import eval_model, single_leaf_eval, eval_protopnet_model
-from src.core.optim import (
-    NonlinearOptimParams,
-    NonlinearSchedulerParams,
-)
 from src.util.args import get_args
 from src.util.data import get_dataloader
 from src.config import test_dir
@@ -68,7 +61,6 @@ def test_model(args: Namespace):
     model = model.eval()
 
     match (model_type):
-        
         case "protopnet":
             acc = eval_protopnet_model(model, test_loader)
             log.info(f"\nTest acc.: {acc:.3f}")
