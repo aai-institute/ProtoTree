@@ -145,9 +145,8 @@ def train_prototree(args: Namespace):
 
     # TRAIN
     log.info("Starting training.")
-    # TODO: maybe put arguments of ModelCheckpoint in args. So the saving can be custom
     checkpoint_callback = ModelCheckpoint(dirpath="output",
-                                          filename="{epoch}-{step}-{Val acc:.2f}", monitor="Val acc", #Val avg acc
+                                          filename="{epoch}-{step}-{Val acc:.2f}", monitor="Val acc", 
                                           save_last=True, every_n_epochs=every_n_epochs, save_top_k=save_top_k) 
     trainer = pl.Trainer(
         accelerator="cpu" if disable_cuda else "auto",
@@ -161,12 +160,6 @@ def train_prototree(args: Namespace):
     log.info("Finished training.")
     checkpoint_callback.best_model_path
 
-    if DEBUG:
-        # Load the previously saved model and check if the leaves parameters are well saved
-        import numpy as np
-        leaves_paramas = np.array([leave.dist_params.cpu().numpy() for leave in model.tree_section.leaves])
-        np.save(trainer.checkpoint_callback.dirpath, leaves_paramas)
-        #model = ProtoTree.load_from_checkpoint(f"{trainer.logger.root_dir}/version_{trainer.logger.version}/checkpoints/epoch={}-step={}.ckpt")
     # EVALUATE AND ANALYSE TRAINED TREE
     model = model.eval()
 
