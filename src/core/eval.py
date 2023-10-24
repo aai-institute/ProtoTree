@@ -4,8 +4,10 @@ import numpy as np
 import torch
 import torch.optim
 from torch.utils.data import DataLoader
+from torch.nn import functional as F
 from tqdm import tqdm
 from typing import Union
+import pandas as pd 
 
 from src.core.models import ProtoTree, ProtoPNet
 from src.core.types import SamplingStrat, SingleLeafStrat
@@ -13,10 +15,32 @@ from src.core.types import SamplingStrat, SingleLeafStrat
 log = logging.getLogger(__name__)
 
 @torch.no_grad()
+def eval_model(
+    model: Union[ProtoPNet, ProtoTree],
+    data_loader: DataLoader,
+    strategy: SamplingStrat = "distributed",
+    desc: str = "Evaluating",
+    explain: bool = False
+) -> float:
+    
+    if isinstance(model, ProtoPNet):
+        acc = eval_protopnet_model(model=model, data_loader=data_loader, desc=desc, explain=explain)
+    
+    elif isinstance(model, ProtoTree):
+        acc = eval_prototree_model(model=model, data_loader=data_loader, strategy=strategy, desc=desc, explain=explain)
+            
+    else:
+        raise TypeError("Model type not recognised")
+    
+    return acc
+            
+
+@torch.no_grad()
 def eval_protopnet_model(
     model: ProtoPNet,
     data_loader: DataLoader,
     desc: str = "Evaluating",
+    explain: bool = False
 ) -> float:
     """
     :param model:
@@ -30,9 +54,26 @@ def eval_protopnet_model(
     total_acc = 0.0
     n_batches = len(tqdm_loader)
 
-    for batch_num, (x, y) in enumerate(tqdm_loader):
-        x, y = x.to(model.device), y.to(model.device)
-        y_pred = model.predict(x)
+    if explain:
+        df_explanations = pd.DataFrame(columns=["image", "prototype", "modification", "delta", "orig_similarity"])
+        
+    for batch_num, sample in enumerate(tqdm_loader):
+        x, y = sample[0].to(model.device), sample[1].to(model.device)
+        
+        if  explain:
+    
+            path = sample[2]
+            x_mods = sample[3]
+            dists = model.proto_base.forward(x)
+        
+            df_explanations_batch = prototypes_explanation(dists, path, x_mods, model)
+            df_explanations = pd.concat([df_explanations, df_explanations_batch], ignore_index=True)
+            
+            y_pred = torch.argmax(torch.softmax(F.log_softmax(model.classifier(dists), dim=1), dim=-1), dim=-1)
+        
+        else:
+            y_pred = model.predict(x)
+        
         batch_acc = (y_pred == y).sum().item() / len(y)
         tqdm_loader.set_postfix_str(f"batch: acc={batch_acc:.5f}")
         total_acc += batch_acc
@@ -43,15 +84,19 @@ def eval_protopnet_model(
             avg_acc = total_acc / n_batches
             tqdm_loader.set_postfix_str(f"average: acc={avg_acc:.5f}")
 
+    if explain:
+        return avg_acc, df_explanations
+    
     return avg_acc
 
 
 @torch.no_grad()
-def eval_model(
-    tree: ProtoTree,
+def eval_prototree_model(
+    model: ProtoTree,
     data_loader: DataLoader,
     strategy: SamplingStrat = "distributed",
     desc: str = "Evaluating",
+    explain: bool = False
 ) -> float:
     """
     :param tree:
@@ -60,15 +105,28 @@ def eval_model(
     :param desc: description for the progress bar, passed to tqdm
     :return:
     """
-    tree.eval()
+    model.eval()
     tqdm_loader = tqdm(data_loader, desc=desc, ncols=0)
     leaf_depths = []
     total_acc = 0.0
     n_batches = len(tqdm_loader)
-
-    for batch_num, (x, y) in enumerate(tqdm_loader):
-        x, y = x.to(tree.device), y.to(tree.device)
-        logits, _, predicting_leaves = tree.forward(x, strategy=strategy)
+    
+    if explain:
+        df_explanations = pd.DataFrame(columns=["image", "prototype", "modification", "delta", "orig_similarity"])
+      
+    for batch_num, sample in enumerate(tqdm_loader):
+        x, y = sample[0].to(model.device), sample[1].to(model.device)
+        
+        logits, _, predicting_leaves = model.forward(x, strategy=strategy)
+        
+        if  explain:
+            path = sample[2]
+            x_mods = sample[3]
+            dists = model.proto_base.forward(x)
+        
+            df_explanations_batch = prototypes_explanation(dists, path, x_mods, model)
+            df_explanations = pd.concat([df_explanations, df_explanations_batch], ignore_index=True)
+            
         y_pred = torch.argmax(logits, dim=1)
         batch_acc = (y_pred == y).sum().item() / len(y)
         tqdm_loader.set_postfix_str(f"batch: acc={batch_acc:.5f}")
@@ -92,6 +150,10 @@ def eval_model(
         log.info(
             f"Longest path has length {leaf_depths.max()}, shortest path has length {leaf_depths.min()}"
         )
+    
+    if explain:
+        return avg_acc, df_explanations
+    
     return avg_acc
 
 
@@ -125,8 +187,8 @@ def eval_fidelity(
     n_batches = len(data_loader)
     tree.eval()
     avg_fidelity = 0.0
-    for x, y in tqdm(data_loader, desc="Evaluating fidelity", ncols=0):
-        x, y = x.to(tree.device), y.to(tree.device)
+    for sample in tqdm(data_loader, desc="Evaluating fidelity", ncols=0):
+        x, y = sample[0].to(tree.device), sample[1].to(tree.device)
 
         y_pred_reference = tree.predict(x, strategy=ref_strategy)
         y_pred_test = tree.predict(x, strategy=test_strategy)
@@ -134,3 +196,24 @@ def eval_fidelity(
         avg_fidelity += batch_fidelity / (len(y) * n_batches)
 
     return avg_fidelity
+
+@torch.no_grad()
+def prototypes_explanation(dists, path, x_mods, model):
+    
+    assert dists.shape[0] == 1, "Batch size has to be 1"
+    
+    data = dict(image=list(), prototype=list(), modification=list(), delta=list(), orig_similarity=list())
+    
+    n_proto = dists.shape[1]
+    for mod, img_mod in x_mods.items():
+        dists_mod = model.proto_base.forward(img_mod)
+        local_scores = dists - dists_mod
+        
+        data["image"].extend(path * n_proto)
+        data["prototype"].extend(list(range(n_proto)))
+        data["modification"].extend([mod] * n_proto)
+        data["delta"].extend(local_scores.cpu().numpy().reshape(-1))
+        data["orig_similarity"].extend(dists.cpu().numpy().reshape(-1))
+        
+    return pd.DataFrame(data)
+    

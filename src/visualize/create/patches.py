@@ -6,6 +6,7 @@ from typing import Callable, Iterable
 import cv2
 import numpy as np
 import torch
+import json
 
 from src.core.img_similarity import ImageProtoSimilarity
 from src.util.data import save_img
@@ -49,6 +50,7 @@ def save_patch_visualizations(
     proto_patch_matches: dict[int, ImageProtoSimilarity],
     save_dir: os.PathLike,
     img_size=(224, 224),
+    save_as_json= True
 ):
     # Adapted from ProtoPNet
     """
@@ -63,18 +65,37 @@ def save_patch_visualizations(
     latent_to_pixel = get_latent_to_pixel(img_size)
 
     log.info(f"Saving prototype patch visualizations to {save_dir}.")
-    for proto_id, image_proto_similarity in proto_patch_matches.items():
-        (
-            im_closest_patch,
-            im_original,
-            im_with_bbox,
-            im_with_heatmap,
-        ) = closest_patch_imgs(image_proto_similarity, inv_transform, latent_to_pixel)
+    if save_as_json:
+        prototypes_info = dict()
+        for proto_id, image_proto_similarity in proto_patch_matches.items():
+            patch_similarities = image_proto_similarity.all_patch_similarities.cpu().numpy()
+            bbox_inds = _bbox_indices(patch_similarities, latent_to_pixel)
+            
+            prototypes_info[proto_id] = dict(patch_similarities=patch_similarities.tolist(),
+                                             bbox = list(map(int, [bbox_inds.w_low, 
+                                                                   bbox_inds.h_low, 
+                                                                   bbox_inds.w_high, 
+                                                                   bbox_inds.h_high]
+                                             )),
+                                             path=image_proto_similarity.path)
+            
+            with open(save_dir / "proto_info.json", "w") as f:
+                json.dump(prototypes_info, f)
 
-        # TODO: These filenames should come from config (same for the other py files).
-        save_img(im_closest_patch, save_dir / f"{proto_id}_closest_patch.png")
-        save_img(im_with_bbox, save_dir / f"{proto_id}_bounding_box_closest_patch.png")
-        save_img(im_with_heatmap, save_dir / f"{proto_id}_heatmap_original_image.png")
+    else:
+        
+        for proto_id, image_proto_similarity in proto_patch_matches.items():
+            (
+                im_closest_patch,
+                im_original,
+                im_with_bbox,
+                im_with_heatmap,
+            ) = closest_patch_imgs(image_proto_similarity, inv_transform, latent_to_pixel)
+
+            # TODO: These filenames should come from config (same for the other py files).
+            save_img(im_closest_patch, save_dir / f"{proto_id}_closest_patch.png")
+            save_img(im_with_bbox, save_dir / f"{proto_id}_bounding_box_closest_patch.png")
+            save_img(im_with_heatmap, save_dir / f"{proto_id}_heatmap_original_image.png")
 
 
 @torch.no_grad()
@@ -172,8 +193,6 @@ def _to_rgb_heatmap(arr: np.ndarray) -> np.ndarray:
 
 
 def _bbox_color(similarity: float) -> ColorRgb:
-    # TODO: Is there no built-in way to do this? There don't seem to be any color maps (or ways of using color maps)
-    #  that do what we want.
     """
     Takes a similarity float between 0 and 1 (inclusive) and maps it to colors ranging from red for 0, to yellow
     for 0.5, to green for 1.

@@ -1,0 +1,56 @@
+
+# PATHS  
+cub_dir : "data/CUB_200_2011"
+cub_images_dir : "data/CUB_200_2011/images"
+dataset_dir : "data/CUB_200_2011/dataset"
+train_dir : "train_corners"
+val_dir : "train_crop"
+test_dir : "test_crop"
+output_dir : "./runs/run_model"
+
+# DATASET
+dataset : "CUB"
+img_size : [224, 244]
+
+# MDEL
+backbone : "resnet50_inat"
+model_type : "prototree"
+
+# PROTOTYPE
+W1 : 1 
+H1 : 1
+num_features : 256
+explain : True
+
+# PROTOTREE
+depth : 9
+
+# TRAINING
+batch_size : 64 
+epochs : 1 #100
+optimizer : "Adam"
+lr_main : 0.001
+lr_backbone : 0.00001
+momentum : 0.9
+weight_decay_main : 0.01
+weight_decay_backbone : 0.01
+milestones : []
+gamma : 0.5
+freeze_epochs : 30
+disable_pretrained : False
+leaf_pruning_multiplier : 11.0
+project_from_epoch : -1
+gradient_leaf_opt : False
+disable_cuda : False
+every_n_epochs : 10
+save_top_k : 1
+use_similarity : False 
+
+# TEST
+model_checkpoint : ""
+explain_prototype : True
+prototypes_info_path : ""
+
+# PROTOTYPE EXPLANATIONS
+img_modifications : ["hue", "saturation", "texture", "color", "brightness", "shape"]
+

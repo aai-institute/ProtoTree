@@ -5,6 +5,7 @@ from typing import Iterator, Callable
 import numpy as np
 import torch
 from tqdm import tqdm
+import pandas as pd
 
 from src.core.models import ProtoTree
 from src.util.data import save_img
@@ -56,13 +57,51 @@ def save_multi_patch_visualizations(
             latent_to_pixel,
             multi_patch_dir,
         )
+@torch.no_grad()
+def save_multi_patch_visualizations_with_local_score(
+    explanations: Iterator[tuple[ProtoTree.LeafRationalization, str, tuple]],
+    explanations_dir: os.PathLike,
+    local_scores: pd.DataFrame,
+    img_size=(224, 224),
+):
+    """
+    Saves visualizations of each explanation as a DOT file and png. In these visualizations, every patch in an
+    explanation is applied to a single copy of the image.
+    TODO: Note that this currently relies on the patch visualizations being run first. We should probably change this,
+     or change the API to enforce it.
+    """
+    multi_patches_dir = explanations_dir / "multi_patch"
+    multi_patches_dir.mkdir(parents=True, exist_ok=True)
+    inv_transform = get_inverse_arr_transform(img_size)
+    latent_to_pixel = get_latent_to_pixel(img_size)
 
+    log.info(
+        f"Saving multiple patch visualizations of the explanations to {multi_patches_dir}."
+    )
+    tqdm_explanations = tqdm(
+        explanations,
+        desc="Saving multiple patch visualizations of the explanations",
+        ncols=0,
+    )
+    for explanation_counter, (leaf_explanation, true_class, class_names, img_path) in enumerate(
+        tqdm_explanations
+    ):
+        
+        multi_patch_dir = multi_patches_dir / img_path #f"img_{explanation_counter}"
+        _save_multi_patch_vis(
+            leaf_explanation,
+            inv_transform,
+            latent_to_pixel,
+            multi_patch_dir,
+            local_scores
+        )
 
 def _save_multi_patch_vis(
     leaf_rationalization: ProtoTree.LeafRationalization,
     inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     multi_patch_dir: os.PathLike,
+    local_score: pd.DataFrame = None
 ):
     """
     Saves the original image and copies of it with {an average heatmap, all bounding boxes from patches, bounding boxes
@@ -92,6 +131,10 @@ def _save_multi_patch_vis(
         all_patch_similarities, latent_to_pixel, im_original
     )
 
+    # TODO gio
+    # decide if save or visualize with config param
+    # Add also img for local score of the patches
+    # Put all togheter imgs in a graph
     save_img(im_original, multi_patch_dir / "original.png")
     save_img(im_with_bboxs, multi_patch_dir / "im_with_bboxs.png")
     save_img(im_with_present_bboxs, multi_patch_dir / "im_with_present_bboxs.png")
