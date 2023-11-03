@@ -5,6 +5,7 @@ src/features/state_dicts
 runs
 lightning_logs
 output
+env
 
 ### Python template
 # Byte-compiled / optimized / DLL files

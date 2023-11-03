@@ -18,6 +18,7 @@ from src.util.score import globale_scores
 
 from src.visualize.create.patches import save_patch_visualizations
 from src.visualize.create.tree import save_tree_visualization
+from src.visualize.create.explanation.prototypes import save_prototypes
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
@@ -152,14 +153,14 @@ def train_prototree(config: dict):
     checkpoint_callback = ModelCheckpoint(dirpath="output",
                                           filename="{epoch}-{step}-{Val acc:.2f}", monitor="Val acc", #Val avg acc
                                           save_last=True, every_n_epochs=every_n_epochs, save_top_k=save_top_k) 
-    output_dir = Path("./output") / model_type
+    ckpt_output_dir = Path("./output") / model_type
     trainer = pl.Trainer(
         accelerator="cpu" if disable_cuda else "auto",
         detect_anomaly=False,
         max_epochs=epochs,
         limit_val_batches=n_training_batches // 5,
         devices=1,  # TODO: Figure out why the model doesn't work on multiple devices.
-        default_root_dir=output_dir
+        default_root_dir=ckpt_output_dir
     )
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     log.info("Finished training.")
@@ -173,16 +174,28 @@ def train_prototree(config: dict):
     
     # COMPUTE AND SAVE GLOBAL SCORES
     # TODO: proto explanation implemented for batch_size = 1 (maybe we want to change it)
-    dataloader = get_dataloader(dataset_dir=train_dir, img_size=img_size, augment=False, explain=explain_prototypes, modifications=img_modifications, loader_batch_size=1, num_workers=4)
-    _, proto_expl = eval_model(model, dataloader, explain=True) 
-    global_expl = globale_scores(scores=proto_expl, out_dir=score_dir)
+    if explain_prototypes:
+        dataloader = get_dataloader(dataset_dir=train_dir, img_size=img_size, augment=False, explain=explain_prototypes, modifications=img_modifications, loader_batch_size=1, num_workers=4)
+        _, proto_expl = eval_model(model, dataloader, explain=True) 
+        global_expl = globale_scores(scores=proto_expl, out_dir=score_dir)
+    else:
+        global_expl = None
         
     # SAVE VISUALIZATIONS 
-    if model_type == "prototree":
-        tree_dir = vis_dir/ "tree"
-        with open(patches_dir / "proto_info.json") as f:
-            prototypes_info = json.load(f)
-        save_tree_visualization(model, prototypes_info, global_expl, tree_dir, class_names)
+    with open(patches_dir / "proto_info.json") as f:
+        prototypes_info = json.load(f)
+    
+    match model_type:
+        case "prototree":
+            tree_dir = vis_dir/ "tree"
+            with open(patches_dir / "proto_info.json") as f:
+                prototypes_info = json.load(f)
+            save_tree_visualization(model, prototypes_info, tree_dir, class_names, global_scores=global_expl)
+        case "protopnet":
+            save_prototypes(proto_info=prototypes_info, img_size=img_size, global_expl=global_expl)
+        case _:
+            raise ValueError(f"Unknown model type {model_type}.")
+
  
  
 if __name__ == "__main__":

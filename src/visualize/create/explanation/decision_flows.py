@@ -9,6 +9,7 @@ import pydot
 import torch
 from tqdm import tqdm
 from PIL import Image
+import matplotlib.pyplot as plt
 
 from src.core.img_similarity import ImageProtoSimilarity
 from src.core.models import ProtoTree
@@ -27,12 +28,12 @@ def save_decision_flow_visualizations(
     explanations: Iterator[tuple[ProtoTree.LeafRationalization, str, tuple]],
     protos_info: dict[str, dict], 
     explanations_dir: os.PathLike,
+    patches_dir: os.PathLike,
+    scores: pd.DataFrame = None, 
     img_size=(224, 224),
 ):
     """
     Saves visualizations of each explanation as a DOT file and png.
-    TODO: Note that this currently relies on the patch visualizations being run first. We should probably change this,
-     or change the API to enforce it.
     """
     decision_flows_dir = explanations_dir / "decision_flows"
     decision_flows_dir.mkdir(parents=True, exist_ok=True)
@@ -49,10 +50,19 @@ def save_decision_flow_visualizations(
     )
     # Leaf explanation contains a list of 9 ancestors sim [node, imagesimilarity (with proto_id)] objects
     
-    for explanation_counter, (leaf_explanation, true_class, class_names, img_path) in enumerate(
+    for explanation_counter, sample in enumerate(
         tqdm_explanations
     ):
-        decision_flow_dir = decision_flows_dir / f"img_{explanation_counter}" #img_path
+        leaf_explanation, true_class, class_names = sample[0], sample[1], sample[2]
+        
+        if scores is not None:
+            img_path = sample[3]
+            decision_flow_dir = decision_flows_dir / os.path.basename(img_path).split(".")[0]
+            img_scores = scores.loc[scores["image"] == img_path]
+        else:
+            decision_flow_dir = decision_flows_dir / f"img_{explanation_counter}" #img_path
+            img_scores = None
+            
         flow_dag = _decision_flow_dag(
             leaf_explanation,
             true_class,
@@ -61,6 +71,8 @@ def save_decision_flow_visualizations(
             latent_to_pixel,
             protos_info,
             decision_flow_dir,
+            patches_dir,
+            img_scores
         )
         _save_pydot(flow_dag, decision_flow_dir)
 
@@ -81,6 +93,7 @@ def _decision_flow_dag(
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     protos_info: dict[str, dict],
     decision_flow_dir: os.PathLike,
+    patches_dir: os.PathLike,
     proto_scores: pd.DataFrame = None
 ) -> pydot.Dot:
     # TODO: There's a lot of parameters to this function (and some of the others further down this file). We could "fix"
@@ -97,7 +110,7 @@ def _decision_flow_dag(
     proto_subgraphs, decision_pydot_edges = [], []
     for ancestor_sim, proto_present in zip(
         leaf_rationalization.ancestor_sims,
-        leaf_rationalization.proto_presents() #TODO: remove it!! only temporary
+        leaf_rationalization.proto_presents() 
     ):
         proto_subgraph, decision_edge = _proto_node_components(
             ancestor_sim,
@@ -106,6 +119,7 @@ def _decision_flow_dag(
             latent_to_pixel,
             protos_info,
             decision_flow_dir,
+            patches_dir, 
             proto_scores
         )
         decision_pydot_edges.append(decision_edge)
@@ -144,6 +158,7 @@ def _proto_node_components(
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     protos_info: dict[str, dict],
     decision_flow_dir: os.PathLike,
+    patches_dir: os.PathLike, 
     protos_scores: pd.DataFrame = None
 ) -> tuple[pydot.Subgraph, pydot.Edge]:
     """
@@ -151,30 +166,25 @@ def _proto_node_components(
     the tree. This consists of a subgraph of {prototype visualization, (optional) bounding box for the matching patch on
     the image, (optional) edge connecting the two images}, and an edge leading to the next node in the tree.
     """
+    proto_img = plt.imread(protos_info[str(ancestor_sim.node.index)]["path"])
+    patch_bbox = protos_info[str(ancestor_sim.node.index)]["bbox"]
+    proto_patch = proto_img[patch_bbox[1]:patch_bbox[3], patch_bbox[0]:patch_bbox[2]] # check PIL bbox as needs to be done x,y,w,h, or x1,y1,x2,y2img_orig[bb[1]:bb[3], bb[0]:bb[2]]
     
-    # TODO gio:  This part is already defined in _get_internal_node_ tree.py. TODO check how to avoid duplicate
+    n = 2 if protos_scores is not None else 1
+    fig, axs = plt.subplots(1, n)
+    axs[0].imshow(proto_patch)
+    axs[0].set_xticks([])
+    axs[0].set_yticks([])
      
-    proto_img = Image.open(protos_info[str(ancestor_sim.node.index)]["path"])
-    proto_patch = proto_img.crop(protos_info[str(ancestor_sim.node.index)]["bbox"] ) # check PIL bbox as needs to be done x,y,w,h, or x1,y1,x2,y2img_orig[bb[1]:bb[3], bb[0]:bb[2]]
-    # plot of local scores
-    #if proto_scores:
-        # matplotlib plot
-    #resize, first image
-    # image1 = image1.resize((426, 240))
-    # image1_size = image1.size
-    # image2_size = image2.size
-    # new_image = Image.new('RGB',(2*image1_size[0], image1_size[1]), (250,250,250))
-    # new_image.paste(image1,(0,0))
-    # new_image.paste(image2,(image1_size[0],0))
-    # new_image.save("images/merged_image.jpg","JPEG")
-    # new_image.show()
-        
-    # TODO: temporary. check how to do that
-    dir = Path("./runs/run_model/visualizations/patches/patches")
-    dir.mkdir(parents=True, exist_ok=True)
-    
-    proto_file = dir / f"{ancestor_sim.node.index}_closest_patch.png"
-    proto_patch.save(proto_file)
+    if protos_scores is not None:   
+        proto_scores = round(protos_scores.loc[protos_scores["prototype"] == ancestor_sim.node.index], 4)
+        proto_scores.plot(x="modification", y="delta", ax=axs[1], kind="bar", legend=False)
+        axs[1].bar_label(axs[1].containers[0])
+        axs[1].set_yticks([])
+        axs[1].set_facecolor('0.9')
+
+    proto_file = patches_dir / f"{ancestor_sim.node.index}_closest_patch.png"
+    plt.savefig(proto_file) 
     
     proto_subgraph = pydot.Subgraph(
         f"proto_subgraph_{ancestor_sim.node.depth}", rank="same"

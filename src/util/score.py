@@ -2,7 +2,13 @@ import pandas as pd
 import os
 
 def globale_scores(scores: pd.DataFrame, out_dir : os.PathLike):
-  
+    """
+    Compute the global scores for the learned prototypes
+
+    :param scores: dataframe with local scores for each training image
+    :param out_dir: directory where to save the global scores as a csv file
+    :return the dataframe of the global scores
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     
     prototype_global_scores = list()

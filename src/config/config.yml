@@ -10,7 +10,7 @@ output_dir : "./runs/run_model"
 
 # DATASET
 dataset : "CUB"
-img_size : [224, 244]
+img_size : [224, 224]
 
 # MDEL
 backbone : "resnet50_inat"
@@ -27,7 +27,7 @@ depth : 9
 
 # TRAINING
 batch_size : 64 
-epochs : 1 #100
+epochs : 100
 optimizer : "Adam"
 lr_main : 0.001
 lr_backbone : 0.00001
@@ -52,5 +52,5 @@ explain_prototype : True
 prototypes_info_path : ""
 
 # PROTOTYPE EXPLANATIONS
-img_modifications : ["hue", "saturation", "texture", "color", "brightness", "shape"]
+img_modifications : ["hue", "saturation", "texture", "color", "contrast", "shape"]
 

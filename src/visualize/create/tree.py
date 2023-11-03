@@ -24,13 +24,12 @@ INTERNAL_NODE_IMG_GAP = 4
 
 
 @torch.no_grad()
-# TODO: global score make it optional if user wants!
 def save_tree_visualization(
     model: ProtoTree,
     prototypes_info: dict, #patches_dir: os.PathLike,
-    global_scores: pd.DataFrame,
     tree_dir: os.PathLike,
     class_names: tuple,
+    global_scores: pd.DataFrame = None,
 ):
     """
     Saves visualization as a DOT file and png.
@@ -211,38 +210,44 @@ def _gen_internal_node_img(proto_idx: int, prototypes_info: dict, global_scores_
     
     img_orig = Image.open(proto_info["path"])
     bb = proto_info["bbox"]
-    patch_img_orig = img_orig.crop(bb) # check PIL bbox as needs to be done x,y,w,h, or x1,y1,x2,y2img_orig[bb[1]:bb[3], bb[0]:bb[2]]
-    #draw rect on im_orig
+    patch_img_orig = img_orig.crop(bb) # TODOs gio check PIL bbox as needs to be done x,y,w,h, or x1,y1,x2,y2img_orig[bb[1]:bb[3], bb[0]:bb[2]]
     
     draw = ImageDraw.Draw(img_orig)
     draw.rectangle([(bb[0], bb[1]), (bb[2], bb[3])], outline="yellow", width=5)
-     
-    # Get global score image  
-    # ax = plt.subplot(111, frame_on=False) # no visible frame
-    # ax.xaxis.set_visible(False)  # hide the x axis
-    # ax.yaxis.set_visible(False)  
-    # pd.plotting.table(ax, global_scores_info.loc[global_scores_info["prototype"] == proto_idx], loc='center', cellLoc='center')
-    # plt.savefig('proto_global_score.png')
-    # img_scores_orig = Image.open("proto_global_score.png")
-    # os.remove("proto_global_score.png")
-    proto_scores = global_scores_info.loc[global_scores_info["prototype"] == proto_idx].set_index("prototype")
-    proto_scores.plot.bar()
-    plt.savefig('proto_global_score_plot.png')
-    img_scores_orig = Image.open("proto_global_score_plot.png")
-    os.remove("proto_global_score_plot.png")
     
     bb_img = ImageOps.contain(img_orig, SINGLE_NODE_IMG_SIZE)
     patch_img = ImageOps.contain(patch_img_orig, SINGLE_NODE_IMG_SIZE)
-    img_scores = ImageOps.contain(img_scores_orig, SINGLE_NODE_IMG_SIZE)
+    
     wbb, hbb = bb_img.size
     w, h = patch_img.size
-    wscore, hscore = img_scores.size
+    
+    # Get global score image  
+    if global_scores_info is not None:
+        proto_scores = global_scores_info.loc[global_scores_info["prototype"] == proto_idx].set_index("prototype")
+        proto_scores = round(proto_scores, 4)
+        ax = proto_scores.plot.bar()
+        for p in ax.patches:
+            ax.annotate(str(p.get_height()), (p.get_x() * 1.005, p.get_height() * 1.005))
+        ax.yaxis.set_visible(False)
+        ax.set_facecolor('0.9')
+        plt.savefig('tmp.png')
+        img_scores_orig = Image.open("tmp.png")
+        os.remove("tmp.png")
+    
+        img_scores = ImageOps.contain(img_scores_orig, SINGLE_NODE_IMG_SIZE)
+        wscore, hscore = img_scores.size
 
-    together_w, together_h = w + INTERNAL_NODE_IMG_GAP + wbb + INTERNAL_NODE_IMG_GAP + wscore, max(h, hbb, hscore)
+    if global_scores_info is None:
+        together_w, together_h = w + INTERNAL_NODE_IMG_GAP + wbb + INTERNAL_NODE_IMG_GAP, max(h, hbb)
+    else:
+        together_w, together_h = w + INTERNAL_NODE_IMG_GAP + wbb + INTERNAL_NODE_IMG_GAP + wscore, max(h, hbb, hscore)
+    
     together = Image.new(
         patch_img.mode, (together_w, together_h), color=(255, 255, 255)
     )
     together.paste(patch_img, (0, 0))
     together.paste(bb_img, (w + INTERNAL_NODE_IMG_GAP, 0))
-    together.paste(img_scores, (w + INTERNAL_NODE_IMG_GAP + wbb + INTERNAL_NODE_IMG_GAP, 0))
+    
+    if global_scores_info is not None:
+        together.paste(img_scores, (w + INTERNAL_NODE_IMG_GAP + wbb + INTERNAL_NODE_IMG_GAP, 0))
     return together.convert("RGB")

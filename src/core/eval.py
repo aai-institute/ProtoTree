@@ -199,7 +199,16 @@ def eval_fidelity(
 
 @torch.no_grad()
 def prototypes_explanation(dists, path, x_mods, model):
+    """
+    Compute prototype explanations
+
+    :param dists: distances computed by the prototype layer in the network
+    :param path: path of the image
+    :param x_mods: dictionary of modified version of the input image
+    :param model: used model (ProtoTree | ProtoPNet)
     
+    :return dataframe with local scores 
+    """
     assert dists.shape[0] == 1, "Batch size has to be 1"
     
     data = dict(image=list(), prototype=list(), modification=list(), delta=list(), orig_similarity=list())
@@ -207,7 +216,7 @@ def prototypes_explanation(dists, path, x_mods, model):
     n_proto = dists.shape[1]
     for mod, img_mod in x_mods.items():
         dists_mod = model.proto_base.forward(img_mod)
-        local_scores = dists - dists_mod
+        local_scores = abs(dists - dists_mod)
         
         data["image"].extend(path * n_proto)
         data["prototype"].extend(list(range(n_proto)))

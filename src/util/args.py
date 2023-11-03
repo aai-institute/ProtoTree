@@ -39,6 +39,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--save_top_k", 
         type=int, 
+        default=5,
         help="Number of best checkpoints saved during the training."  
     )
     parser.add_argument(
