@@ -164,7 +164,7 @@ def train_prototree(config: dict):
     )
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
     log.info("Finished training.")
-    checkpoint_callback.best_model_path
+    log.info(f"{checkpoint_callback.best_model_path=}")
 
     # SAVE PROTOTYPES INFO FOR LATER VISUALIZATION
     vis_dir = output_dir / "visualizations"
