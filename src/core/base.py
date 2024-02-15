@@ -109,6 +109,9 @@ class ProtoBase(nn.Module):
     def project_prototypes(self, proto_patch_patches: dict[int, ImageProtoSimilarity]):
         # TODO: We should probably not be mutating the model (via the prototypes) after training, as this is making the
         #  code less flexible and harder to reason about.
+        
+        
+        ### On the idea of changing model part from the paper
         """
         Replaces each prototype with a given patch.
         Note: This mutates the prototype tensors, and hence modifies any model using them.
@@ -128,11 +131,14 @@ class ProtoBase(nn.Module):
         self,
         proto_patch_patches: dict[int, ImageProtoSimilarity],
         x: torch.Tensor,
+        path: torch.Tensor = None
     ):
         # TODO: This is currently incredibly slow, particularly on GPUs, because of the large number of small,
         #  non-vectorized operations. This can probably be refactored to be much faster.
         #  Another small thing is that this function isn't pure, it mutates the dictionary since even shallow copying
         #  can be a bit slow; is there a more functional way of doing this?
+        
+        ###  problem of mutable dictionary
         """
         Takes a map where each key is a proto_idx and the corresponding value is information about the patch that is
         most similar to the prototype, and then updates that map based on any new best matches (most similar patches)
@@ -144,7 +150,7 @@ class ProtoBase(nn.Module):
          will be mutated by this method.
         :param x: A batch of images.
         """
-        for proto_similarity in self._patch_match_candidates(x):
+        for proto_similarity in self._patch_match_candidates(x, path):
             proto_id = proto_similarity.proto_id
             if proto_id in proto_patch_patches:
                 cur_closest = proto_patch_patches[proto_id]
@@ -160,6 +166,7 @@ class ProtoBase(nn.Module):
     def _patch_match_candidates(
         self,
         x: torch.Tensor,
+        path: torch.Tensor = None
     ) -> Iterator[ImageProtoSimilarity]:
         # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
         #  commonality. However, we also need to beware of premature abstraction.
@@ -171,7 +178,10 @@ class ProtoBase(nn.Module):
         """
         patches, dists = self.patches_and_dists(x)
 
-        for x_i, dists_i, patches_i in zip(x, dists, patches):
+        for i, (x_i, dists_i, patches_i) in enumerate(zip(x, dists, patches)):
             for proto_id in range(self.num_prototypes):
                 patch_distances = dists_i[proto_id, :, :]
-                yield img_proto_similarity(proto_id, x_i, patch_distances, patches_i)
+                if path:
+                    yield img_proto_similarity(proto_id, x_i, patch_distances, patches_i, path[i])
+                else:
+                    yield img_proto_similarity(proto_id, x_i, patch_distances, patches_i)

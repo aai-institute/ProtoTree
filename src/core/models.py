@@ -31,8 +31,7 @@ MATCH_UPDATE_PERIOD = 125
 
 
 class ProtoPNet(pl.LightningModule):
-    # TODO: We could abstract this and ProtoTree into a superclass. However, perhaps we should wait for the rule of 3 to
-    #  help us choose the right abstraction.
+
     def __init__(
         self,
         h_proto: int,
@@ -78,8 +77,9 @@ class ProtoPNet(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
         nonlinear_scheduler = self.lr_schedulers()
-
-        x, y = batch
+ 
+        x, y = batch[0], batch[1]    
+        path = batch[2] if len(batch) > 2 else None
 
         if batch_idx == 0:
             freezable_step(
@@ -103,7 +103,7 @@ class ProtoPNet(pl.LightningModule):
         # TODO: Hack because update_proto_patch_matches is inefficient.
         if batch_idx % MATCH_UPDATE_PERIOD == MATCH_UPDATE_PERIOD - 1:
             # It's useful to compute this for visualizations, even if we're not projecting.
-            self.proto_base.update_proto_patch_matches(self.proto_patch_matches, x)
+            self.proto_base.update_proto_patch_matches(self.proto_patch_matches, x, path)
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -218,8 +218,6 @@ class ProtoTree(pl.LightningModule):
                 ancestor_child.is_right_child for ancestor_child in ancestor_children
             ]
 
-    # TODO: We could abstract this and ProtoPNet into a superclass. However, perhaps we should wait for the rule of 3 to
-    #  help us choose the right abstraction.
     def __init__(
         self,
         h_proto: int,
@@ -248,6 +246,7 @@ class ProtoTree(pl.LightningModule):
         super().__init__()
 
         # TODO: Use dependency injection here?
+        ### 
         backbone = NAME_TO_NET[backbone_name](pretrained=pretrained)
         num_prototypes = 2**depth - 1
         self.proto_base = ProtoBase(
@@ -277,7 +276,8 @@ class ProtoTree(pl.LightningModule):
         nonlinear_optim = self.optimizers()
         nonlinear_scheduler = self.lr_schedulers()
 
-        x, y = batch
+        x, y = batch[0], batch[1]    
+        path = batch[2] if len(batch) > 2 else None
 
         if batch_idx == 0:
             freezable_step(
@@ -300,7 +300,7 @@ class ProtoTree(pl.LightningModule):
         # TODO: Hack because update_proto_patch_matches is inefficient.
         if batch_idx % MATCH_UPDATE_PERIOD == MATCH_UPDATE_PERIOD - 1:
             # It's useful to compute this for visualizations, even if we're not projecting.
-            self.proto_base.update_proto_patch_matches(self.proto_patch_matches, x)
+            self.proto_base.update_proto_patch_matches(self.proto_patch_matches, x, path)
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
