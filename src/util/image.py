@@ -77,14 +77,28 @@ class ShapeTransformation:
         return PIL.Image.fromarray(img)
 
 
-MODIFICATIONS = {
-    "hue": HUE_TRANSFORM,
-    "contrast": CONTRAST_TRANSFORM,
-    "saturation": SATURATION_TRANSFORM,
-    "color": COLOR_TRANSFORM,
-    "shape": ShapeTransformation(amplitude=AMPLITUDE, wave=WAVE),
-    "texture": TextureTransformation(texture_h=TEXTURE_H),
-}
+class RegisteredImageTransform(Enum):
+    HUE = "hue"
+    CONTRAST = "contrast"
+    SATURATION = "saturation"
+    COLOR = "color"
+    SHAPE = "shape"
+    TEXTURE = "texture"
+
+    def get_transform(self):
+        match self:
+            case RegisteredImageTransform.HUE:
+                return HUE_TRANSFORM
+            case RegisteredImageTransform.CONTRAST:
+                return CONTRAST_TRANSFORM
+            case RegisteredImageTransform.SATURATION:
+                return SATURATION_TRANSFORM
+            case RegisteredImageTransform.COLOR:
+                return COLOR_TRANSFORM
+            case RegisteredImageTransform.SHAPE:
+                return ShapeTransformation(amplitude=AMPLITUDE, wave=WAVE)
+            case RegisteredImageTransform.TEXTURE:
+                return TextureTransformation(texture_h=TEXTURE_H)
 
 
 def get_augmentation_transform() -> Callable[[torch.Tensor], Image]:
