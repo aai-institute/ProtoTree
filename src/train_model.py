@@ -12,6 +12,7 @@ from src.core.models import ProtoPNet, ProtoTree
 from src.core.optim import NonlinearOptimParams, NonlinearSchedulerParams
 from src.util.args import get_args
 from src.util.data import get_dataloader
+from src.util.image import RegisteredImageTransform
 from src.util.score import globale_scores
 from src.visualize.create.explanation.prototypes import save_prototypes
 from src.visualize.create.patches import save_patch_visualizations
@@ -19,6 +20,8 @@ from src.visualize.create.tree import save_tree_visualization
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
+
+# TODO: move config to python
 
 
 def train_prototree(config: dict):
@@ -74,7 +77,9 @@ def train_prototree(config: dict):
 
     # Prototype explanation args
     explain_prototypes = config["explain"]
-    img_modifications = config["img_modifications"]
+    img_modifications = (
+        RegisteredImageTransform[mod_name] for mod_name in config["img_modifications"]
+    )
 
     log.info(f"Training and testing ProtoTree with {config=}.")
 

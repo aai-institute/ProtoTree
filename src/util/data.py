@@ -23,7 +23,7 @@ def get_dataloader(
     augment: bool = False,
     train: bool = False,
     explain=False,
-    modifications=None,
+    modifications: tuple[RegisteredImageTransform] = (),
     loader_batch_size: int = 64,
     num_workers: int = 4,
     shuffle: bool = False,
@@ -46,15 +46,15 @@ def get_dataloader(
 
 
 def get_data(
-    dir,
+    dir: str,
     augment=False,
     train=False,
     explain=False,
-    modifications=None,
-    img_size=(224, 224),
+    modifications: tuple[RegisteredImageTransform] = (),
+    img_size: tuple[int, int] = (224, 224),
 ) -> ImageFolder:
     """
-    :param augment_train_set: only affects the train set, val set and test set are not augmented
+    :param augment: only affects the train set, val set and test set are not augmented
     :param img_size:
     :return: tuple of type train_set, val_set, test_set, classes, shape
     """

@@ -20,6 +20,8 @@ from src.visualize.prepare.explanations import data_explanations
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("train_prototree")
 
+# TODO: move config to python
+
 
 def test_model(config: dict):
     # data and paths
@@ -33,7 +35,9 @@ def test_model(config: dict):
     log.info(f"Testing a {model_type} model with {config=}.")
 
     # PREPARE DATA
-    modifications = config["img_modifications"]
+    img_modifications = (
+        RegisteredImageTransform[mod_name] for mod_name in config["img_modifications"]
+    )
     explain_proto = config["explain"]
     test_dir = Path(config["dataset_dir"]) / config["test_dir"]
     img_size = config["img_size"]
@@ -42,7 +46,7 @@ def test_model(config: dict):
         augment=False,
         img_size=img_size,
         explain=explain_proto,
-        modifications=modifications,
+        modifications=img_modifications,
         loader_batch_size=1,
         num_workers=4,
     )
