@@ -93,7 +93,7 @@ class ProtoPNet(pl.LightningModule):
         nll_loss = F.nll_loss(logits, y)
         loss = nll_loss + self._proto_costs(all_dists, y)
         if isnan(loss.item()):
-            raise ValueError("Loss is NaN, cannot proceed any further.")
+            raise RuntimeError("Loss is NaN, cannot proceed any further.")
 
         nonlinear_optim.zero_grad()
         self.manual_backward(loss)

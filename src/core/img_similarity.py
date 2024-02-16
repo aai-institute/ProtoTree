@@ -12,11 +12,14 @@ class ImageProtoSimilarity:
     Stores the similarities between each patch of an image and a node's prototype.
     """
     proto_id: int
-    transformed_image: torch.Tensor  # The image (in non-latent space) after preliminary transformations.
+    """The id of the prototype (corresponds to a node in the tree for ProtoTree, or an index in the list of prototypes)."""
+    transformed_image: torch.Tensor
+    """The image (in non-latent space) after preliminary transformations, as it is passed to the model."""
     closest_patch: torch.Tensor
     closest_patch_distance: float
     all_patch_distances: torch.Tensor
-    path: torch.Tensor = None
+    path: str | None = None
+    """Path to the image"""
 
     @property
     def all_patch_similarities(self) -> torch.Tensor:
@@ -51,15 +54,6 @@ def img_proto_similarity(
     closest_patch = _get_closest_patch(sample_patches_distances, sample_patches)
     closest_patch_distance = sample_patches_distances.min().item()
 
-    if path:
-        return ImageProtoSimilarity(
-            proto_id=proto_id,
-            transformed_image=transformed_image,
-            closest_patch=closest_patch,
-            closest_patch_distance=closest_patch_distance,
-            all_patch_distances=sample_patches_distances,
-            path=path,
-        )
     return ImageProtoSimilarity(
         proto_id=proto_id,
         transformed_image=transformed_image,

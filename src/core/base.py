@@ -67,7 +67,7 @@ class ProtoBase(nn.Module):
 
     def patches_and_dists(self, x: torch.Tensor):
         """
-        Get Tuple[patches for a given input tensor, minimal distances between the prototypes and the input]
+        Get tuple[patches for a given input tensor, minimal distances between the prototypes and the input]
         This is just an optimized version of the patches and distances methods so that we don't have to extract the
         features from the backbone twice.
 
@@ -130,7 +130,7 @@ class ProtoBase(nn.Module):
         self,
         proto_patch_patches: dict[int, ImageProtoSimilarity],
         x: torch.Tensor,
-        path: torch.Tensor = None,
+        path: torch.Tensor | None = None,
     ):
         # TODO: This is currently incredibly slow, particularly on GPUs, because of the large number of small,
         #  non-vectorized operations. This can probably be refactored to be much faster.
@@ -148,6 +148,7 @@ class ProtoBase(nn.Module):
         :param proto_patch_patches: The current map of proto_idx to data on the most similar image patch. Note that it
          will be mutated by this method.
         :param x: A batch of images.
+        :param path: a batch of paths to the images, or None
         """
         for proto_similarity in self._patch_match_candidates(x, path):
             proto_id = proto_similarity.proto_id
@@ -163,7 +164,7 @@ class ProtoBase(nn.Module):
 
     @torch.no_grad()
     def _patch_match_candidates(
-        self, x: torch.Tensor, path: torch.Tensor = None
+        self, x: torch.Tensor, path: torch.Tensor | None = None
     ) -> Iterator[ImageProtoSimilarity]:
         # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
         #  commonality. However, we also need to beware of premature abstraction.
@@ -171,18 +172,18 @@ class ProtoBase(nn.Module):
         Generator yielding the [prototype]-[image] similarity (ImageProtoSimilarity) for every (proto, image) pair
         in the given tree and dataloader. A generator is used to avoid OOMing on larger datasets and trees.
 
-        :return: Iterator of (similarity, label)
+        :param x: A batch of images.
+        :param path: a batch of paths to the images, or None
+        :return: Iterator of `ImageProtoSimilarity`
         """
         patches, dists = self.patches_and_dists(x)
 
-        for i, (x_i, dists_i, patches_i) in enumerate(zip(x, dists, patches)):
+        patch_paths = path if path is not None else [None] * len(x)
+        for i, (x_i, dists_i, patches_i, path_i) in enumerate(
+            zip(x, dists, patches, patch_paths)
+        ):
             for proto_id in range(self.num_prototypes):
                 patch_distances = dists_i[proto_id, :, :]
-                if path:
-                    yield img_proto_similarity(
-                        proto_id, x_i, patch_distances, patches_i, path[i]
-                    )
-                else:
-                    yield img_proto_similarity(
-                        proto_id, x_i, patch_distances, patches_i
-                    )
+                yield img_proto_similarity(
+                    proto_id, x_i, patch_distances, patches_i, path=path_i
+                )
