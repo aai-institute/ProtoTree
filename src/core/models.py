@@ -114,6 +114,7 @@ class ProtoPNet(pl.LightningModule):
         self.log("Train loss", loss, prog_bar=True)
 
     def _proto_costs(self, all_dists: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        # TODO: add docstring
         self.class_proto_lookup = self.class_proto_lookup.to(device=self.device)
         proto_in_class_indices = self.class_proto_lookup[y, :]
         proto_out_class_indices = select_not(self.class_proto_lookup, y)
@@ -273,6 +274,7 @@ class ProtoTree(pl.LightningModule):
 
         self.save_hyperparameters()
 
+    # TODO: reduce duplication with ProtoPNet
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
         nonlinear_scheduler = self.lr_schedulers()
@@ -383,6 +385,7 @@ class ProtoTree(pl.LightningModule):
 
         return logits, node_to_probs, predicting_leaves
 
+    @torch.no_grad()
     def explain(
         self,
         x: torch.Tensor,
@@ -393,9 +396,6 @@ class ProtoTree(pl.LightningModule):
         list[Leaf],
         list[LeafRationalization],
     ]:
-        # TODO: This public method works by calling two other methods on the same class. This is perhaps a little bit
-        #  unusual and/or clunky, and could be making testing harder. However, it's not currently clear to me if this is
-        #  a serious problem, or what the right design for this would be.
         """
         Produces predictions for input images, and rationalizations for why the model made those predictions. This is
         done by chaining self.forward and self.rationalize. See those methods for details regarding the predictions and
@@ -497,6 +497,13 @@ class ProtoTree(pl.LightningModule):
 
 
 class TreeSection(nn.Module):
+    """Represents the tree part of ProtoTree - i.e. all things related to assembling the prototypes
+    into a binary tree, computing relevant properties, and making predictions by passing from root to leaves.
+
+    The word 'Section' is not indicative of a mathematical section, but rather instances of this class
+    represent a part of the ProtoTree model.
+    """
+
     def __init__(
         self,
         num_classes: int,
@@ -577,7 +584,8 @@ class TreeSection(nn.Module):
         self, similarities: torch.Tensor
     ) -> dict[Node, NodeProbabilities]:
         """
-        Computes the log probabilities (left, right, arrival) for all nodes for the input x.
+        Computes the log probabilities (left, right, arrival) for all nodes for the input x from the
+        already computed similarities.
 
         :param similarities:
         :return: dictionary mapping each node to a dataclass containing tensors of shape (batch_size,)
