@@ -2,6 +2,7 @@ import os
 from typing import Callable, List, Literal, Sequence, Union
 
 import numpy as np
+import torch
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as F
 from matplotlib import pyplot as plt
