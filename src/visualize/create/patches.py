@@ -58,6 +58,8 @@ def save_patch_visualizations(
     :param save_dir:
     :param img_size: size of images that were used to train the model, i.e. the input to `resize` in the transforms.
         Will be used to create the inverse transform.
+    :param save_as_json: If True, saves the patch similarities and bounding boxes as a JSON file.
+        Note that the images are not saved in this case.
     :return:
     """
     save_dir.mkdir(exist_ok=True, parents=True)
@@ -75,17 +77,15 @@ def save_patch_visualizations(
 
             prototypes_info[proto_id] = dict(
                 patch_similarities=patch_similarities.tolist(),
-                bbox=list(
-                    map(
-                        int,
-                        [
-                            bbox_inds.w_low,
-                            bbox_inds.h_low,
-                            bbox_inds.w_high,
-                            bbox_inds.h_high,
-                        ],
-                    )
-                ),
+                bbox=[
+                    int(x)
+                    for x in [
+                        bbox_inds.w_low,
+                        bbox_inds.h_low,
+                        bbox_inds.w_high,
+                        bbox_inds.h_high,
+                    ]
+                ],
                 path=image_proto_similarity.path,
             )
 
