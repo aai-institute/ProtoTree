@@ -4,7 +4,7 @@ import argparse
 # Utility functions for handling parsed arguments
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser("Train a ProtoTree")
- 
+
     parser.add_argument(
         "--config_file",
         type=str,
@@ -32,32 +32,32 @@ def get_args() -> argparse.Namespace:
         help="Specify model checkpoint to evaluate",
     )
     parser.add_argument(
-        "--every_n_epochs", 
-        type=int, 
-        help="Checkpoint will be saved every n epochs during training."  
+        "--every_n_epochs",
+        type=int,
+        help="Checkpoint will be saved every n epochs during training.",
     )
     parser.add_argument(
-        "--save_top_k", 
-        type=int, 
+        "--save_top_k",
+        type=int,
         default=5,
-        help="Number of best checkpoints saved during the training."  
+        help="Number of best checkpoints saved during the training.",
     )
     parser.add_argument(
-        "--explain_prototypes", 
-        action="store_true", 
-        help="Do prototypes explanation along model evaluation."
+        "--explain_prototypes",
+        action="store_true",
+        help="Do prototypes explanation along model evaluation.",
     )
     parser.add_argument(
-        "--img_modifications", 
-        '--names-list', 
-        nargs='+', 
-        help="Image modifications for prototypes explanation."
+        "--img_modifications",
+        "--names-list",
+        nargs="+",
+        help="Image modifications for prototypes explanation.",
     )
     parser.add_argument(
-        "--prototypes_info_path", 
-        type=str, 
-        help="Path of the json file containing prototype infos"
-        )
+        "--prototypes_info_path",
+        type=str,
+        help="Path of the json file containing prototype infos",
+    )
     args = parser.parse_args()
- 
+
     return args

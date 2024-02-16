@@ -1,13 +1,11 @@
-from typing import Callable
+from typing import Callable, Union
 
 import cv2
 import numpy as np
-import torch
 import PIL
+import torch
 from PIL.Image import Image
 from torchvision import transforms as transforms
-from typing import Union
- 
 
 # TODO: Probably shouldn't need to hardcode these.
 _MEAN = (0.485, 0.456, 0.406)
@@ -15,60 +13,80 @@ _STD = (0.229, 0.224, 0.225)
 
 # TODO: gio: understand how to put and pass these param from config.cfg
 BRIGHT_LVL = 0.8
-CONTR_LVL = 0.45    
-SAT_LVL = 0.7       
-HUE_LVL = 0.1     
+CONTR_LVL = 0.45
+SAT_LVL = 0.7
+HUE_LVL = 0.1
 AMPLITUDE = 4
-WAVE = 0.05        
+WAVE = 0.05
 TEXTURE_H = 4
 
-# Transformation definition for explaining prototypes 
-HUE_TRANSFORM = transforms.ColorJitter(brightness=[BRIGHT_LVL,BRIGHT_LVL], contrast=0, saturation=0, hue=0)
-CONTRAST_TRANSFORM = transforms.ColorJitter(brightness=0, contrast=[CONTR_LVL, CONTR_LVL], saturation=0, hue=0)
-SATURATION_TRANSFORM = transforms.ColorJitter(brightness=0, contrast=0, saturation=[SAT_LVL, SAT_LVL], hue=0)
-COLOR_TRANSFORM = transforms.ColorJitter(brightness=0, contrast=0, saturation=0, hue=[HUE_LVL, HUE_LVL])
+# Transformation definition for explaining prototypes
+HUE_TRANSFORM = transforms.ColorJitter(
+    brightness=[BRIGHT_LVL, BRIGHT_LVL], contrast=0, saturation=0, hue=0
+)
+CONTRAST_TRANSFORM = transforms.ColorJitter(
+    brightness=0, contrast=[CONTR_LVL, CONTR_LVL], saturation=0, hue=0
+)
+SATURATION_TRANSFORM = transforms.ColorJitter(
+    brightness=0, contrast=0, saturation=[SAT_LVL, SAT_LVL], hue=0
+)
+COLOR_TRANSFORM = transforms.ColorJitter(
+    brightness=0, contrast=0, saturation=0, hue=[HUE_LVL, HUE_LVL]
+)
+
 
 class TextureTransformation:
-    def __init__(self, texture_h: int, templ_window_size: int = 7, search_window_size: int = 7):
+    def __init__(
+        self, texture_h: int, templ_window_size: int = 7, search_window_size: int = 7
+    ):
         self.texture_h = texture_h
         self.templ_window_size = templ_window_size
         self.search_window_size = search_window_size
-        
+
     def __call__(self, img: Union[Image, np.ndarray]):
         if type(img) == Image:
             img = np.array(img)
-        
-        img_texture = cv2.fastNlMeansDenoisingColored(img, None, templateWindowSize=self.templ_window_size, 
-                                                searchWindowSize=self.search_window_size, 
-                                                h = self.texture_h, hColor=self.texture_h)
+
+        img_texture = cv2.fastNlMeansDenoisingColored(
+            img,
+            None,
+            templateWindowSize=self.templ_window_size,
+            searchWindowSize=self.search_window_size,
+            h=self.texture_h,
+            hColor=self.texture_h,
+        )
         return PIL.Image.fromarray(img_texture)
-      
+
+
 class ShapeTransformation:
     def __init__(self, amplitude, wave):
         self.amplitude = amplitude
         self.wave = wave
-    
+
     def __call__(self, img: Union[Image, np.ndarray]):
-         
         if type(img) == Image:
             img = np.array(img)
-            
+
         shift = lambda x: self.amplitude * np.sin(np.pi * x * self.wave)
-        
+
         for i in range(img.shape[0]):
-            img[i,:,:] = np.roll(img[i,:,:], int(shift(i)),axis=0)
+            img[i, :, :] = np.roll(img[i, :, :], int(shift(i)), axis=0)
         for i in range(img.shape[1]):
-            img[:,i,:] = np.roll(img[:,i,:], int(shift(i)),axis=0)
-        
-        return PIL.Image.fromarray(img) 
-        
-MODIFICATIONS = {"hue": HUE_TRANSFORM, 
-                 "contrast": CONTRAST_TRANSFORM, 
-                 "saturation": SATURATION_TRANSFORM,
-                 "color": COLOR_TRANSFORM, 
-                 "shape": ShapeTransformation(amplitude=AMPLITUDE, wave=WAVE), 
-                 "texture": TextureTransformation(texture_h=TEXTURE_H)}
-    
+            img[:, i, :] = np.roll(img[:, i, :], int(shift(i)), axis=0)
+
+        return PIL.Image.fromarray(img)
+
+
+MODIFICATIONS = {
+    "hue": HUE_TRANSFORM,
+    "contrast": CONTRAST_TRANSFORM,
+    "saturation": SATURATION_TRANSFORM,
+    "color": COLOR_TRANSFORM,
+    "shape": ShapeTransformation(amplitude=AMPLITUDE, wave=WAVE),
+    "texture": TextureTransformation(texture_h=TEXTURE_H),
+}
+
+
 def get_augmentation_transform() -> Callable[[torch.Tensor], Image]:
     return transforms.RandomOrder(
         [
@@ -127,5 +145,5 @@ def get_latent_to_pixel(
         return cv2.resize(
             latent_img, (img_size[1], img_size[0]), interpolation=cv2.INTER_CUBIC
         )
-        
-    return latent_to_pixel     
+
+    return latent_to_pixel

@@ -41,7 +41,7 @@ def img_proto_similarity(
     transformed_image: torch.Tensor,
     sample_patches_distances: torch.Tensor,
     sample_patches: torch.Tensor,
-    path: torch.Tensor = None
+    path: torch.Tensor = None,
 ) -> ImageProtoSimilarity:
     # TODO: Doesn't the PrototypeBase kind of do this already? Why do we need to do further calculation here instead of
     #  lightly modifying PrototypeBase?
@@ -58,7 +58,7 @@ def img_proto_similarity(
             closest_patch=closest_patch,
             closest_patch_distance=closest_patch_distance,
             all_patch_distances=sample_patches_distances,
-            path=path
+            path=path,
         )
     return ImageProtoSimilarity(
         proto_id=proto_id,
@@ -66,7 +66,7 @@ def img_proto_similarity(
         closest_patch=closest_patch,
         closest_patch_distance=closest_patch_distance,
         all_patch_distances=sample_patches_distances,
-        path=path
+        path=path,
     )
 
 

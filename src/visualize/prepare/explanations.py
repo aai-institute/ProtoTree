@@ -1,10 +1,10 @@
 from typing import Iterator
-import pandas as pd
 
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from src.core.models import TreeSection, ProtoTree
+from src.core.models import ProtoTree, TreeSection
 
 
 @torch.no_grad()
@@ -13,7 +13,7 @@ def data_explanations(
     loader: DataLoader,
     class_names: tuple,
     local_scores: pd.DataFrame = None,
-    explain_prototypes : bool = True
+    explain_prototypes: bool = True,
 ) -> Iterator[tuple[ProtoTree.LeafRationalization, str, tuple]]:
     # TODO: This doesn't give a direct reference to the original image names/orderings (particularly if we shuffle the
     #  data. We could try to plumb that through too, but we'd need to consider a possible loss in generality, e.g. if
@@ -29,7 +29,7 @@ def data_explanations(
     #     for leaf_explanation, true_label in zip(leaf_explanations, y):
     #         true_class = class_names[true_label]
     #         yield leaf_explanation, true_class, class_names  # TODO: Might warrant a class, or is that overengineering?
-    
+
     # Here get also path from loader if explain prototype
     for sample in loader:
         x = sample[0]

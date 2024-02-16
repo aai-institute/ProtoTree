@@ -1,16 +1,16 @@
+import json
 import logging
 import os
-from dataclasses import dataclass, astuple
+from dataclasses import astuple, dataclass
 from typing import Callable, Iterable
 
 import cv2
 import numpy as np
 import torch
-import json
 
 from src.core.img_similarity import ImageProtoSimilarity
 from src.util.data import save_img
-from src.util.image import get_latent_to_pixel, get_inverse_arr_transform
+from src.util.image import get_inverse_arr_transform, get_latent_to_pixel
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def save_patch_visualizations(
     proto_patch_matches: dict[int, ImageProtoSimilarity],
     save_dir: os.PathLike,
     img_size=(224, 224),
-    save_as_json= True
+    save_as_json=True,
 ):
     # Adapted from ProtoPNet
     """
@@ -68,34 +68,49 @@ def save_patch_visualizations(
     if save_as_json:
         prototypes_info = dict()
         for proto_id, image_proto_similarity in proto_patch_matches.items():
-            patch_similarities = image_proto_similarity.all_patch_similarities.cpu().numpy()
+            patch_similarities = (
+                image_proto_similarity.all_patch_similarities.cpu().numpy()
+            )
             bbox_inds = _bbox_indices(patch_similarities, latent_to_pixel)
-            
-            prototypes_info[proto_id] = dict(patch_similarities=patch_similarities.tolist(),
-                                             bbox = list(map(int, [bbox_inds.w_low, 
-                                                                   bbox_inds.h_low, 
-                                                                   bbox_inds.w_high, 
-                                                                   bbox_inds.h_high]
-                                             )),
-                                             path=image_proto_similarity.path)
-            
+
+            prototypes_info[proto_id] = dict(
+                patch_similarities=patch_similarities.tolist(),
+                bbox=list(
+                    map(
+                        int,
+                        [
+                            bbox_inds.w_low,
+                            bbox_inds.h_low,
+                            bbox_inds.w_high,
+                            bbox_inds.h_high,
+                        ],
+                    )
+                ),
+                path=image_proto_similarity.path,
+            )
+
             with open(save_dir / "proto_info.json", "w") as f:
                 json.dump(prototypes_info, f)
 
     else:
-        
         for proto_id, image_proto_similarity in proto_patch_matches.items():
             (
                 im_closest_patch,
                 im_original,
                 im_with_bbox,
                 im_with_heatmap,
-            ) = closest_patch_imgs(image_proto_similarity, inv_transform, latent_to_pixel)
+            ) = closest_patch_imgs(
+                image_proto_similarity, inv_transform, latent_to_pixel
+            )
 
             # TODO: These filenames should come from config (same for the other py files).
             save_img(im_closest_patch, save_dir / f"{proto_id}_closest_patch.png")
-            save_img(im_with_bbox, save_dir / f"{proto_id}_bounding_box_closest_patch.png")
-            save_img(im_with_heatmap, save_dir / f"{proto_id}_heatmap_original_image.png")
+            save_img(
+                im_with_bbox, save_dir / f"{proto_id}_bounding_box_closest_patch.png"
+            )
+            save_img(
+                im_with_heatmap, save_dir / f"{proto_id}_heatmap_original_image.png"
+            )
 
 
 @torch.no_grad()

@@ -1,4 +1,4 @@
-from typing import Optional, Union, Literal, Iterator, Tuple
+from typing import Iterator, Literal, Optional, Tuple, Union
 
 import torch
 from torch import nn as nn
@@ -109,8 +109,7 @@ class ProtoBase(nn.Module):
     def project_prototypes(self, proto_patch_patches: dict[int, ImageProtoSimilarity]):
         # TODO: We should probably not be mutating the model (via the prototypes) after training, as this is making the
         #  code less flexible and harder to reason about.
-        
-        
+
         ### On the idea of changing model part from the paper
         """
         Replaces each prototype with a given patch.
@@ -131,13 +130,13 @@ class ProtoBase(nn.Module):
         self,
         proto_patch_patches: dict[int, ImageProtoSimilarity],
         x: torch.Tensor,
-        path: torch.Tensor = None
+        path: torch.Tensor = None,
     ):
         # TODO: This is currently incredibly slow, particularly on GPUs, because of the large number of small,
         #  non-vectorized operations. This can probably be refactored to be much faster.
         #  Another small thing is that this function isn't pure, it mutates the dictionary since even shallow copying
         #  can be a bit slow; is there a more functional way of doing this?
-        
+
         ###  problem of mutable dictionary
         """
         Takes a map where each key is a proto_idx and the corresponding value is information about the patch that is
@@ -164,9 +163,7 @@ class ProtoBase(nn.Module):
 
     @torch.no_grad()
     def _patch_match_candidates(
-        self,
-        x: torch.Tensor,
-        path: torch.Tensor = None
+        self, x: torch.Tensor, path: torch.Tensor = None
     ) -> Iterator[ImageProtoSimilarity]:
         # TODO: Lots of overlap with Prototree.rationalize, so there's potential for extracting out
         #  commonality. However, we also need to beware of premature abstraction.
@@ -182,6 +179,10 @@ class ProtoBase(nn.Module):
             for proto_id in range(self.num_prototypes):
                 patch_distances = dists_i[proto_id, :, :]
                 if path:
-                    yield img_proto_similarity(proto_id, x_i, patch_distances, patches_i, path[i])
+                    yield img_proto_similarity(
+                        proto_id, x_i, patch_distances, patches_i, path[i]
+                    )
                 else:
-                    yield img_proto_similarity(proto_id, x_i, patch_distances, patches_i)
+                    yield img_proto_similarity(
+                        proto_id, x_i, patch_distances, patches_i
+                    )

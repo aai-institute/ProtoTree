@@ -1,22 +1,22 @@
 import logging
 import os
-from typing import Iterator, Callable
+from typing import Callable, Iterator
 
 import numpy as np
+import pandas as pd
 import torch
 from tqdm import tqdm
-import pandas as pd
 
 from src.core.models import ProtoTree
 from src.util.data import save_img
 from src.util.image import get_inverse_arr_transform, get_latent_to_pixel
 from src.visualize.create.patches import (
-    _bbox_indices,
-    _to_rgb_heatmap,
-    _superimpose_bboxs,
-    _bbox_color,
-    Opacity,
     Bbox,
+    Opacity,
+    _bbox_color,
+    _bbox_indices,
+    _superimpose_bboxs,
+    _to_rgb_heatmap,
 )
 
 log = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ log = logging.getLogger(__name__)
 #     multi_patches_dir.mkdir(parents=True, exist_ok=True)
 #     inv_transform = get_inverse_arr_transform(img_size)
 #     latent_to_pixel = get_latent_to_pixel(img_size)
+
 
 #     log.info(
 #         f"Saving multiple patch visualizations of the explanations to {multi_patches_dir}."
@@ -83,30 +84,31 @@ def save_multi_patch_visualizations(
         desc="Saving multiple patch visualizations of the explanations",
         ncols=0,
     )
-    for explanation_counter, sample in enumerate(
-        tqdm_explanations
-    ):
+    for explanation_counter, sample in enumerate(tqdm_explanations):
         leaf_explanation, true_class, class_names = sample[0], sample[1], sample[2]
         if local_scores is not None:
             img_path = sample[3]
-            multi_patch_dir = multi_patches_dir / os.path.basename(img_path).split(".")[0]
+            multi_patch_dir = (
+                multi_patches_dir / os.path.basename(img_path).split(".")[0]
+            )
         else:
             multi_patch_dir = multi_patches_dir / f"img_{explanation_counter}"
-        
+
         _save_multi_patch_vis(
             leaf_explanation,
             inv_transform,
             latent_to_pixel,
             multi_patch_dir,
-            local_scores
+            local_scores,
         )
+
 
 def _save_multi_patch_vis(
     leaf_rationalization: ProtoTree.LeafRationalization,
     inv_transform: Callable[[torch.Tensor], np.ndarray],
     latent_to_pixel: Callable[[np.ndarray], np.ndarray],
     multi_patch_dir: os.PathLike,
-    local_score: pd.DataFrame = None
+    local_score: pd.DataFrame = None,
 ):
     """
     Saves the original image and copies of it with {an average heatmap, all bounding boxes from patches, bounding boxes

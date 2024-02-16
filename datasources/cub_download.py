@@ -1,8 +1,8 @@
 import logging
-from pathlib import Path
 import shutil
 import sys
 import tarfile
+from pathlib import Path
 
 import gdown
 

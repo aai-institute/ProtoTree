@@ -1,7 +1,7 @@
 import logging
 from math import isnan
 from statistics import mean
-from typing import List, Optional, Union, Any
+from typing import Any, List, Optional, Union
 
 import lightning.pytorch as pl
 import numpy as np
@@ -12,14 +12,14 @@ from torch import Tensor
 from torch.nn import functional as F
 
 from src.core.base import ProtoBase
-from src.core.img_similarity import img_proto_similarity, ImageProtoSimilarity
+from src.core.img_similarity import ImageProtoSimilarity, img_proto_similarity
 from src.core.node import InternalNode, Leaf, Node, NodeProbabilities, create_tree
-from src.core.prune import prune_unconfident_leaves
 from src.core.optim import (
     NonlinearSchedulerParams,
-    get_nonlinear_scheduler,
     freezable_step,
+    get_nonlinear_scheduler,
 )
+from src.core.prune import prune_unconfident_leaves
 from src.core.types import SamplingStrat, SingleLeafStrat
 from src.util.indexing import select_not
 from src.util.net import NAME_TO_NET
@@ -31,7 +31,6 @@ MATCH_UPDATE_PERIOD = 125
 
 
 class ProtoPNet(pl.LightningModule):
-
     def __init__(
         self,
         h_proto: int,
@@ -71,14 +70,14 @@ class ProtoPNet(pl.LightningModule):
 
         self.train_step_outputs, self.val_step_outputs = [], []
         self.proto_patch_matches: dict[int, ImageProtoSimilarity] = {}
-        
+
         self.save_hyperparameters()
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
         nonlinear_scheduler = self.lr_schedulers()
- 
-        x, y = batch[0], batch[1]    
+
+        x, y = batch[0], batch[1]
         path = batch[2] if len(batch) > 2 else None
 
         if batch_idx == 0:
@@ -103,7 +102,9 @@ class ProtoPNet(pl.LightningModule):
         # TODO: Hack because update_proto_patch_matches is inefficient.
         if batch_idx % MATCH_UPDATE_PERIOD == MATCH_UPDATE_PERIOD - 1:
             # It's useful to compute this for visualizations, even if we're not projecting.
-            self.proto_base.update_proto_patch_matches(self.proto_patch_matches, x, path)
+            self.proto_base.update_proto_patch_matches(
+                self.proto_patch_matches, x, path
+            )
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
@@ -246,7 +247,7 @@ class ProtoTree(pl.LightningModule):
         super().__init__()
 
         # TODO: Use dependency injection here?
-        ### 
+        ###
         backbone = NAME_TO_NET[backbone_name](pretrained=pretrained)
         num_prototypes = 2**depth - 1
         self.proto_base = ProtoBase(
@@ -269,14 +270,14 @@ class ProtoTree(pl.LightningModule):
 
         self.train_step_outputs, self.val_step_outputs = [], []
         self.proto_patch_matches: dict[int, ImageProtoSimilarity] = {}
-        
+
         self.save_hyperparameters()
 
     def training_step(self, batch, batch_idx):
         nonlinear_optim = self.optimizers()
         nonlinear_scheduler = self.lr_schedulers()
 
-        x, y = batch[0], batch[1]    
+        x, y = batch[0], batch[1]
         path = batch[2] if len(batch) > 2 else None
 
         if batch_idx == 0:
@@ -300,7 +301,9 @@ class ProtoTree(pl.LightningModule):
         # TODO: Hack because update_proto_patch_matches is inefficient.
         if batch_idx % MATCH_UPDATE_PERIOD == MATCH_UPDATE_PERIOD - 1:
             # It's useful to compute this for visualizations, even if we're not projecting.
-            self.proto_base.update_proto_patch_matches(self.proto_patch_matches, x, path)
+            self.proto_base.update_proto_patch_matches(
+                self.proto_patch_matches, x, path
+            )
 
         y_pred = logits.argmax(dim=1)
         acc = (y_pred == y).sum().item() / len(y)
